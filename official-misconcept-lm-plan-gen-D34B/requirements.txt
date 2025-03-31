@@ -1,0 +1,55 @@
+ipython>=8.10
+jupyterlab>=3.0
+kedro~=0.19.6
+kedro-datasets>=3.0; python_version >= "3.9"
+kedro-datasets>=1.0; python_version < "3.9"
+kedro-telemetry>=0.3.1
+kedro-viz>=6.7.0
+notebook
+ruff~=0.1.8
+
+# logging
+wandb
+icecream
+# Utils 
+tqdm
+ipywidgets
+pandas
+einops
+matplotlib
+scikit-learn
+jupyterlab
+scikit-learn
+scipy
+seaborn
+natsort
+jsonlines
+python-dotenv
+
+# from LLM-Planning Training Data Generation
+numpy
+openai
+PyYAML~=6.0.1
+
+transformers~=4.45.0
+pddl~=0.4.0
+
+# For LLAMA 3.1 and LM finetuning 
+# unsloth[cu121-ampere-torch230] @ git+https://github.com/unslothai/unsloth.git
+# unsloth llama.py file has issue ref: https://github.com/unslothai/unsloth/issues/404  need to fix it manually, 4 places `config.torch_dtype`
+xformers<0.0.27
+# pip install --force-reinstall 'xformers<0.0.27'
+# pip install 'numpy<2.0.0' 'fsspec[http]<=2024.5.0' 'ruff==0.2.2'
+trl==0.9.6
+peft
+accelerate
+bitsandbytes
+
+# install the following two manually
+# llamafactory[torch,metrics,deepspeed] @ git+https://github.com/hiyouga/LLaMA-Factory.git
+# conda install pytorch-cuda=12.1 -c pytorch -c nvidia
+# conda install cuda=12.1 -c pytorch -c nvidia  # this will support deepspeed
+torch
+
+# tarski==0.7.0
+# need to --force to install 'tarski==0.7.0' manually 

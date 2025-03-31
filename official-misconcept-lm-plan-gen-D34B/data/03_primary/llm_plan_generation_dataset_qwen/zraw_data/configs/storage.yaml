@@ -1,0 +1,80 @@
+instance_dir: storage/generated_basic
+generalized_instance_dir: storage/generated_basic_longer_plan_len
+domain_file: storage/generated_domain.pddl
+domain_name: storage
+n_instances: 200
+start: 0
+end: 199
+instances_template: instance-{}.pddl
+
+domain_intro: |
+  I have to plan the storage and movement of crates within a storage facility. The facility consists of different areas including storearea, transitarea, and places such as containers and depots. Hoists are used to move crates between different areas.
+  Here are the actions that can be performed:
+
+  Lift a crate using a hoist from one store area. 
+  Drop a crate using a hoist to a store area.
+  Move a hoist between store areas.
+  Let a hoist go-out from a store area to a transit area.
+  Let a hoist go-in from a transit area to a store area.
+
+  The following are the restrictions on the actions:
+  A hoist can lift a crate only if the hoist is currently available. 
+  A hoist can lift a crate if the hoist is in an connected (adjacent) area to the crate's store area.
+  Once the crate is lifted, the crate is no longer on the store area, which also means that the crate is no more in the place (container or depot) where it was stored.
+  Once the crate is lifted, the store area becomes clear.
+  Once the crate is lifted, the hoist is no longer available but lifting the crate.
+  A hoist can drop a crate to a target store area only if the hoist is at the connected (adjacent) area to the crate's target store area.
+  A hoist can drop a crate only when the hoist is currently lifting the crate.
+  A hoist can drop a crate to a store area only if the store area is clear.
+  Once the crate is dropped, the crate is on the store area, which also means that the crate is in the place (container or depot) where it was stored.
+  Once the crate is dropped, the store area is no longer clear.
+  Once the crate is dropped, the hoist becomes available and is no longer lifting the crate.
+  A hoist can move from one store area to another store area only if the hoist is current at the from-store area and the from-store area and to-store area are connected (adjacent) areas.
+  A hoist can move from one store area to another store area only if the to-store area is clear.
+  Once the hoist is moved from one store area to another store area, the hoist is no longer at the from-store area but is at the to-store area.
+  Once the hoist is moved from one store area to another store area, the from-store area becomes clear.
+  Once the hoist is moved from one store area to another store area, the to-store area is no longer clear.
+  A hoist can go-out from a store area to a transit area only if the hoist is currently at the store area
+  A hoist can go-out from a store area to a transit area only if the the store area is connected (adjacent) to the transit area.
+  Once the hoist goes-out from a store area to a transit area, the hoist is no longer at the store area but is at the transit area.
+  Once the hoist goes-out from a store area to a transit area, the store area becomes clear.
+  A hoist can go-in from a transit area to a store area only if the hoist is currently at the transit area
+  A hoist can go-in from a transit area to a store area only if the the store area is connected (adjacent) to the transit area.
+  A hoist can go-in from a transit area to a store area only if the store area is clear.
+  Once the hoist goes-in from a transit area to a store area, the hoist is no longer at the transit area but is at the store area.
+  Once the hoist goes-in from a transit area to a store area, the store area is no longer clear.
+
+actions:
+  {
+    "lift": "use {0} at {3} to lift {1} at {2} in place {4}",
+    "drop": "use {0} at {3} to drop {1} at {2} in place {4}",
+    "move": "move {} from {} to {}",
+    "go-out": "let {} go-out from {} to {}",
+    "go-in": "let {} go-in from {} to {}"
+  }
+
+predicates: 
+  {
+    "clear": "{} is clear",
+    "in": "{} is in {}",
+    "available": "{} is available",
+    "lifting": "{} is lifting {}",
+    "at": "{} is at {}",
+    "on": "{} is on {}",
+    "connected": "{} is connected to {}"
+  }
+
+encoded_objects:
+  {
+    '^depot(\d+)(\-\d+\-\d+)$': "depot_store_area_{}{}",
+    '^container\-(\d+\-\d+)$': "container_store_area-{}",
+    "hoist": "hoist_{}",
+    "crate": "crate_{}",
+    '^container(\d+)$': "container_{}",
+    '^depot(\d+)$': "depot_{}",
+    "loadarea": "transit_load_area",
+    "transit": "transit_area_{}"
+  }
+
+
+

@@ -1,0 +1,104 @@
+instance_dir: logistics/generated_basic
+generalized_instance_dir: logistics/generated_basic_longer_plan_len
+domain_file: logistics/generated_domain.pddl
+domain_name: logistics
+n_instances: 285
+start: 1
+end: 285
+instances_template: instance-{}.pddl
+
+domain_intro: |
+   I have to plan logistics to transport packages within cities via trucks and between cities via airplanes. Locations within a city are directly connected (trucks can move between any two such locations), and so are the cities. In each city there is exactly one truck and each city has one location that serves as an airport.
+   Here are the actions that can be performed:
+
+   Load a package into a truck. 
+   Load a package into an airplane.
+   Unload a package from a truck. 
+   Unload a package from an airplane. 
+   Drive a truck from one location to another location. 
+   Fly an airplane from one city to another city.
+
+   The following are the restrictions on the actions:
+   A package can be loaded into a truck only if the package and the truck are in the same location.
+   Once a package is loaded into a truck, the package is not at the location and is in the truck.   
+   A package can be loaded into an airplane only if the package and the airplane are in the same location.
+   Once a package is loaded into an airplane, the package is not at the location and is in the airplane.
+   A package can be unloaded from a truck only if the package is in the truck.
+   Once a package is unloaded from a truck, the package is not in the truck and is at the location of the truck.
+   A package can be unloaded from an airplane only if the package in the airplane.
+   Once a package is unloaded from an airplane, the package is not in the airplane and is at the location of the airplane.   
+   A truck can be driven from one location to another if the truck is at the from-location and both from-location and to-location are locations in the same city.
+   Once a truck is driven from one location to another, it is not at the from-location and is at the to-location.
+   An airplane can be flown from one city to another if the from-location and the to-location are airports and the airplane is at the from-location.
+   Once an airplane is flown from one city to another the airplane is not at the from-location and is at the to-location.
+
+domain_intro_variable: |
+   I have to plan logistics to transport packages within cities via trucks and between cities via airplanes. Locations within a city are directly connected (trucks can move between any two such locations), and so are the cities. In each city there is exactly one truck and each city has one location that serves as an airport.
+   Here are the actions that can be performed:
+
+   Load a package into a truck. 
+   Load a package into an airplane.
+   Unload a package from a truck. 
+   Unload a package from an airplane. 
+   Drive a truck from one location to another location. 
+   Fly an airplane from one city to another city.
+
+   The following are the restrictions on the actions:
+
+   ['load-truck']
+   A {0} can be loaded into a {1} only if the {0} and the {1} are in the same {2}.
+   Once a {0} is loaded into a {1}, the {0} is not at the {2} and is in the {1}.   
+
+   ['load-airplane']
+   A {0} can be loaded into an {1} only if the {0} and the {1} are in the same {2}.
+   Once a {0} is loaded into an {1}, the {0} is not at the {2} and is in the {1}.
+
+   ['unload-truck']
+   A {0} can be unloaded from a {1} only if the {0} is in the {1}.
+   Once a {0} is unloaded from a {1}, the {0} is not in the {1} and is at the {2} of the {1}.
+
+   ['unload-airplane']
+   A {0} can be unloaded from an {1} only if the {0} in the {1}.
+   Once a {0} is unloaded from an {1}, the {0} is not in the {1} and is at the {2} of the {1}.   
+
+   ['drive-truck']
+   A {0} can be driven from {1} to {2} if the {0} is at the {1} and both {1} and {2} are locations in the same {3}.
+   Once a {0} is driven from {1} to {2}, it is not at the {1} and is at the {2}.
+
+   ['fly-airplane']
+   An {0} can be flown from {1} to {2} if the {1} and the {2} are airports and the {0} is at the {1}.
+   Once an {0} is flown from {1} to {2} the {0} is not at the {1} and is at the {2}.
+
+actions:
+  {
+    load-truck: "load {} into {} at {}",
+    load-airplane: "load {} into {} at {}",
+    unload-truck: "unload {} from {} at {}",
+    unload-airplane: "unload {} from {} at {}",
+    drive-truck: "drive {} from {} to {} in {}",
+    fly-airplane: "fly {} from {} to {}"
+  }
+
+
+predicates: {
+   "AIRPLANE": "",
+   "AIRPORT": "{} is an airport",
+   "CITY": "",
+   "LOCATION": "",
+   "OBJ": "",
+   "TRUCK": "",
+   "at": "{} is at {}",
+   "in": "{} is in {}",
+   "in-city": "{} is in the city {}",
+  }
+
+# encoded_objects: dictionary of object names, have to be alphabetical
+encoded_objects:
+  {
+    "p": "package_{}",
+    "t": "truck_{}",
+    "a": "airplane_{}",
+    '^l(\d+)\-(\d+)$': "location_{}-{}",
+    "c": "city_{}"
+  }
+

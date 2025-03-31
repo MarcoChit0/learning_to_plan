@@ -1,0 +1,112 @@
+{
+    "accu_t4": {
+        "script_url": "../../../data/03_primary/llm_plan_generation_dataset_qwen",
+        "formatting": "alpaca",
+        "subset": "accu_t4",
+        "split": "train",
+        "columns":{
+            "prompt": "instruction",
+            "query": "input",
+            "response": "output"
+        }
+    },
+    "accu_t3": {
+        "script_url": "../../../data/03_primary/llm_plan_generation_dataset_qwen",
+        "formatting": "alpaca",
+        "subset": "accu_t3",
+        "split": "train",
+        "columns":{
+            "prompt": "instruction",
+            "query": "input",
+            "response": "output"
+        }
+    },
+    "accu_t1_t4": {
+        "script_url": "../../../data/03_primary/llm_plan_generation_dataset_qwen",
+        "formatting": "alpaca",
+        "subset": "accu_t1_t4",
+        "split": "train",
+        "columns":{
+            "prompt": "instruction",
+            "query": "input",
+            "response": "output"
+        }
+    },
+    "accu_t2_t4": {
+        "script_url": "../../../data/03_primary/llm_plan_generation_dataset_qwen",
+        "formatting": "alpaca",
+        "subset": "accu_t2_t4",
+        "split": "train",
+        "columns":{
+            "prompt": "instruction",
+            "query": "input",
+            "response": "output"
+        }
+    },
+    "accu_t1_t3_t4": {
+        "script_url": "../../../data/03_primary/llm_plan_generation_dataset_qwen",
+        "formatting": "alpaca",
+        "subset": "accu_t1_t3_t4",
+        "split": "train",
+        "columns":{
+            "prompt": "instruction",
+            "query": "input",
+            "response": "output"
+        }
+    },
+    "accu_t1_t3": {
+        "script_url": "../../../data/03_primary/llm_plan_generation_dataset_qwen",
+        "formatting": "alpaca",
+        "subset": "accu_t1_t3",
+        "split": "train",
+        "columns":{
+            "prompt": "instruction",
+            "query": "input",
+            "response": "output"
+        }
+    },
+    "t0": {
+        "script_url": "../../../data/03_primary/llm_plan_generation_dataset_qwen",
+        "formatting": "alpaca",
+        "subset": "t0",
+        "split": "train",
+        "columns":{
+            "prompt": "instruction",
+            "query": "input",
+            "response": "output"
+        }
+    },
+    "t0_t5": {
+        "script_url": "../../../data/03_primary/llm_plan_generation_dataset_qwen",
+        "formatting": "alpaca",
+        "subset": "t0_t5",
+        "split": "train",
+        "columns":{
+            "prompt": "instruction",
+            "query": "input",
+            "response": "output"
+        }
+    },
+    "accu_t1": {
+        "script_url": "../../../data/03_primary/llm_plan_generation_dataset_qwen",
+        "formatting": "alpaca",
+        "subset": "accu_t1",
+        "split": "train",
+        "columns":{
+            "prompt": "instruction",
+            "query": "input",
+            "response": "output"
+        }
+    },
+    "accu_t2": {
+        "script_url": "../../../data/03_primary/llm_plan_generation_dataset_qwen",
+        "formatting": "alpaca",
+        "subset": "accu_t2",
+        "split": "train",
+        "columns":{
+            "prompt": "instruction",
+            "query": "input",
+            "response": "output"
+        }
+    }
+}   

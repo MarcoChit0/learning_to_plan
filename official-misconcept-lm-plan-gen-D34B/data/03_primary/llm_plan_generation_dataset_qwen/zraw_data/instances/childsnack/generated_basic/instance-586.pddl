@@ -1,0 +1,29 @@
+; child-snack task with 1 children and 0.63 gluten factor 
+; constant factor of 1.5
+; random seed: 129022
+
+(define (problem prob-snack)
+  (:domain child-snack)
+  (:objects
+    child36 - child
+    bread17 - bread-portion
+    content423 - content-portion
+    tray253 - tray
+    table56 table76 table257 - place
+    sandw1 sandw2 - sandwich
+  )
+  (:init
+     (at tray253 kitchen)
+     (at_kitchen_bread bread17)
+     (at_kitchen_content content423)
+     (not_allergic_gluten child36)
+     (waiting child36 table56)
+     (notexist sandw1)
+     (notexist sandw2)
+  )
+  (:goal
+    (and
+     (served child36)
+    )
+  )
+)

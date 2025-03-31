@@ -1,0 +1,44 @@
+instance_dir: hanoi/generated_basic
+generalized_instance_dir: hanoi/generated_basic_longer_plan_len
+domain_file: hanoi/generated_domain.pddl
+domain_name: hanoi
+n_instances: 200
+start: 0
+end: 199
+instances_template: instance-{}.pddl
+
+domain_intro: |
+  I have to solve the Tower of Hanoi puzzle, which involves stacking a number of discs of different sizes. The puzzle starts with the discs neatly stacked in ascending order of size, the smallest at the top, making a conical shape.
+
+  Here are the actions I can do
+
+    Move a disc from its parent disc to the top of a target disc.
+
+  The following are the restrictions on the actions:
+    Only one disc can be moved at a time.
+    A disc can only be moved if the target disc is larger than the disc being moved.
+    A disc can be moved from one parent disc to another target disc only if the disc is directly on top of the parent disc.
+    A disc can be moved only if there is no disc on top of it (in other words, this disc can be moved only if this disc is clear).
+    A disc can be move to the top of another disc only if the target disc has no disc on top of it.
+    Once a disc has been moved, the original parent disc has no disc on top of it.
+    Once a disc has been moved, the disc is on top of the target disc.
+    Once a disc has been moved, the disc is no longer on top of the parent disc.
+    Once a disc has been moved, the target disc is no longer clear as it has a disc on top of it.
+
+actions:
+  {
+    move: "move {} from {} to {}"
+  }
+
+predicates:
+  {
+    "clear": "{} is clear",
+    "on": "{} is on top of {}",
+    "smaller": "{} is larger than {}"
+  }
+
+encoded_objects: 
+  {
+    "peg": "peg_{}",
+    "d": "disc_{}"
+  }

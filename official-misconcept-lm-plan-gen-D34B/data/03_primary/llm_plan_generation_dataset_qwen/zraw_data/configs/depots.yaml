@@ -1,0 +1,104 @@
+instance_dir: depots/generated_basic
+generalized_instance_dir: depots/generated_basic_longer_plan_len
+domain_file: depots/generated_domain.pddl
+domain_name: depots
+n_instances: 4200
+start: 0
+end: 4199
+instances_template: instance-{}.pddl
+domain_intro: |
+   I have to plan the logistics of transporting crates between a number of depots and distributors via trucks that are loaded by hoists. Depots and distributors are directly connected by roads (trucks can drive between any two depots or distributors).
+   
+   A depot is a type of place.
+   A distributor is a type of place.
+   A pallet is a type of surface.
+   A crate is a type of surface.
+
+   Here are the actions that can be performed:
+
+   Drive a truck from one place to another place.
+   Use a hoist to lift a crate from a surface at a place.
+   Use a hoist to drop a crate to a surface at a place.
+   Use a hoist to load a crate into a truck at a place.
+   Use a hoist to unload a crate from a truck at a place.
+
+   The following are the restrictions on the actions:
+   A truck can be driven from one place to another place only if the truck is at the origin place.
+   Once a truck has been driven from one place to another, it is not at the origin place and is at the destination place.
+   A crate can be lifted by a hoist only if the hoist is at the same place as the crate, the hoist is available, and the crate is clear.
+   Once a crate has been lifted by a hoist from a surface at a place, the crate is not at the place, the hoist is lifting the crate, the hoist is not available, the surface is clear, and the crate is not on the surface.
+   A crate can be dropped by a hoist to a surface only if the hoist and surface are both at the place, the surface is clear, and the hoist is lifting the crate.
+   Once a crate has been dropped by a hoist to a surface at a place, the hoist is available, the hoist is not lifting the crate, the crate is at the place, the surface is not clear, the crate is clear, and the crate is on the surface.
+   A crate can be loaded by a hoist onto a truck at a place only if the hoist is at the same place, the truck is at the same place, and the hoist is lifting the crate.
+   Once a crate has been loaded by a hoist onto a truck at a place. 
+   A crate can be unloaded by a hoist from a truck at a place only if the hoist is at the same place as the truck, the hoist is available, and the crate is in the truck.
+   Once a crate has been unloaded by a hoist from a truck at a place, the crate is not in the truck, the hoist is not available, and the hoist is lifting the crate.
+
+domain_intro_variable: |
+   I have to plan the logistics of transporting crates between a number of depots and distributors via trucks that are loaded by hoists. Depots and distributors are directly connected by roads (trucks can drive between any two depots or distributors).
+   
+   A depot is a type of place.
+   A distributor is a type of place.
+   A pallet is a type of surface.
+   A crate is a type of surface.
+
+   Here are the actions that can be performed:
+
+   Drive a truck from one place to another place.
+   Use a hoist to lift a crate from a surface at a place.
+   Use a hoist to drop a crate to a surface at a place.
+   Use a hoist to load a crate into a truck at a place.
+   Use a hoist to unload a crate from a truck at a place.
+
+   The following are the restrictions on the actions:
+
+   ['drive']
+   A {0} can be driven from {1} to {2} only if the {0} is at the {1}.
+   Once a {0} has been driven from {1} to {2}, it is not at the origin {1} and is at the destination {2}.
+
+   ['lift']
+   A {1} can be lifted by a {0} only if the {0} is at the same place {3} as the {1}, the {0} is available, and the {1} is clear.
+   Once a {1} has been lifted by a {0} from a {2} at a place {3}, the {1} is not at the place {3}, the {0} is lifting the {1}, the {0} is not available, the {2} is clear, and the {1} is not on the {2}.
+
+   ['drop']
+   A {1} can be dropped by a {0} to a {2} only if the {0} and {2} are both at the place {3}, the {2} is clear, and the {0} is lifting the {1}.
+   Once a {1} has been dropped by a {0} to a {2} at a place {3}, the {0} is available, the {0} is not lifting the {1}, the {1} is at the place {3}, the {2} is not clear, the {1} is clear, and the {1} is on the {2}.
+
+   ['load']
+   A {1} can be loaded by a {0} onto a {2} at a place {3} only if the {0} is at the same place {3}, the {2} is at the same place {3}, and the {0} is lifting the {1}.
+   Once a {1} has been loaded by a {0} onto a {2} at a place {3}.
+
+   ['unload']
+   A {1} can be unloaded by a {0} from a {2} at a place {3} only if the {0} is at the same place {3} as the {2}, the {0} is available, and the {1} is in the {2}.
+   Once a {1} has been unloaded by a {0} from a {2} at a place {3}, the {1} is not in the {2}, the {0} is not available, and the {0} is lifting the {1}.
+
+
+actions:
+  {
+    drive: "drive {} from {} to {}",
+    lift: "Use {} to lift {} from {} at {}",
+    drop: "Use {} to drop {} to {} at {}",
+    load: "Use {} to load {} into {} at {}",
+    unload: "Use {} to unload {} from {} at {}"
+  }
+
+
+predicates:
+  {
+    "at": "{} is at {}",
+    "clear": "{} is clear",
+    "available": "{} is available",
+    "on": "{} is on {}",
+    "in": "{} is in {}",
+    "lifting": "{} is lifting {}"
+  }
+
+encoded_objects:
+  {
+    "pallet": "pallet_{}",
+    "depot": "depot_{}",
+    "distributor": "distributor_{}",
+    "truck": "truck_{}",
+    "crate": "crate_{}",
+    "hoist": "hoist_{}"
+  }

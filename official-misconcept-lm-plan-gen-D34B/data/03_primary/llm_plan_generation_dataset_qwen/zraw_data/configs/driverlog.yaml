@@ -1,0 +1,114 @@
+instance_dir: driverlog/generated_basic
+generalized_instance_dir: driverlog/generated_basic_longer_plan_len
+domain_file: driverlog/generated_domain.pddl
+domain_name: driverlog
+n_instances: 4200
+start: 0
+end: 4199
+instances_template: instance-{}.pddl
+domain_intro: |
+  I have to plan how to transport objects between locations using trucks driven by drivers. The drivers can walk between locations, board and disembark from trucks, and drive trucks between locations. The trucks can be loaded and unloaded with objects.
+
+  Here are the actions that can be performed:
+
+  Load an object into a truck.
+  Unload an object from a truck.
+  A driver boards a truck.
+  A driver disembarks from a truck.
+  A driver drives a truck from one location to another location.
+  A driver walks from one location to another location.
+
+  The following are the restrictions on the actions:
+
+  An object can be loaded into a truck only if the object is at the same location as the truck.
+  Once an object is loaded into a truck, the object is not at the location but is in the truck.
+  An object can be unloaded from a truck only if the object is in the truck.
+  Once an object is unloaded from a truck, the object is not in the truck but is at the location of the truck.
+  A driver can board a truck only if the driver is at the same location as the truck.
+  A driver can board a truck only if the truck is empty.
+  Once a driver boards a truck, we say the driver is driving the truck.
+  Once a driver boards a truck, the driver is no longer at the location. 
+  Once a driver boards a truck, the truck is no longer empty.
+  A driver can disembark from a truck only if the driver is driving the truck.
+  Once a driver disembarks from a truck, we say the driver is no longer driving the truck.
+  Once a driver disembarks from a truck, the driver is at the location of the truck.
+  Once a driver disembarks from a truck, the truck is empty.
+  A driver can drive a truck from one location to another location only if the driver is driving the truck and the truck is at the from-location.
+  A driver can drive a truck from one location to another location only if the from-location and to-location are linked.
+  Once a driver drives a truck from one location to another location, the truck is at the to-location and is no longer at the from-location.
+  A driver can walk from one location to another location only if the driver is at the from-location and the from-location and to-location are linked.
+  Once a driver walks from one location to another location, the driver is at the to-location and is no longer at the from-location.
+
+domain_intro_variable: |
+  I have to plan how to transport objects between locations using trucks driven by drivers. The drivers can walk between locations, board and disembark from trucks, and drive trucks between locations. The trucks can be loaded and unloaded with objects.
+
+  Here are the actions that can be performed:
+
+  Load an object into a truck.
+  Unload an object from a truck.
+  A driver boards a truck.
+  A driver disembarks from a truck.
+  A driver drives a truck from one location to another location.
+  A driver walks from one location to another location.
+
+  The following are the restrictions on the actions:
+
+  ['load-truck']
+  An {0} can be loaded into a {1} only if the {0} is at the same {2} as the {1}.
+  Once an {0} is loaded into a {1}, the {0} is not at the {2} but is in the {1}.
+
+  ['unload-truck']
+  An {0} can be unloaded from a {1} only if the {0} is in the {1}.
+  Once an {0} is unloaded from a {1}, the {0} is not in the {1} but is at the {2} of the {1}.
+
+  ['board-truck']
+  A {0} can board a {1} only if the {0} is at the same {2} as the {1}.
+  A {0} can board a {1} only if the {1} is empty.
+  Once a {0} boards a {1}, we say the {0} is driving the {1}.
+  Once a {0} boards a {1}, the {0} is no longer at the {2}. 
+  Once a {0} boards a {1}, the {1} is no longer empty.
+
+  ['disembark-truck']
+  A {0} can disembark from a {1} only if the {0} is driving the {1}.
+  Once a {0} disembarks from a {1}, we say the {0} is no longer driving the {1}.
+  Once a {0} disembarks from a {1}, the {0} is at the {2} of the {1}.
+  Once a {0} disembarks from a {1}, the {1} is empty.
+
+  ['drive-truck']
+  A {3} can drive a {0} from {1} to {2} only if the {3} is driving the {0} and the {0} is at the {1}.
+  A {3} can drive a {0} from {1} to {2} only if the {1} and {2} are linked.
+  Once a {3} drives a {0} from {1} to {2}, the {0} is at the {2} and is no longer at the {1}.
+
+  ['walk']
+  A {0} can walk from {1} to {2} only if the {0} is at the {1} and the {1} and {2} are linked.
+  Once a {0} walks from {1} to {2}, the {0} is at the {2} and is no longer at the {1}.
+
+
+actions:
+  {
+    "load-truck": "load {} into {} at {}",
+    "unload-truck": "unload {} from {} at {}",
+    "board-truck": "{} boards {} at {}",
+    "disembark-truck": "{} disembarks from {} at {}",
+    "drive-truck": "{3} drives {0} from {1} to {2}",
+    "walk": "{} walks from {} to {}",
+  }
+
+predicates:
+  {
+    "at": "{} is at {}",
+    "in": "{} is in {}",
+    "driving": "{} is driving {}",
+    "link": "{} and {} are linked",
+    "path": "{} and {} are connected",
+    "empty": "{} is empty",
+  }
+
+encoded_objects:
+  {
+    "driver": "driver_{}",
+    "truck": "truck_{}",
+    "package": "package_{}",
+    "s": "place_{}",
+    "p": "path_{}",
+  }

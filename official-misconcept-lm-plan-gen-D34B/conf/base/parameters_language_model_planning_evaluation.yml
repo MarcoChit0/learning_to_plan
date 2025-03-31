@@ -1,0 +1,135 @@
+# This is a boilerplate parameters config generated for pipeline 'language_model_planning_evaluation'
+# using Kedro 0.19.6.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.6/configuration/parameters.html
+
+language_model_planning_evaluation_params:
+  # having different params for different config types
+  t0_params:
+    checkpoint_dir: "data/07_model_output/qwen/full_t0/sft"
+    # checkpoint_dir: "data/07_model_output/qwen/full_t0_special_sft/sft"
+    config_type_name: "t0"
+    is_llama_factory: true
+    eval_batch_size: 4 # fit 24G GPU
+    ppo_checkpoint_dir: "data/07_model_output/qwen/full_t0/ppo/checkpoint-39326"
+    lora_rank: "${further_ppo_training_params.t0_params.lora_rank}"
+    lora_alpha: "${further_ppo_training_params.t0_params.lora_alpha}"
+
+  accu_t1_params:
+    checkpoint_dir: "data/07_model_output/qwen/full_accu_t1/sft"
+    config_type_name: "accu_t1"
+    is_llama_factory: true
+    eval_batch_size: 4
+
+    ppo_checkpoint_dir: ""
+
+  accu_t2_params:
+    checkpoint_dir: "data/07_model_output/qwen/full_accu_t2/sft"
+    config_type_name: "accu_t2"
+    is_llama_factory: true
+    eval_batch_size: 4
+
+    ppo_checkpoint_dir: ""
+
+  accu_t3_params:
+    checkpoint_dir: "data/07_model_output/qwen/full_accu_t3/sft"
+    config_type_name: "accu_t3"
+    is_llama_factory: true
+    eval_batch_size: 2 # 80GB
+
+    ppo_checkpoint_dir: ""
+
+  accu_t1_t3_params:
+    config_type_name: "accu_t1_t3"
+    checkpoint_dir: "data/07_model_output/qwen/full_accu_t1_t3/sft"
+    is_llama_factory: true
+    eval_batch_size: 2 # 80GB
+
+    ppo_checkpoint_dir: ""
+    
+  accu_t4_params:
+    checkpoint_dir: "data/07_model_output/qwen/full_accu_t4/sft"
+    config_type_name: "accu_t4"
+    is_llama_factory: true # TODO: try llama factory version  
+    eval_batch_size: 2 # 80GB eval_batch_   size: 4
+
+    ppo_checkpoint_dir: ""
+
+  accu_t1_t4_params:
+    config_type_name: "accu_t1_t4"
+    checkpoint_dir: "data/07_model_output/qwen/full_accu_t1_t4/sft" 
+    is_llama_factory: true
+    eval_batch_size: 4 #  80GB
+
+    ppo_checkpoint_dir: "data/07_model_output/qwen/full_accu_t1_t4/ppo/checkpoint-35714"
+    lora_rank: "${further_ppo_training_params.accu_t1_t4_params.lora_rank}"
+    lora_alpha: "${further_ppo_training_params.accu_t1_t4_params.lora_alpha}"
+
+  accu_t2_t4_params:
+    checkpoint_dir: "data/07_model_output/qwen/full_accu_t2_t4/sft"
+    config_type_name: "accu_t2_t4"
+    is_llama_factory: true # TODO try llama factory version
+    eval_batch_size: 4 # 80GB
+
+    ppo_checkpoint_dir: ""
+
+  accu_t1_t3_t4_params:
+    config_type_name: "accu_t1_t3_t4"
+    checkpoint_dir: "data/07_model_output/qwen/full_accu_t1_t3_t4/sft"
+    is_llama_factory: true
+    eval_batch_size: 2 # 80GB
+
+    ppo_checkpoint_dir: ""
+
+  t0_t5_params:
+    checkpoint_dir: "data/07_model_output/qwen/full_t0_t5/sft"
+    config_type_name: "t0_t5"
+    is_llama_factory: true
+    eval_batch_size: 4 # 80GB
+
+    ppo_checkpoint_dir: "TODO"
+    lora_rank: "${further_ppo_training_params.t0_t5_params.lora_rank}"
+    lora_alpha: "${further_ppo_training_params.t0_t5_params.lora_alpha}"
+    
+
+language_model_planning_evaluation_general_params:
+  if_one_shot: false # if true, we will randomly sample one instance. # * experiments show that one-shot is not stable as we did not use conversation style during training.
+
+  huggingface_dataset_dir: "${training_llm_for_plan_generation_params.huggingface_dataset_dir}"
+  planning_domain_config_dir: "${training_llm_for_plan_generation_params.planning_domain_config_dir}"
+  domain_fp_pattern: "${training_llm_for_plan_generation_params.domain_fp_pattern}"
+  problem_instance_fp_pattern: "${training_llm_for_plan_generation_params.problem_instance_fp_pattern}"
+
+  plan_output_dir: "${training_llm_for_plan_generation_params.plan_output_dir}"
+  val_fp: "${training_llm_for_plan_generation_params.val_fp}"
+
+  seq_params: "${training_llm_for_plan_generation_params.seq_params}"
+  dtype: "${training_llm_for_plan_generation_params.dtype}"
+
+  
+
+  # Sampling parameters
+  top_k: 3  # number of plan candidates to generate, 1 | 3 | 5 
+  top_p: 0.93 # top_p for sampling, inactive if top_k = 1
+  token_top_k: 50 # top_k for token sampling, inactive if top_k = 1            
+
+  # Hint parameters
+  provide_action_hint: true # we found that models often cannot estimate OOD action steps, so for accu_t2 and above, we can provide some of starting action steps as hints. 
+  action_hint_size: 1 # default 1, only provide the first action step as hint
+
+  # debug_mode: false # will only test debug_mode instances
+  # debug_mode_num: 2
+  # wandb_record: true 
+  # only_check_plan_executable: false # if true, we will only check if the plan is executable, and will not evaluate the plan reaches the goal or not.
+
+  # Debug mode
+  debug_mode: true # will only test debug_mode instances
+  debug_mode_num: 200
+  wandb_record: true 
+  only_check_plan_executable: false
+  only_check_goal_achievable: true
+
+  
+
+  lora_dropout: "${further_ppo_training_general_params.lora_dropout}"

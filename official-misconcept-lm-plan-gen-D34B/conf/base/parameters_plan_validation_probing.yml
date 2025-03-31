@@ -1,0 +1,20 @@
+# This is a boilerplate parameters config generated for pipeline 'plan_validation_probing'
+# using Kedro 0.19.6.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.6/configuration/parameters.html
+
+plan_validation_probing_params:
+  huggingface_dataset_dir: "${globals:huggingface_dataset_dir}"
+  test_split_name: ["train", "test_longer_horizon"]
+  probing_data_config_type: "accu_t4" # this dataset contains all details and we just remove parts of content to fit the probing model
+  probing_data_cache_dir: "data/02_intermediate/probing_data_cache"
+  wandb_record: true 
+  freeze_for_debug: false
+
+plan_validation_probing_testing_model_info:
+  accu_t1_t4_params: "${language_model_planning_evaluation_params.accu_t1_t4_params}"
+  accu_t2_t4_params: "${language_model_planning_evaluation_params.accu_t2_t4_params}"
+  accu_t4_params: "${language_model_planning_evaluation_params.accu_t4_params}"
+  accu_t1_t3_t4_params: "${language_model_planning_evaluation_params.accu_t1_t3_t4_params}"
+  t0_t5_params: "${language_model_planning_evaluation_params.t0_t5_params}"

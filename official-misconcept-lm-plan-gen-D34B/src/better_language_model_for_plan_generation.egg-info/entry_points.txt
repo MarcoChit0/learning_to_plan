@@ -1,0 +1,2 @@
+[console_scripts]
+better-language-model-for-plan-generation = better_language_model_for_plan_generation.__main__:main

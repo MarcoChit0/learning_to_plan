@@ -1,0 +1,130 @@
+# This is a boilerplate parameters config generated for pipeline 'training_llm_for_plan_generation'
+# using Kedro 0.19.6.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.6/configuration/parameters.html
+
+training_llm_for_plan_generation_params:
+  huggingface_dataset_dir: "${globals:huggingface_dataset_dir}"
+  planning_domain_config_dir: "${training_llm_for_plan_generation_params.huggingface_dataset_dir}/zraw_data/configs"
+  domain_fp_pattern: "${training_llm_for_plan_generation_params.huggingface_dataset_dir}/zraw_data/instances/{domain_name}/generated_domain.pddl"
+  problem_instance_fp_pattern: "${training_llm_for_plan_generation_params.huggingface_dataset_dir}/zraw_data/instances/{domain_name}/{subdir_name}/instance-{instance_id}.pddl"
+
+  plan_output_dir: "data/07_model_output/llm_plan_generation/plan_output-{timestamp}"
+  val_fp: "opt/VAL/validate"
+
+  config_type_name: "t0" # t0 | accu_t1 | accu_t2 | accu_t3 | accu_t4 | accu_t1_t4 | accu_t2_t4
+  model_name: "unsloth/Meta-Llama-3.1-8B"
+  dtype: 'bfloat16'
+  load_in_4bit: false
+  if_lora: false
+  seed: 3407
+  epochs: 8 # according to https://community.openai.com/t/how-many-epochs-for-fine-tunes/7027/6 since our dataset is small
+
+  dataset_num_proc: 6
+  packing: false 
+  early_stopping_patience: 500 # Stop early if no improvement for 8 evaluations
+
+  # ! max_seq_length is deprecated, use max_new_tokens instead
+  seq_params:
+    t0:
+      max_seq_length: 3228
+      max_new_tokens: 999
+      batch_size: 2 # fits in 80GB GPU memory
+      eval_batch_size: 32
+      gradient_accumulation_steps: 4 
+
+    t0_t5:
+      max_seq_length: 3494
+      max_new_tokens: 2000
+      batch_size: 2 # fits in 80GB GPU memory # require 2 GPUs
+      eval_batch_size: 32
+      gradient_accumulation_steps: 4
+
+    accu_t1:
+      max_seq_length: 3230
+      max_new_tokens: 999
+      batch_size: 2 # fits in 80GB GPU memory
+      eval_batch_size: 32
+      gradient_accumulation_steps: 4 
+
+    accu_t2:
+      max_seq_length: 5000
+      max_new_tokens: 9474
+      batch_size: 1 # fits in 80GB GPU memory
+      eval_batch_size: 16
+      gradient_accumulation_steps: 4 
+
+    accu_t3:
+      max_seq_length: 9121
+      max_new_tokens: 18046
+      batch_size: 1 # fits in 80GB GPU memory # require 2 GPUs
+      eval_batch_size: 8
+      gradient_accumulation_steps: 1
+
+    accu_t4:
+      max_seq_length: 9121
+      max_new_tokens: 23340
+      batch_size: 1 # fits in 80GB GPU memory # require 2 GPUs
+      eval_batch_size: 8
+      gradient_accumulation_steps: 1
+
+    accu_t1_t4:
+      max_seq_length: 3494
+      max_new_tokens: 999
+      batch_size: 2 # fits in 80GB GPU memory # require 2 GPUs
+      eval_batch_size: 32
+      gradient_accumulation_steps: 6
+
+    accu_t2_t4:
+      max_seq_length: 5000                    
+      max_new_tokens: 11860
+      batch_size: 1 # fits in 80GB GPU memory # require 2 GPUs
+      eval_batch_size: 16
+      gradient_accumulation_steps: 10
+
+    accu_t1_t3: # same as accu_t3
+      max_seq_length: 9121
+      max_new_tokens: 9256
+      batch_size: 1 # fits in 80GB GPU memory # require 2 GPUs
+      eval_batch_size: 8
+      gradient_accumulation_steps: 1
+
+    accu_t1_t3_t4: # same as accu_t3
+      max_seq_length: 9121
+      max_new_tokens: 10703
+      batch_size: 1 # fits in 80GB GPU memory # require 2 GPUs
+      eval_batch_size: 8
+      gradient_accumulation_steps: 1
+
+
+  training_args:
+    warmup_steps: 5
+    num_train_epochs: "${training_llm_for_plan_generation_params.epochs}"
+    learning_rate: 1.0e-5
+    logging_steps: 500 
+    optim: "adamw_8bit"
+    weight_decay: 0.02 # follow the best practice in paper https://arxiv.org/abs/2408.16293
+    lr_scheduler_type: 'cosine'
+    seed: "${training_llm_for_plan_generation_params.seed}"
+    eval_strategy: "steps" # the step will be same as logging_steps
+    load_best_model_at_end: true # load the best model when finished training (early stopping)
+    save_strategy: "steps"
+    save_steps: 1000
+    save_total_limit: 2
+    eval_on_start: false # perform a evaluation step (sanity check) before the training to ensure the validation steps works correctly. 
+
+
+
+
+  checkpoint_output_dir: "data/07_model_output/llm_plan_generation/model_checkpoint_output-config_{config_type}-{timestamp}"
+
+  debug_checkpoint_dir: ""
+  continue_train_dir: ""
+  last_run_id: ""
+
+  is_train: true # if false, will only load the model and do evaluation
+  wandb_record: true 
+
+  # metric_for_best_model ref: https://github.com/huggingface/transformers/issues/12301
+  # compute_metrics ref: https://huggingface.co/docs/evaluate/en/transformers_integrations

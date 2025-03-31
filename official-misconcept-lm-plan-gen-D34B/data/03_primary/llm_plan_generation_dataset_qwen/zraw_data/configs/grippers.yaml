@@ -1,0 +1,78 @@
+instance_dir: grippers/generated_basic
+generalized_instance_dir: grippers/generated_basic_longer_plan_len
+domain_file: grippers/generated_domain.pddl
+domain_name: grippers
+n_instances: 4200
+start: 0
+end: 4199
+instances_template: instance-{}.pddl
+domain_intro: |
+  I have to plan how to move objects between rooms using a robot with grippers. The robot can move between rooms and pick up or drop objects using its grippers.
+
+  Here are the actions that can be performed:
+
+  Move the robot from one room to another room.
+  A robot pick up an object from a room.
+  A robot drop an object in a room.
+
+  The following are the restrictions on the actions:
+  A robot can move from one room to another room only if the robot is in the from-room.
+  Once the robot has moved from one room to another room, the robot is no longer in the from-room and is in the to-room.
+  A robot can pick up an object from a room only if the robot is in the room and the object is also in the same room.
+  A robot can pick up an object from a room only if the robot's gripper is free.
+  Once the robot has picked up an object from a room, the object is no longer in the room and is carried by the robot.
+  Once the robot has picked up an object from a room, the robot's gripper is no longer free.
+  A robot can drop an object in a room only if the robot is in the room and the robot is carrying the object.
+  Once the robot has dropped an object in a room, the object is in the room and is no longer carried by the robot.
+  Once the robot has dropped an object in a room, the robot's gripper is free.
+
+domain_intro_variable: |
+  I have to plan how to move objects between rooms using a robot with grippers. The robot can move between rooms and pick up or drop objects using its grippers.
+
+  Here are the actions that can be performed:
+
+  Move the robot from one room to another room.
+  A robot pick up an object from a room.
+  A robot drop an object in a room.
+
+  The following are the restrictions on the actions:
+
+  ['move']
+  A {0} can move from {1} to {2} only if the {0} is in the {1}.
+  Once the {0} has moved from {1} to {2}, the {0} is no longer in the {1} and is in the {2}.
+
+  ['pick']
+  A {0} can pick up an {1} from a {2} only if the {0} is in the {2} and the {1} is also in the same {2}.
+  A {0} can pick up an {1} from a {2} only if the {0}'s {3} is free.
+  Once the {0} has picked up an {1} from a {2}, the {1} is no longer in the {2} and is carried by the {0}.
+  Once the {0} has picked up an {1} from a {2}, the {0}'s {3} is no longer free.
+
+  ['drop']
+  A {0} can drop an {1} in a {2} only if the {0} is in the {2} and the {0} is carrying the {1}.
+  Once the {0} has dropped an {1} in a {2}, the {1} is in the {2} and is no longer carried by the {0}.
+  Once the {0} has dropped an {1} in a {2}, the {0}'s {3} is free.
+
+
+actions:
+  {
+    "move": "move {} from {} to {}",
+    "pick": "{} picks {} at {} with {}",
+    "drop": "{} drops {} at {} with {}"
+  }
+
+predicates:
+  {
+    "at-robby": "{} is at {}",
+    "at": "{} is at {}",
+    "free": "{}'s {} is free",
+    "carry": "{} carries {} with {}"
+  }
+
+encoded_objects:
+  {
+    "room": "room_{}",
+    "rgripper": "right_gripper_{}",
+    "lgripper": "left_gripper_{}",
+    "robot": "robot_{}",
+    "ball": "ball_{}",
+  }

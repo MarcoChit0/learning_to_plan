@@ -1,0 +1,123 @@
+instance_dir: satellite/generated_basic
+generalized_instance_dir: satellite/generated_basic_longer_plan_len
+domain_file: satellite/generated_domain.pddl
+domain_name: satellite
+n_instances: 4200
+start: 0
+end: 4199
+instances_template: instance-{}.pddl
+domain_intro: |
+  I have to plan the operations of satellites in space. These satellites are equipped with various instruments that can be used to take images of different directions in space using specific modes. The satellites can be turned, their instruments can be switched on and off, calibrated, and used to take images.
+
+  Here are the actions that can be performed:
+
+  Turn a satellite to a direction.
+  Switch on an instrument on a satellite.
+  Switch off an instrument on a satellite.
+  Calibrate an instrument on a satellite by pointing it to a calibration target.
+  Take an image of a direction using an instrument with a specific mode.
+
+  The following are the restrictions on the actions:
+
+  A satellite can be turned from a previous direction to a new direction only if the satellite is currently pointing to the previous direction.
+  Once the satellite is turned to a new direction, the satellite is no longer pointing to the previous direction but is pointing to the new direction.
+  An instrument can be switched on on a satellite only if the instrument is on board the satellite.
+  An instrument can be switched on on a satellite only if the instrument is power-available.
+  Once the instrument is switched on on a satellite, the instrument is power-on.
+  Once the instrument is switched on on a satellite, the instrument is no longer power-available.
+  Once the instrument is switched on on a satellite, the instrument becomes not calibrated.
+  An instrument can be switched off on a satellite only if the instrument is on board the satellite.
+  An instrument can be switched off on a satellite only if the instrument is power-on.
+  Once the instrument is switched off on a satellite, the instrument is power-available.
+  Once the instrument is switched off on a satellite, the instrument is no longer power-on.
+  An instrument can be calibrated on a satellite only if the instrument is on board the satellite.
+  An instrument can be calibrated on a satellite only if the instrument is power-on.
+  An instrument can be calibrated on a satellite only if the instrument is pointing to the calibration target.
+  Once the instrument is calibrated on a satellite, the instrument is calibrated.
+  An image of a direction with a specific mode can be taken using an instrument on a satellite only if the instrument is on board the satellite.
+  An image of a direction with a specific mode can be taken using an instrument on a satellite only if the instrument is power-on.
+  An image of a direction with a specific mode can be taken using an instrument on a satellite only if the instrument is calibrated.
+  An image of a direction with a specific mode can be taken using an instrument on a satellite only if the satellite is pointing to the direction.
+  An image of a direction with a specific mode can be taken using an instrument on a satellite only if the instrument supports the mode.
+  Once an image of a direction with a specific mode is taken using an instrument on a satellite, we will have the image.
+
+domain_intro_variable: |
+  I have to plan the operations of satellites in space. These satellites are equipped with various instruments that can be used to take images of different directions in space using specific modes. The satellites can be turned, their instruments can be switched on and off, calibrated, and used to take images.
+
+  Here are the actions that can be performed:
+
+  Turn a satellite to a direction.
+  Switch on an instrument on a satellite.
+  Switch off an instrument on a satellite.
+  Calibrate an instrument on a satellite by pointing it to a calibration target.
+  Take an image of a direction using an instrument with a specific mode.
+
+  The following are the restrictions on the actions:
+
+  ['turn_to']
+  A {0} can be turned from a previous {2} to a new {1} only if the {0} is currently pointing to the previous {2}.
+  Once the {0} is turned to a new {1}, the {0} is no longer pointing to the previous {2} but is pointing to the new {1}.
+
+  ['switch_on']
+  An {0} can be switched on on a {1} only if the {0} is on board the {1}.
+  An {0} can be switched on on a {1} only if the {0} is power-available.
+  Once the {0} is switched on on a {1}, the {0} is power-on.
+  Once the {0} is switched on on a {1}, the {0} is no longer power-available.
+  Once the {0} is switched on on a {1}, the {0} becomes not calibrated.
+
+  ['switch_off']
+  An {0} can be switched off on a {1} only if the {0} is on board the {1}.
+  An {0} can be switched off on a {1} only if the {0} is power-on.
+  Once the {0} is switched off on a {1}, the {0} is power-available.
+  Once the {0} is switched off on a {1}, the {0} is no longer power-on.
+
+  ['calibrate']
+  An {1} can be calibrated on a {0} only if the {1} is on board the {0}.
+  An {1} can be calibrated on a {0} only if the {1} is power-on.
+  An {1} can be calibrated on a {0} only if the {1} is pointing to the calibration target {2}.
+  Once the {1} is calibrated on a {0}, the {1} is calibrated.
+
+  ['take_image']
+  An image of a direction {1} with a specific {3} can be taken using an {2} on a {0} only if the {2} is on board the {0}.
+  An image of a direction {1} with a specific {3} can be taken using an {2} on a {0} only if the {2} is power-on.
+  An image of a direction {1} with a specific {3} can be taken using an {2} on a {0} only if the {2} is calibrated.
+  An image of a direction {1} with a specific {3} can be taken using an {2} on a {0} only if the {0} is pointing to the direction {1}.
+  An image of a direction {1} with a specific {3} can be taken using an {2} on a {0} only if the {2} supports the {3}.
+  Once an image of a direction {1} with a specific {3} is taken using an {2} on a {0}, we will have the image.
+
+
+actions:
+  {
+    "turn_to": "turn {} from {} to {}",
+    "switch_on": "switch on {} on {}",
+    "switch_off": "switch off {} on {}",
+    "calibrate": "calibrate {1} on {0} pointing to calibration target {2}",
+    "take_image": "take image of {1} using {2} on {0} with {3}",
+  }
+
+predicates:
+  {
+    "on_board": "{} is on board {}",
+    "supports": "{} supports {}",
+    "pointing": "{} is pointing to {}",
+    "power_avail": "{} is power-available",
+    "power_on": "{} is power-on",
+    "calibrated": "{} is calibrated",
+    "have_image": "{} has image in {}",
+    "calibration_target": "the calibration target of {} is {}",
+  }
+
+encoded_objects:
+  {
+    "satellite": "satellite_{}",
+    "instrument": "instrument_{}",
+    "direction": "direction_{}",
+    "image": "image_mode_{}",
+    "thermograph": "thermograph_mode_{}",
+    "spectrograph": "spectrograph_mode_{}",
+    "infrared": "infrared_mode_{}",
+    "groundstation": "ground_station_{}",
+    "star": "star_{}",
+    "planet": "planet_{}",
+    "phenomenon": "phenomenon_{}",
+  }

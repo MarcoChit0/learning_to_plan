@@ -1,0 +1,67 @@
+instance_dir: mystery_blocksworld/generated_basic
+generalized_instance_dir: mystery_blocksworld/generated_basic_longer_plan_len
+domain_file: mystery_blocksworld/generated_domain.pddl
+domain_name: mystery_blocksworld
+n_instances: 501
+start: 1
+end: 500
+instances_template: instance-{}.pddl
+
+domain_intro: |
+   I am playing with a set of objects. 
+   Here are the actions that can be performed:
+
+      Attack object
+      Feast object from another object
+      Succumb object
+      Overcome object from another object
+   
+   The following are the restrictions on the actions:
+      I can only attack or feast one object at a time.
+      I can only attack or feast an object if there is harmony.
+      I can only attack an object if the object is a planet and the object is a province. An object is a province if the object does not crave any other object and if the object is not being attacked.
+      I can only feast an object from on top of another object if the object I am feasting craves the other object.
+      I can only feast an object from on top of another object if the object I am feasting is a province.
+      Once I attack or feast an object, there is pain with the object.
+      I can only succumb an object if there is pain with the object.
+      I can only overcome an object from another object if there is pain with the object being overcome.
+      I can only overcome an object from another object if the object onto which I am overcoming the object is a province.
+      Once I succumb or overcome an object, there is harmony.
+      Once you overcome an object from a second object, the second object is no longer a province.
+
+
+action_obfuscation:
+   pick-up: attack
+   put-down: succumb
+   stack: overcome
+   unstack: feast
+
+actions:
+  {attack: "attack {}",
+   succumb: "succumb {}",
+   overcome: "overcome {} from {}",
+   feast: "feast {} from {}"}
+
+
+
+
+predicate_obfuscation:
+   ontable: planet
+   clear: province
+   handempty: harmony
+   on: craves
+   holding: pain
+
+
+predicates:
+  {planet: "planet {}",
+   province: "province {}",
+   harmony: "harmony",
+   "craves": "{} craves {}",
+  "pain": "pain {}"}
+
+# encoded_objects: dictionary of object names, have to be alphabetical
+encoded_objects:
+  {"a": "object a", "b": "object b", "c": "object c", "d": "object d",
+   "e": "object e", "f": "object f", "g": "object g", "h": "object h",
+   "i": "object i", "j": "object j", "k": "object k", "l": "object l" }

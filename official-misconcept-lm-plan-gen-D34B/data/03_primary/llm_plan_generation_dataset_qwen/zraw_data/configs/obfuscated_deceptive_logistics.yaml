@@ -1,0 +1,82 @@
+instance_dir: obfuscated_deceptive_logistics/generated_basic
+generalized_instance_dir: obfuscated_deceptive_logistics/generated_basic_longer_plan_len
+domain_file: obfuscated_deceptive_logistics/generated_domain.pddl
+domain_name: obfuscated_deceptive_logistics
+n_instances: 285
+start: 1
+end: 285
+instances_template: instance-{}.pddl
+
+domain_intro: |
+  I am playing with a set of objects to transport hands within textures via sneezes and between stupendous via cats. Textures within a stupendous are directly connected (sneezes can move between any two such textures), and so are the stupendous. In each stupendous there is exactly one sneeze and each stupendous has one texture that serves as a spring.
+  Here are the actions that can be performed:
+
+  Clip a hand into a sneeze. 
+  Sip a hand into a cat.
+  Tightfisted a hand from a sneeze. 
+  Paltry a hand from a cat.
+  Wretched a sneeze from one texture to another texture. 
+  Memory a cat from one stupendous to another stupendous.
+
+  The following are the restrictions on the actions:
+  A hand can be clipped into a sneeze only if the hand and the sneeze are next to the same texture.
+  Once a hand is clipped into a sneeze, the hand is not next to the texture and is a vase of the sneeze.   
+  A hand can be sipped into a cat only if the hand and the cat are next to the same texture.
+  Once a hand is sipped into a cat, the hand is not next to the texture and is a vase of the cat.
+  A hand can be tightfisted from a sneeze only if the hand is a vase of the sneeze.
+  Once a hand is tightfisted from a sneeze, the hand is not a vase of the sneeze and is next to the texture of the sneeze.
+  A hand can be paltry from a cat only if the hand in the cat.
+  Once a hand is paltry from a cat, the hand is not a vase of the cat and is next to the texture of the cat.   
+  A sneeze can be wretched from one texture to another if the sneeze is next to the from-texture and both from-texture and to-texture are textures in the same stupendous.
+  Once a sneeze is wretched from one texture to another, it is not next to the from-texture and is next to the to-texture.
+  A cat can be memoried from one stupendous to another if the from-texture and the to-texture are springs and the cat is next to the from-texture.
+  Once a cat is memoried from one stupendous to another the cat is not next to the from-texture and is next to the to-texture.
+
+
+predicate_obfuscation:
+  AIRPLANE: cats
+  AIRPORT: spring
+  CITY: stupendous
+  LOCATION: texture
+  OBJ: hand
+  TRUCK: sneeze
+  at: next
+  in: vase
+  in-city: collect
+
+
+predicates:
+  cats: ""
+  spring: "{} is a spring"
+  stupendous: ""
+  texture: ""
+  hand: ""
+  sneeze: ""
+  next: "{} is next to {}"
+  vase: "{} is a vase of {}"
+  collect: "{} collects {}"
+
+action_obfuscation:
+  LOAD-TRUCK: clip
+  LOAD-AIRPLANE: sip
+  UNLOAD-TRUCK: tightfisted
+  UNLOAD-AIRPLANE: paltry
+  DRIVE-TRUCK: wretched
+  FLY-AIRPLANE: memory
+
+actions:
+  clip: clip {} into {} at {}
+  sip: sip {} into {} at {}
+  tightfisted: tightfisted {} from {} at {}
+  paltry: paltry {} from {} at {}
+  wretched: wretched {} from {} to {} in {}
+  memory: memory {} from {} to {}
+
+encoded_objects:
+  {
+    "p": "hand_{}",
+    "t": "sneeze_{}",
+    "a": "cats_{}",
+    '^l(\d+)\-(\d+)$': "texture_{}-{}",
+    "c": "stupendous_{}"
+  }

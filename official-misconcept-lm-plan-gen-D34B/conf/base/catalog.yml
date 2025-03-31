@@ -1,0 +1,3 @@
+"{config_type_name}_planning_evaluation_results#csv":
+  type: pandas.CSVDataset
+  filepath: data/08_reporting/language_model_planning_evaluation/{config_type_name}_planning_evaluation_results.csv

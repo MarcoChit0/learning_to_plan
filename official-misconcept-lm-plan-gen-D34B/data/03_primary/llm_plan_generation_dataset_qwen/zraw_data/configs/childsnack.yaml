@@ -1,0 +1,136 @@
+instance_dir: childsnack/generated_basic
+generalized_instance_dir: childsnack/generated_basic_longer_plan_len
+domain_file: childsnack/generated_domain.pddl
+domain_name: childsnack
+n_instances: 4200
+start: 0
+end: 4199
+instances_template: instance-{}.pddl
+domain_intro: |
+  I have to plan how to make and serve sandwiches for a group of children, taking into account that some of them are allergic to gluten. There are two types of sandwiches: regular and gluten-free.
+
+  Here are the actions that can be performed:
+
+  Make a gluten-free sandwich.
+  Make a regular sandwich.
+  Put a sandwich on a tray.
+  Serve a gluten-free sandwich to an allergic child.
+  Serve a regular sandwich to a child.
+  Move a tray between kitchen and tables.
+
+  The following are the restrictions on the actions:
+  We can make a gluten-free sandwich only if there is a bread at kitchen and the bread is gluten-free.
+  We can make a gluten-free sandwich only if there is a content at kitchen and the content is gluten-free.
+  Once we make a gluten-free sandwich, the bread and content are no longer at kitchen.
+  Once we make a gluten-free sandwich, the sandwich is at kitchen and is gluten-free.
+  We can make a regular sandwich only if there is a bread at kitchen.
+  We can make a regular sandwich only if there is a content at kitchen.
+  Once we make a regular sandwich, the bread and content are no longer at kitchen.
+  Once we make a regular sandwich, the sandwich is at kitchen.
+  We can put a sandwich on a tray only if the sandwich is at kitchen.
+  We can put a sandwich on a tray only if the tray is also at kitchen.
+  Once we put a sandwich on a tray, the sandwich is no longer at kitchen but is on the tray.
+  We can serve a gluten-free sandwich to an allergic child only if the child is allergic to gluten.
+  We can serve a gluten-free sandwich to an allergic child only if the sandwich is on a tray and the sandwich is gluten-free.
+  We can serve a gluten-free sandwich to an allergic child only if the child is waiting for the sandwich at the table.
+  We can serve a regular sandwich to a child only if the tray is at the table where the child is waiting.
+  Once we serve a gluten-free sandwich to an allergic child, the sandwich is no longer on the tray.
+  Once we serve a gluten-free sandwich to an allergic child, we say the child has been served.
+  We can serve a regular sandwich to a child only if the child is not allergic to gluten.
+  We can serve a regular sandwich to a child only if the child is waiting for the sandwich at the table.
+  We can serve a regular sandwich to a child only if the sandwich is on a tray and the tray is at the table where the child is waiting.
+  Once we serve a regular sandwich to a child, the sandwich is no longer on the tray.
+  Once we serve a regular sandwich to a child, we say the child has been served.
+  We can move a tray from from-place to to-place only if the tray is at from-place.
+  Once we move a tray from from-place to to-place, the tray is no longer at from-place but is at to-place.
+
+domain_intro_variable: |
+  I have to plan how to make and serve sandwiches for a group of children, taking into account that some of them are allergic to gluten. There are two types of sandwiches: regular and gluten-free.
+
+  Here are the actions that can be performed:
+
+  Make a gluten-free sandwich.
+  Make a regular sandwich.
+  Put a sandwich on a tray.
+  Serve a gluten-free sandwich to an allergic child.
+  Serve a regular sandwich to a child.
+  Move a tray between kitchen and tables.
+
+  The following are the restrictions on the actions:
+
+  ['make_sandwich_no_gluten']
+  We can make a gluten-free {0} only if there is a {1} at kitchen and the {1} is gluten-free.
+  We can make a gluten-free {0} only if there is a {2} at kitchen and the {2} is gluten-free.
+  Once we make a gluten-free {0}, the {1} and {2} are no longer at kitchen.
+  Once we make a gluten-free {0}, the {0} is at kitchen and is gluten-free.
+
+  ['make_sandwich']
+  We can make a regular {0} only if there is a {1} at kitchen.
+  We can make a regular {0} only if there is a {2} at kitchen.
+  Once we make a regular {0}, the {1} and {2} are no longer at kitchen.
+  Once we make a regular {0}, the {0} is at kitchen.
+
+  ['put_on_tray']
+  We can put a {0} on a {1} only if the {0} is at kitchen.
+  We can put a {0} on a {1} only if the {1} is also at kitchen.
+  Once we put a {0} on a {1}, the {0} is no longer at kitchen but is on the {1}.
+
+  ['serve_sandwich_no_gluten']
+  We can serve a gluten-free {0} to an allergic {1} only if the {1} is allergic to gluten.
+  We can serve a gluten-free {0} to an allergic {1} only if the {0} is on a {2} and the {0} is gluten-free.
+  We can serve a gluten-free {0} to an allergic {1} only if the {1} is waiting for the {0} at the {3}.
+  We can serve a regular {0} to a {1} only if the {2} is at the {3} where the {1} is waiting.
+
+  Once we serve a gluten-free {0} to an allergic {1}, the {0} is no longer on the {2}.
+  Once we serve a gluten-free {0} to an allergic {1}, we say the {1} has been served.
+
+  ['serve_sandwich']
+  We can serve a regular {0} to a {1} only if the {1} is not allergic to gluten.
+  We can serve a regular {0} to a {1} only if the child is waiting for the {0} at the {3}.
+  We can serve a regular {0} to a {1} only if the {0} is on a {2} and the {2} is at the {3} where the {1} is waiting.
+  Once we serve a regular {0} to a {1}, the {0} is no longer on the {2}.
+  Once we serve a regular {0} to a {1}, we say the {1} has been served.
+
+  ['move_tray']
+  We can move a {0} from {1} to {2} only if the {0} is at {1}.
+  Once we move a {0} from {1} to {2}, the {0} is no longer at {1} but is at {2}.
+
+
+actions:
+  {
+    "make_sandwich_no_gluten": "make a gluten-free {} using {} and {}",
+    "make_sandwich": "make a regular {} using {} and {}",
+    "put_on_tray": "put {} on {}",
+    "serve_sandwich_no_gluten": "use {2} to serve gluten-free {0} to {1} at {3}",
+    "serve_sandwich": "use {2} to serve regular {0} to {1} at {3}",
+    "move_tray": "move {} from {} to {}",
+  }
+
+predicates:
+  {
+    "at_kitchen_bread": "{} is at kitchen",
+    "at_kitchen_content": "{} is at kitchen",
+    "at_kitchen_sandwich": "{} is at kitchen",
+    "no_gluten_bread": "{} is gluten-free",
+    "no_gluten_content": "{} is gluten-free",
+    "ontray": "{} is on {}",
+    "no_gluten_sandwich": "{} is gluten-free",
+    "allergic_gluten": "{} is allergic to gluten",
+    "not_allergic_gluten": "{} is not allergic to gluten",
+    "served": "{} has been served",
+    "waiting": "{} is waiting for sandwich at {}",
+    "at": "{} is at {}",
+    "notexist": "{} is not ready yet",
+  }
+
+
+encoded_objects:
+  {
+    "child": "child_{}",
+    "bread": "bread_{}",
+    "content": "content_{}",
+    "tray": "tray_{}",
+    "table": "table_{}",
+    "sandw": "sandwich_{}",
+    "kitchen": "kitchen",
+  }

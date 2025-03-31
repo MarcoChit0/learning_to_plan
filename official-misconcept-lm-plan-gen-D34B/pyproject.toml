@@ -1,0 +1,43 @@
+[build-system]
+requires = [ "setuptools",]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "better_language_model_for_plan_generation"
+readme = "README.md"
+dynamic = [ "dependencies", "version",]
+
+[project.scripts]
+better-language-model-for-plan-generation = "better_language_model_for_plan_generation.__main__:main"
+
+[project.optional-dependencies]
+docs = [ "docutils<0.21", "sphinx>=5.3,<7.3", "sphinx_rtd_theme==2.0.0", "nbsphinx==0.8.1", "sphinx-autodoc-typehints==1.20.2", "sphinx_copybutton==0.5.2", "ipykernel>=5.3, <7.0", "Jinja2<3.2.0", "myst-parser>=1.0,<2.1",]
+
+[tool.kedro]
+package_name = "better_language_model_for_plan_generation"
+project_name = "better-language-model-for-plan-generation"
+kedro_init_version = "0.19.6"
+tools = [ "Linting", "Custom Logging", "Documentation", "Data Structure", "Kedro Viz",]
+example_pipeline = "False"
+source_dir = "src"
+
+[tool.ruff]
+line-length = 88
+show-fixes = true
+select = [ "F", "W", "E", "I", "UP", "PL", "T201",]
+ignore = [ "E501",]
+
+[project.entry-points."kedro.hooks"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.setuptools.dynamic.dependencies]
+file = "requirements.txt"
+
+[tool.setuptools.dynamic.version]
+attr = "better_language_model_for_plan_generation.__version__"
+
+[tool.setuptools.packages.find]
+where = [ "src",]
+namespaces = false
