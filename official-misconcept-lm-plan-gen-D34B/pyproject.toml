@@ -41,3 +41,6 @@ attr = "better_language_model_for_plan_generation.__version__"
 [tool.setuptools.packages.find]
 where = [ "src",]
 namespaces = false
+
+[tool.kedro_telemetry]
+project_id = "c3dcb5979e5c431e9c6d9e4a12f8a48d"

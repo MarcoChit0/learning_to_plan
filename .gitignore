@@ -1,0 +1,3 @@
+*.pddl
+**__pycache__/
+**data/
