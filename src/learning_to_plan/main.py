@@ -154,8 +154,6 @@ async def build_blocksworld_dataset(
                     "error": str(e)
                 }
 
-    pattern = re.compile(r"instance-(\d+)\.pddl$")
-    instances = sorted([f for f in os.listdir(instances_dir_path) if re.match(pattern, f)], key=lambda x: int(pattern.search(x).group(1)))[:max_instances]
 
     data = {}
     if os.path.exists(output_file_path):
@@ -167,6 +165,9 @@ async def build_blocksworld_dataset(
                 reader = csv.DictReader(csvfile)
                 for row in reader:
                     data[row["instance"]] = row
+
+    pattern = re.compile(r"instance-(\d+)\.pddl$")
+    instances = sorted([f for f in os.listdir(instances_dir_path) if re.match(pattern, f)], key=lambda x: int(pattern.search(x).group(1)))[:max_instances]
 
     # remove instances that are not to be computed
     for instance in list(data.keys()):
