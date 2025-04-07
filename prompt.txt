@@ -1,0 +1,163 @@
+block is clear.
+your hand is empty.
+
+effects:
+you are holding block.
+your hand is not empty.
+block is not on the table.
+block is not clear.
+
+### Action: put down block.
+preconditions:
+you are holding block.
+
+effects:
+block is on the table.
+block is clear.
+your hand is empty.
+you are not holding block.
+
+### Action: stack block1 on block2.
+preconditions:
+you are holding block1.
+block2 is clear.
+
+effects:
+your hand is empty.
+block1 is clear.
+block2 is not clear.
+you are not holding block1.
+block1 is on block2.
+
+### Action: unstack block1 from block2.
+preconditions:
+block1 is clear.
+block1 is on block2.
+your hand is empty.
+
+effects:
+you are holding block1.
+your hand is not empty.
+block2 is clear.
+block1 is not clear.
+block1 is not on block2.
+
+## Example of Instance 1.
+<insert_instance>
+
+## Example of Response 1.
+<insert_response>
+
+## Example of Instance 2.
+<insert_instance>
+
+## Example of Response 2.
+<insert_response>
+
+...
+
+## Example of Instance N.
+<insert_instance>
+
+## Example of Response N.
+<insert_response>
+
+## Instance.
+<insert_response>
+
+
+# Goal
+
+Use the available actions to transform the initial state into the goal state.
+
+# Output Format
+
+Return a sequence of actions, one per line, in the order they should be applied.
+
+# Warnings
+
+An action can only be applied if all its preconditions are true in the current state.
+When an action is applied, its effects update the current state by adding and removing facts.
+The goal is reached when all facts in the goal state are present in the current state.
+A valid plan must transform the initial state into the goal state using only applicable actions.
+Starting from the initial state, choose an applicable action, apply it, and repeat this process until the goal is reached.
+If no sequence of actions can reach the goal, return nothing.
+
+# Context. 
+
+## Available actions.
+
+### Action: pick up block.
+preconditions:
+block is on the table.
+block is clear.
+your hand is empty.
+
+effects:
+you are holding block.
+your hand is not empty.
+block is not on the table.
+block is not clear.
+
+### Action: put down block.
+preconditions:
+you are holding block.
+
+effects:
+block is on the table.
+block is clear.
+your hand is empty.
+you are not holding block.
+
+### Action: stack block1 on block2.
+preconditions:
+you are holding block1.
+block2 is clear.
+
+effects:
+your hand is empty.
+block1 is clear.
+block2 is not clear.
+you are not holding block1.
+block1 is on block2.
+
+### Action: unstack block1 from block2.
+preconditions:
+block1 is clear.
+block1 is on block2.
+your hand is empty.
+
+effects:
+you are holding block1.
+your hand is not empty.
+block2 is clear.
+block1 is not clear.
+block1 is not on block2.
+
+## Example of Instance. 
+instance.
+
+blocks: a, b, c.
+
+initial state:
+your hand is empty.
+a is on c.
+b is on the table.
+c is on the table.
+a is clear.
+b is clear.
+
+goal state:
+a is on b.
+b is on c.
+
+## Example of Response.
+unstack a from c
+put down a
+pick up b
+stack b on c
+pick up a
+stack a on b
+
+## Instance.
+<insert_response>

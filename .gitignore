@@ -1,3 +1,4 @@
 *.pddl
 **__pycache__/
 **data/
+.env
