@@ -8,10 +8,15 @@ CONDA_ENV_NAME = learning_to_plan_env
 
 # Create virtual environment using conda + install dependencies with Poetry
 venv:
-	conda create -y -n $(CONDA_ENV_NAME) python=3.11
-	PYTHON_PATH=$$(conda run -n $(CONDA_ENV_NAME) which python) && \
-	poetry env use $$PYTHON_PATH
-	poetry install
+	command -v poetry >/dev/null 2>&1 || { \
+		echo "Poetry not found. Installing..."; \
+		curl -sSL https://install.python-poetry.org | python3 -; \
+		export PATH="$$HOME/.local/bin:$$PATH"; \
+	}
+	conda create -y -n learning_to_plan_env python=3.11
+	PYTHON_PATH=$$(conda run -n learning_to_plan_env which python) && \
+	$$HOME/.local/bin/poetry env use $$PYTHON_PATH && \
+	$$HOME/.local/bin/poetry install
 
 # Docker image build
 build:
