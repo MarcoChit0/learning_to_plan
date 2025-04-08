@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Training LLMs for classical planning using test-time compute techniques."
 authors = [{name = "Marco Chitolina <68135699+MarcoChit0@users.noreply.github.com>"}]
 readme = "README.md"
-requires-python = "==3.13.*"
+requires-python = "==3.11.*"
 
 dependencies = [
 "numpy",

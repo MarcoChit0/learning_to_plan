@@ -10,27 +10,31 @@ ENV_FILE = .env
 ENV_VARS := $(shell [ -f $(ENV_FILE) ] && cat $(ENV_FILE) | xargs)
 
 # Default target
-default: docker-build
+default: build
 
-docker-build:
+build:
 	docker build -f $(DOCKERFILE_PATH) -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
 
-docker-run:
+run:
 	docker run -it --rm \
 		--env-file $(ENV_FILE) \
 		-v $$(pwd):/app \
 		$(DOCKER_IMAGE):$(DOCKER_TAG)
 
-docker-dev-run:
+dev-run:
 	docker run -it --rm \
 		--env-file $(ENV_FILE) \
 		-v $$(pwd):/app \
 		--entrypoint "bash" \
 		$(DOCKER_IMAGE):$(DOCKER_TAG)
 
-docker-shell:
+
+shell:
 	docker run -it --rm \
 		--env-file $(ENV_FILE) \
 		-v $$(pwd):/app \
 		--entrypoint /bin/bash \
 		$(DOCKER_IMAGE):$(DOCKER_TAG)
+
+clean:
+	-docker rmi $(DOCKER_IMAGE):$(DOCKER_TAG)

@@ -18,10 +18,10 @@ pip install -e .
 ### 🐳 Docker
 
 ```bash
-make build          # Build Docker image
-make run            # Run the app
-make shell          # Drop into a shell
-make rebuild        # Force rebuild from scratch
-make clean          # Clean up Docker cache
+make build
+make run
+make shell
+make dev-run
+make clean
 ```
 
