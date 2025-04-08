@@ -303,10 +303,10 @@ def create_finetuning_dataset(
 
 
 def run_training_procedure(
-    model_name="Qwen/Qwen2.5-3B-Instruct",
+    model_name="Qwen/Qwen2.5-1.5B-Instruct",
     max_length=2048,
-    batch_size=64,
-    grad_accum_steps=8,
+    batch_size=1,
+    grad_accum_steps=1,
     learning_rate=2e-5,
     epochs=20,
     train_file="train.jsonl",
@@ -321,13 +321,14 @@ def run_training_procedure(
         DataCollatorForLanguageModeling
     )
     from datasets import load_dataset
+    import torch
 
     # Load dataset from JSONL files
     dataset = load_dataset("json", data_files={"train": train_file, "validation": validation_file})
 
     # Load model and tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True)
+    model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True, torch_dtype=torch.bfloat16)
 
     # Tokenize function
     def tokenize_fn(example):
@@ -351,11 +352,9 @@ def run_training_procedure(
         gradient_accumulation_steps=grad_accum_steps,
         num_train_epochs=epochs,
         learning_rate=learning_rate,
-        evaluation_strategy="steps",
-        eval_steps=100,
         save_steps=500,
         logging_steps=20,
-        fp16=True,
+        fp16=False,
         save_total_limit=2,
         report_to="none"
     )
@@ -374,7 +373,18 @@ def run_training_procedure(
 
 
 if __name__ == "__main__":
+    import sys
     import asyncio
-    asyncio.run(build_blocksworld_dataset(output_file_path="blocksworld_dataset.csv", max_instances=4200, overwrite=False, max_retries=3))
-    create_finetuning_dataset(csv_path="blocksworld_dataset.csv")
-    # run_training_procedure()
+
+    if len(sys.argv) != 2:
+        print("Usage: python main.py [dataset-raw|dataset-processed|train]")
+    else:
+        mode = sys.argv[1]
+        if mode == "dataset-raw":
+            asyncio.run(build_blocksworld_dataset(output_file_path="blocksworld_dataset.csv", max_instances=4200, overwrite=False, max_retries=3))
+        elif mode == "dataset-processed":
+            create_finetuning_dataset(csv_path="blocksworld_dataset.csv")
+        elif mode == "train":
+            run_training_procedure()
+        else:
+            print("Invalid argument. Options: dataset-raw, dataset-processed, train")
