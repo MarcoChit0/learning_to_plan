@@ -375,6 +375,6 @@ def run_training_procedure(
 
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(build_blocksworld_dataset(output_file_path="blocksworld_dataset.csv", max_instances=4000, overwrite=False, max_retries=3))
+    asyncio.run(build_blocksworld_dataset(output_file_path="blocksworld_dataset.csv", max_instances=4200, overwrite=False, max_retries=3))
     create_finetuning_dataset(csv_path="blocksworld_dataset.csv")
-    run_training_procedure()
+    # run_training_procedure()

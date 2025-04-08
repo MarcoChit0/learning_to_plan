@@ -1,46 +1,36 @@
-# Makefile
+SHELL := /bin/bash
 
-APP_NAME = learning_to_plan
-DOCKER_IMAGE = $(APP_NAME):latest
-DOCKER_CONTAINER = $(APP_NAME)-container
+# Docker config
+DOCKER_IMAGE = learning_to_plan
+DOCKER_TAG = latest
+DOCKERFILE_PATH = .docker/Dockerfile
+
+# Environment file (optional)
 ENV_FILE = .env
-CONDA_ENV_NAME = learning_to_plan_env
+ENV_VARS := $(shell [ -f $(ENV_FILE) ] && cat $(ENV_FILE) | xargs)
 
-# Create virtual environment using conda + install dependencies with Poetry
-venv:
-	command -v poetry >/dev/null 2>&1 || { \
-		echo "Poetry not found. Installing..."; \
-		curl -sSL https://install.python-poetry.org | python3 -; \
-		export PATH="$$HOME/.local/bin:$$PATH"; \
-	}
-	conda create -y -n learning_to_plan_env python=3.11
-	PYTHON_PATH=$$(conda run -n learning_to_plan_env which python) && \
-	$$HOME/.local/bin/poetry env use $$PYTHON_PATH && \
-	$$HOME/.local/bin/poetry install
+# Default target
+default: docker-build
 
-# Docker image build
-build:
-	docker build -f .docker/Dockerfile -t $(DOCKER_IMAGE) .
+docker-build:
+	docker build -f $(DOCKERFILE_PATH) -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
 
-rebuild:
-	docker build --no-cache -f .docker/Dockerfile -t $(DOCKER_IMAGE) .
+docker-run:
+	docker run -it --rm \
+		--env-file $(ENV_FILE) \
+		-v $$(pwd):/app \
+		$(DOCKER_IMAGE):$(DOCKER_TAG)
 
-# Run main script inside container (if Docker is available)
-run:
-	docker run --rm -it --env-file $(ENV_FILE) $(DOCKER_IMAGE)
+docker-dev-run:
+	docker run -it --rm \
+		--env-file $(ENV_FILE) \
+		-v $$(pwd):/app \
+		--entrypoint "bash" \
+		$(DOCKER_IMAGE):$(DOCKER_TAG)
 
-# Run main script in dev mode with volume (if Docker is available)
-dev-run:
-	docker run --rm --network=host -v $(PWD):/app -w /app $(DOCKER_IMAGE) poetry run python src/learning_to_plan/main.py
-
-# Run main script locally (without Docker) from the Poetry environment
-local-run:
-	poetry run python src/learning_to_plan/main.py
-
-# Open a bash shell in the container
-shell:
-	docker run --rm -it --env-file $(ENV_FILE) --entrypoint /bin/bash $(DOCKER_IMAGE)
-
-# Clean up docker artifacts
-clean:
-	docker system prune -f
+docker-shell:
+	docker run -it --rm \
+		--env-file $(ENV_FILE) \
+		-v $$(pwd):/app \
+		--entrypoint /bin/bash \
+		$(DOCKER_IMAGE):$(DOCKER_TAG)

@@ -1,25 +1,22 @@
-# .docker/Dockerfile
+FROM continuumio/miniconda3
 
-FROM python:3.11-slim
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    POETRY_VERSION=1.8.2
-
-RUN apt-get update && apt-get install -y \
-    curl build-essential git && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-
-RUN curl -sSL https://install.python-poetry.org | python3 - && \
-    ln -s /root/.local/bin/poetry /usr/local/bin/poetry
-
+# Create working directory
 WORKDIR /app
 
-COPY pyproject.toml poetry.lock* README.md ./
+# Copy environment.yml first so Docker can cache this step if unchanged
+COPY environment.yml .
 
-RUN poetry config virtualenvs.create false && \
-    poetry install --no-root --no-interaction --no-ansi
+# Create the conda environment
+RUN conda env create -n learning_to_plan -f environment.yml
 
+# Ensure shell will activate conda by default
+SHELL ["/bin/bash", "-c"]
+
+# Copy the rest of the project files
 COPY . .
 
-CMD ["poetry", "run", "python", "src/learning_to_plan/main.py"]
+# Install project dependencies with poetry inside the conda environment
+RUN conda run -n learning_to_plan poetry install
+
+# You can specify a default command:
+CMD ["conda", "run", "-n", "learning_to_plan", "python", "main.py"]

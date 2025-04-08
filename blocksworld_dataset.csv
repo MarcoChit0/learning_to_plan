@@ -69856,3 +69856,2541 @@ stack a on b;
 pick up e;
 stack e on a;
 ",
+instance-4000.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+b is on c.
+d is on a.
+e is on b.",ok,"unstack d from b;
+stack d on a;
+pick up b;
+stack b on c;
+unstack d from a;
+put down d;
+unstack a from e;
+put down a;
+pick up e;
+stack e on b;
+pick up a;
+stack a on e;
+pick up d;
+stack d on a;
+",
+instance-4001.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+c is on a.",ok,"unstack e from d;
+put down e;
+unstack d from c;
+put down d;
+unstack c from b;
+put down c;
+unstack b from a;
+put down b;
+pick up a;
+stack a on d;
+pick up c;
+stack c on a;
+",
+instance-4002.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on e.
+c is on b.
+d is on a.",ok,"unstack e from a;
+put down e;
+unstack a from c;
+put down a;
+pick up d;
+stack d on a;
+unstack c from b;
+put down c;
+pick up b;
+stack b on e;
+pick up c;
+stack c on b;
+",
+instance-4003.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+c is on a.
+e is on b.",ok,"unstack b from a;
+put down b;
+unstack a from e;
+put down a;
+unstack e from c;
+stack e on b;
+unstack c from d;
+put down c;
+pick up a;
+stack a on d;
+pick up c;
+stack c on a;
+",
+instance-4004.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+c is on a.
+e is on d.",ok,"unstack b from e;
+put down b;
+unstack d from c;
+put down d;
+pick up e;
+stack e on d;
+unstack c from a;
+put down c;
+pick up a;
+stack a on e;
+pick up c;
+stack c on a;
+",
+instance-4005.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on e.
+d is on b.
+e is on d.",ok,"unstack a from c;
+put down a;
+pick up c;
+stack c on e;
+",
+instance-4006.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.
+c is on d.
+d is on e.
+e is on b.",ok,"unstack d from b;
+put down d;
+unstack b from c;
+put down b;
+unstack c from e;
+stack c on d;
+unstack e from a;
+stack e on b;
+unstack c from d;
+put down c;
+pick up a;
+stack a on c;
+pick up d;
+stack d on e;
+unstack a from c;
+put down a;
+pick up c;
+stack c on d;
+pick up a;
+stack a on c;
+",
+instance-4007.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+c is on b.
+d is on c.
+e is on d.",ok,"unstack b from a;
+put down b;
+pick up c;
+stack c on b;
+pick up d;
+stack d on c;
+unstack a from e;
+put down a;
+pick up e;
+stack e on d;
+pick up a;
+stack a on e;
+",
+instance-4008.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+c is on d.
+d is on b.",ok,"unstack e from c;
+put down e;
+pick up a;
+stack a on e;
+unstack c from b;
+put down c;
+unstack b from d;
+put down b;
+pick up d;
+stack d on b;
+pick up c;
+stack c on d;
+",
+instance-4009.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on c.
+d is on b.
+e is on a.",ok,"unstack b from e;
+put down b;
+unstack e from a;
+put down e;
+unstack a from d;
+put down a;
+unstack d from c;
+stack d on b;
+pick up e;
+stack e on a;
+unstack d from b;
+put down d;
+pick up b;
+stack b on c;
+pick up d;
+stack d on b;
+unstack e from a;
+put down e;
+pick up a;
+stack a on d;
+pick up e;
+stack e on a;
+",
+instance-4010.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+d is on c.
+e is on d.",ok,"unstack a from c;
+put down a;
+unstack c from e;
+put down c;
+unstack e from d;
+put down e;
+unstack d from b;
+stack d on c;
+pick up a;
+stack a on b;
+pick up e;
+stack e on d;
+",
+instance-4011.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on c.
+e is on b.",ok,"unstack b from e;
+stack b on c;
+pick up e;
+stack e on b;
+",
+instance-4012.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on d.
+d is on e.",ok,"pick up d;
+stack d on e;
+unstack c from b;
+stack c on d;
+",
+instance-4013.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on e.
+e is on a.",ok,"unstack e from d;
+stack e on a;
+unstack d from b;
+stack d on e;
+",
+instance-4014.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.
+c is on d.
+d is on b.
+e is on a.",ok,"unstack a from e;
+stack a on c;
+pick up e;
+stack e on a;
+",
+instance-4015.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+c is on d.
+d is on e.",ok,"unstack c from b;
+stack c on d;
+pick up a;
+stack a on b;
+",
+instance-4016.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.
+b is on e.
+d is on a.",ok,"unstack a from b;
+stack a on c;
+pick up d;
+stack d on a;
+",
+instance-4017.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+d is on c.
+e is on b.",ok,"unstack a from b;
+stack a on d;
+pick up e;
+stack e on b;
+",
+instance-4018.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on e.",ok,"unstack c from e;
+put down c;
+unstack d from b;
+stack d on e;
+",
+instance-4019.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on b.
+e is on a.",ok,"unstack b from d;
+put down b;
+pick up d;
+stack d on b;
+",
+instance-4020.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on c.",ok,"unstack d from c;
+put down d;
+pick up b;
+stack b on c;
+",
+instance-4021.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on a.
+d is on c.
+e is on b.",ok,"unstack c from e;
+stack c on a;
+pick up d;
+stack d on c;
+",
+instance-4022.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+e is on d.",ok,"unstack c from d;
+put down c;
+pick up e;
+stack e on d;
+",
+instance-4023.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on a.
+d is on e.",ok,"unstack e from d;
+put down e;
+unstack d from b;
+stack d on e;
+",
+instance-4024.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on c.
+e is on d.",ok,"unstack d from b;
+stack d on c;
+pick up e;
+stack e on d;
+",
+instance-4025.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on d.
+c is on e.
+d is on c.",ok,"pick up d;
+stack d on c;
+pick up b;
+stack b on d;
+",
+instance-4026.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on b.",ok,"unstack b from d;
+put down b;
+unstack d from e;
+stack d on b;
+",
+instance-4027.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+d is on a.",ok,"unstack a from e;
+stack a on b;
+pick up d;
+stack d on a;
+",
+instance-4028.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on b.
+e is on d.",ok,"unstack d from c;
+stack d on b;
+pick up e;
+stack e on d;
+",
+instance-4029.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on e.
+d is on a.",ok,"unstack e from c;
+put down e;
+unstack c from d;
+stack c on e;
+",
+instance-4030.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.
+c is on b.
+d is on e.",ok,"unstack d from c;
+stack d on e;
+pick up a;
+stack a on c;
+",
+instance-4031.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on a.
+d is on c.
+e is on d.",ok,"unstack d from e;
+stack d on c;
+pick up e;
+stack e on d;
+",
+instance-4032.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+e is on d.",ok,"unstack a from e;
+put down a;
+pick up e;
+stack e on d;
+",
+instance-4033.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on e.
+d is on a.",ok,"unstack e from b;
+put down e;
+unstack b from d;
+stack b on e;
+",
+instance-4034.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+c is on b.",ok,"unstack b from c;
+put down b;
+pick up c;
+stack c on b;
+",
+instance-4035.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on a.
+c is on e.",ok,"unstack d from e;
+put down d;
+unstack c from b;
+stack c on e;
+",
+instance-4036.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on c.
+e is on b.",ok,"pick up b;
+stack b on c;
+pick up e;
+stack e on b;
+",
+instance-4037.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on e.
+d is on c.
+e is on a.",ok,"pick up e;
+stack e on a;
+pick up b;
+stack b on e;
+",
+instance-4038.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.
+b is on a.
+e is on b.",ok,"unstack d from b;
+put down d;
+pick up e;
+stack e on b;
+",
+instance-4039.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+c is on d.",ok,"unstack d from c;
+put down d;
+pick up c;
+stack c on d;
+",
+instance-4040.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on c.
+d is on b.",ok,"unstack b from a;
+stack b on c;
+pick up d;
+stack d on b;
+",
+instance-4041.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on e.",ok,"unstack a from d;
+put down a;
+unstack d from b;
+stack d on e;
+",
+instance-4042.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+d is on b.
+e is on c.",ok,"unstack d from a;
+stack d on b;
+pick up a;
+stack a on d;
+",
+instance-4043.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.
+d is on e.
+e is on a.",ok,"unstack b from d;
+put down b;
+pick up d;
+stack d on e;
+",
+instance-4044.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on e.
+c is on b.",ok,"unstack a from c;
+stack a on d;
+pick up c;
+stack c on b;
+",
+instance-4045.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+d is on a.",ok,"pick up a;
+stack a on b;
+unstack d from c;
+stack d on a;
+",
+instance-4046.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+c is on a.
+d is on b.",ok,"pick up a;
+stack a on e;
+pick up c;
+stack c on a;
+",
+instance-4047.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on a.",ok,"unstack e from a;
+put down e;
+unstack c from b;
+stack c on a;
+",
+instance-4048.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on e.
+c is on d.
+e is on a.",ok,"pick up e;
+stack e on a;
+unstack b from c;
+stack b on e;
+",
+instance-4049.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.",ok,"unstack d from a;
+put down d;
+unstack a from c;
+stack a on d;
+",
+instance-4050.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+e is on c.",ok,"unstack e from a;
+stack e on c;
+pick up a;
+stack a on b;
+",
+instance-4051.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on c.
+c is on a.",ok,"pick up c;
+stack c on a;
+pick up b;
+stack b on c;
+",
+instance-4052.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on a.",ok,"unstack a from c;
+put down a;
+unstack c from b;
+stack c on a;
+",
+instance-4053.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on c.
+e is on a.",ok,"unstack b from a;
+stack b on c;
+pick up e;
+stack e on a;
+",
+instance-4054.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on a.",ok,"unstack a from b;
+put down a;
+pick up b;
+stack b on a;
+",
+instance-4055.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.
+c is on e.",ok,"pick up c;
+stack c on e;
+unstack a from d;
+stack a on c;
+",
+instance-4056.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on d.
+e is on a.",ok,"unstack c from a;
+put down c;
+unstack e from b;
+stack e on a;
+",
+instance-4057.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+b is on d.
+d is on e.",ok,"pick up b;
+stack b on d;
+unstack a from c;
+stack a on b;
+",
+instance-4058.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on d.
+c is on e.
+e is on b.",ok,"unstack a from c;
+put down a;
+pick up c;
+stack c on e;
+",
+instance-4059.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.
+b is on e.
+c is on b.",ok,"unstack d from a;
+put down d;
+pick up a;
+stack a on c;
+",
+instance-4060.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on a.
+d is on b.",ok,"unstack b from d;
+put down b;
+pick up d;
+stack d on b;
+",
+instance-4061.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on e.
+d is on a.
+e is on c.",ok,"unstack e from d;
+stack e on c;
+pick up b;
+stack b on e;
+",
+instance-4062.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+e is on d.",ok,"pick up a;
+stack a on b;
+unstack e from c;
+stack e on d;
+",
+instance-4063.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on d.
+c is on a.
+d is on e.",ok,"unstack b from c;
+stack b on d;
+pick up c;
+stack c on a;
+",
+instance-4064.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on a.
+c is on b.",ok,"unstack b from d;
+stack b on a;
+pick up c;
+stack c on b;
+",
+instance-4065.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.
+b is on a.",ok,"unstack a from e;
+stack a on c;
+unstack b from d;
+stack b on a;
+",
+instance-4066.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+b is on d.",ok,"unstack d from b;
+put down d;
+unstack b from a;
+stack b on d;
+",
+instance-4067.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+d is on b.",ok,"unstack c from d;
+put down c;
+unstack a from e;
+stack a on d;
+",
+instance-4068.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on b.",ok,"unstack a from d;
+put down a;
+pick up d;
+stack d on b;
+",
+instance-4069.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on d.
+d is on e.",ok,"unstack d from c;
+stack d on e;
+pick up b;
+stack b on d;
+",
+instance-4070.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+c is on a.",ok,"unstack a from c;
+stack a on e;
+pick up c;
+stack c on a;
+",
+instance-4071.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on d.
+e is on b.",ok,"unstack b from e;
+stack b on d;
+pick up e;
+stack e on b;
+",
+instance-4072.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on e.",ok,"unstack a from e;
+put down a;
+unstack d from c;
+stack d on e;
+",
+instance-4073.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+c is on b.
+e is on d.",ok,"unstack a from c;
+stack a on e;
+pick up c;
+stack c on b;
+",
+instance-4074.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on a.
+c is on e.
+d is on b.",ok,"unstack e from c;
+put down e;
+pick up c;
+stack c on e;
+",
+instance-4075.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on b.",ok,"unstack a from b;
+put down a;
+pick up d;
+stack d on b;
+",
+instance-4076.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on d.
+d is on a.",ok,"unstack d from c;
+stack d on a;
+pick up c;
+stack c on d;
+",
+instance-4077.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on e.
+c is on a.",ok,"unstack e from b;
+put down e;
+unstack b from c;
+stack b on e;
+",
+instance-4078.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+c is on d.
+d is on e.",ok,"unstack d from c;
+stack d on e;
+pick up c;
+stack c on d;
+",
+instance-4079.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on a.
+e is on c.",ok,"unstack a from b;
+stack a on d;
+pick up b;
+stack b on a;
+",
+instance-4080.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on e.
+c is on d.",ok,"unstack a from c;
+put down a;
+unstack c from b;
+stack c on d;
+",
+instance-4081.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on e.
+e is on c.",ok,"unstack e from b;
+stack e on c;
+pick up d;
+stack d on e;
+",
+instance-4082.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on e.",ok,"unstack c from a;
+put down c;
+pick up a;
+stack a on d;
+",
+instance-4083.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on a.
+d is on b.",ok,"unstack c from b;
+stack c on a;
+unstack d from e;
+stack d on b;
+",
+instance-4084.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+c is on e.
+d is on a.",ok,"unstack a from d;
+stack a on b;
+pick up d;
+stack d on a;
+",
+instance-4085.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+b is on d.",ok,"unstack c from b;
+put down c;
+unstack a from e;
+stack a on b;
+",
+instance-4086.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on d.
+d is on a.",ok,"unstack b from c;
+put down b;
+unstack c from e;
+stack c on d;
+",
+instance-4087.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on b.",ok,"unstack a from b;
+put down a;
+unstack c from d;
+stack c on b;
+",
+instance-4088.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+e is on a.",ok,"unstack a from e;
+stack a on d;
+unstack e from b;
+stack e on a;
+",
+instance-4089.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+d is on e.",ok,"unstack e from d;
+put down e;
+pick up d;
+stack d on e;
+",
+instance-4090.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on e.",ok,"unstack c from b;
+put down c;
+unstack b from d;
+stack b on e;
+",
+instance-4091.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on c.
+c is on e.",ok,"pick up c;
+stack c on e;
+pick up b;
+stack b on c;
+",
+instance-4092.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on a.
+e is on d.",ok,"unstack b from e;
+put down b;
+pick up e;
+stack e on d;
+",
+instance-4093.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on a.
+e is on b.",ok,"unstack b from e;
+stack b on a;
+pick up e;
+stack e on b;
+",
+instance-4094.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+e is on b.",ok,"unstack b from e;
+put down b;
+unstack e from a;
+stack e on b;
+",
+instance-4095.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+b is on d.
+c is on a.",ok,"unstack a from c;
+stack a on b;
+pick up c;
+stack c on a;
+",
+instance-4096.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on a.
+d is on b.
+e is on c.",ok,"unstack d from e;
+stack d on b;
+pick up e;
+stack e on c;
+",
+instance-4097.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on c.
+c is on a.
+e is on d.",ok,"pick up c;
+stack c on a;
+pick up b;
+stack b on c;
+",
+instance-4098.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on c.
+e is on a.",ok,"unstack b from e;
+put down b;
+unstack e from d;
+stack e on a;
+",
+instance-4099.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on c.
+c is on a.",ok,"unstack c from d;
+stack c on a;
+pick up b;
+stack b on c;
+",
+instance-4100.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on d.
+d is on b.
+e is on a.",ok,"unstack c from e;
+stack c on d;
+pick up e;
+stack e on a;
+",
+instance-4101.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on a.
+c is on b.
+d is on e.
+e is on c.",ok,"unstack e from d;
+stack e on c;
+pick up d;
+stack d on e;
+",
+instance-4102.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.",ok,"unstack c from a;
+put down c;
+unstack a from e;
+stack a on d;
+",
+instance-4103.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on b.
+d is on a.
+e is on c.",ok,"pick up d;
+stack d on a;
+pick up e;
+stack e on c;
+",
+instance-4104.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on a.
+d is on c.",ok,"unstack d from b;
+stack d on c;
+pick up b;
+stack b on a;
+",
+instance-4105.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on b.
+d is on c.
+e is on a.",ok,"unstack d from e;
+stack d on c;
+pick up e;
+stack e on a;
+",
+instance-4106.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on a.
+d is on e.",ok,"unstack b from a;
+put down b;
+pick up c;
+stack c on a;
+",
+instance-4107.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on c.",ok,"unstack c from b;
+put down c;
+unstack b from a;
+stack b on c;
+",
+instance-4108.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on d.
+c is on b.
+e is on c.",ok,"unstack c from a;
+stack c on b;
+pick up e;
+stack e on c;
+",
+instance-4109.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on a.
+c is on e.
+d is on b.
+e is on d.",ok,"unstack e from c;
+stack e on d;
+pick up c;
+stack c on e;
+",
+instance-4110.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on d.
+d is on a.
+e is on b.",ok,"unstack b from e;
+put down b;
+unstack e from c;
+stack e on b;
+",
+instance-4111.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on d.",ok,"unstack d from b;
+put down d;
+pick up b;
+stack b on d;
+",
+instance-4112.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+e is on b.",ok,"unstack b from e;
+put down b;
+pick up e;
+stack e on b;
+",
+instance-4113.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.",ok,"unstack c from a;
+put down c;
+unstack a from b;
+stack a on c;
+",
+instance-4114.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on e.
+c is on b.",ok,"unstack b from c;
+stack b on e;
+unstack c from a;
+stack c on b;
+",
+instance-4115.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on a.
+e is on b.",ok,"unstack d from b;
+stack d on a;
+pick up e;
+stack e on b;
+",
+instance-4116.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on e.
+c is on d.
+d is on a.",ok,"unstack e from b;
+put down e;
+pick up b;
+stack b on e;
+",
+instance-4117.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on e.
+d is on c.",ok,"unstack c from d;
+stack c on e;
+pick up d;
+stack d on c;
+",
+instance-4118.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.
+c is on b.
+e is on d.",ok,"unstack e from c;
+stack e on d;
+pick up a;
+stack a on c;
+",
+instance-4119.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+e is on a.",ok,"unstack b from a;
+put down b;
+unstack e from d;
+stack e on a;
+",
+instance-4120.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on c.
+c is on a.",ok,"unstack c from b;
+stack c on a;
+pick up b;
+stack b on c;
+",
+instance-4121.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on d.
+d is on e.",ok,"pick up d;
+stack d on e;
+unstack c from b;
+stack c on d;
+",
+instance-4122.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+e is on b.",ok,"unstack a from e;
+put down a;
+pick up e;
+stack e on b;
+",
+instance-4123.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.
+d is on b.",ok,"unstack a from d;
+stack a on c;
+pick up d;
+stack d on b;
+",
+instance-4124.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on e.",ok,"unstack d from e;
+put down d;
+unstack c from a;
+stack c on e;
+",
+instance-4125.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on e.",ok,"unstack b from d;
+put down b;
+unstack d from a;
+stack d on e;
+",
+instance-4126.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on e.
+e is on b.",ok,"pick up e;
+stack e on b;
+pick up c;
+stack c on e;
+",
+instance-4127.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on a.
+d is on b.",ok,"unstack a from c;
+put down a;
+pick up c;
+stack c on a;
+",
+instance-4128.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on e.",ok,"unstack e from c;
+put down e;
+unstack c from d;
+stack c on e;
+",
+instance-4129.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on c.
+c is on e.",ok,"unstack c from b;
+stack c on e;
+pick up b;
+stack b on c;
+",
+instance-4130.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on d.",ok,"unstack c from d;
+put down c;
+unstack b from e;
+stack b on d;
+",
+instance-4131.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on a.",ok,"unstack c from a;
+put down c;
+pick up d;
+stack d on a;
+",
+instance-4132.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on c.",ok,"unstack d from a;
+put down d;
+unstack a from b;
+stack a on d;
+",
+instance-4133.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on d.
+c is on e.
+e is on a.",ok,"unstack d from b;
+put down d;
+pick up b;
+stack b on d;
+",
+instance-4134.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on e.
+e is on d.",ok,"pick up e;
+stack e on d;
+pick up b;
+stack b on e;
+",
+instance-4135.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on e.",ok,"unstack e from c;
+put down e;
+unstack c from b;
+stack c on e;
+",
+instance-4136.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+c is on b.",ok,"unstack e from a;
+put down e;
+unstack a from d;
+stack a on e;
+",
+instance-4137.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+e is on b.",ok,"unstack d from e;
+put down d;
+pick up e;
+stack e on b;
+",
+instance-4138.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on e.
+d is on c.
+e is on a.",ok,"unstack c from d;
+stack c on e;
+pick up d;
+stack d on c;
+",
+instance-4139.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on e.
+e is on a.",ok,"unstack b from d;
+put down b;
+unstack d from c;
+stack d on e;
+",
+instance-4140.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on c.",ok,"pick up a;
+stack a on d;
+pick up b;
+stack b on c;
+",
+instance-4141.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on e.
+e is on d.",ok,"unstack a from c;
+put down a;
+unstack c from b;
+stack c on e;
+",
+instance-4142.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on d.",ok,"unstack e from d;
+put down e;
+pick up b;
+stack b on d;
+",
+instance-4143.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on a.",ok,"unstack c from b;
+put down c;
+pick up b;
+stack b on a;
+",
+instance-4144.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on a.
+e is on d.",ok,"unstack c from e;
+put down c;
+unstack e from b;
+stack e on d;
+",
+instance-4145.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.",ok,"unstack d from a;
+put down d;
+pick up a;
+stack a on c;
+",
+instance-4146.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on a.
+d is on b.
+e is on d.",ok,"unstack c from e;
+stack c on a;
+pick up e;
+stack e on d;
+",
+instance-4147.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on c.
+d is on e.",ok,"unstack a from b;
+put down a;
+pick up b;
+stack b on c;
+",
+instance-4148.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+b is on d.
+e is on c.",ok,"unstack d from b;
+put down d;
+pick up b;
+stack b on d;
+",
+instance-4149.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on c.
+d is on a.",ok,"pick up b;
+stack b on c;
+pick up d;
+stack d on a;
+",
+instance-4150.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+e is on b.",ok,"unstack e from a;
+stack e on b;
+unstack a from c;
+stack a on e;
+",
+instance-4151.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on b.
+e is on d.",ok,"unstack d from e;
+put down d;
+unstack e from c;
+stack e on d;
+",
+instance-4152.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.
+d is on a.
+e is on d.",ok,"unstack b from d;
+put down b;
+pick up e;
+stack e on d;
+",
+instance-4153.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on d.
+d is on e.
+e is on b.",ok,"unstack d from c;
+stack d on e;
+unstack c from a;
+stack c on d;
+",
+instance-4154.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on c.",ok,"unstack e from d;
+put down e;
+pick up d;
+stack d on c;
+",
+instance-4155.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+c is on a.",ok,"pick up a;
+stack a on d;
+pick up c;
+stack c on a;
+",
+instance-4156.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+b is on a.
+d is on c.",ok,"unstack b from c;
+stack b on a;
+pick up d;
+stack d on c;
+",
+instance-4157.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on a.
+e is on d.",ok,"unstack e from a;
+stack e on d;
+unstack c from b;
+stack c on a;
+",
+instance-4158.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on d.
+e is on a.",ok,"unstack d from c;
+put down d;
+pick up c;
+stack c on d;
+",
+instance-4159.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on c.",ok,"unstack b from a;
+stack b on c;
+pick up a;
+stack a on d;
+",
+instance-4160.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+e is on c.",ok,"unstack d from c;
+put down d;
+pick up e;
+stack e on c;
+",
+instance-4161.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on a.",ok,"unstack a from b;
+put down a;
+pick up b;
+stack b on a;
+",
+instance-4162.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on e.
+e is on a.",ok,"pick up e;
+stack e on a;
+pick up b;
+stack b on e;
+",
+instance-4163.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+b is on d.
+d is on e.",ok,"unstack b from a;
+stack b on d;
+pick up a;
+stack a on b;
+",
+instance-4164.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+e is on c.",ok,"unstack d from c;
+put down d;
+unstack e from a;
+stack e on c;
+",
+instance-4165.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+d is on c.
+e is on a.",ok,"unstack b from a;
+put down b;
+pick up e;
+stack e on a;
+",
+instance-4166.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+b is on a.",ok,"unstack a from b;
+stack a on e;
+pick up b;
+stack b on a;
+",
+instance-4167.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on e.
+e is on c.",ok,"unstack e from a;
+stack e on c;
+pick up b;
+stack b on e;
+",
+instance-4168.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+c is on e.
+e is on b.",ok,"pick up a;
+stack a on d;
+pick up c;
+stack c on e;
+",
+instance-4169.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on e.
+c is on d.",ok,"unstack a from e;
+put down a;
+unstack b from c;
+stack b on e;
+",
+instance-4170.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on d.
+e is on c.",ok,"unstack c from e;
+put down c;
+unstack e from b;
+stack e on c;
+",
+instance-4171.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on e.
+e is on d.",ok,"pick up e;
+stack e on d;
+pick up c;
+stack c on e;
+",
+instance-4172.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on a.
+e is on b.",ok,"unstack c from e;
+put down c;
+pick up e;
+stack e on b;
+",
+instance-4173.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on e.
+c is on d.",ok,"unstack e from b;
+put down e;
+unstack b from a;
+stack b on e;
+",
+instance-4174.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on a.
+e is on b.",ok,"unstack b from e;
+put down b;
+unstack e from c;
+stack e on b;
+",
+instance-4175.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on a.
+e is on b.",ok,"unstack d from e;
+put down d;
+pick up e;
+stack e on b;
+",
+instance-4176.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+c is on d.",ok,"unstack d from c;
+put down d;
+unstack c from b;
+stack c on d;
+",
+instance-4177.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on c.
+c is on a.
+e is on b.",ok,"unstack b from e;
+stack b on c;
+pick up e;
+stack e on b;
+",
+instance-4178.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+c is on b.
+e is on a.",ok,"unstack b from c;
+put down b;
+unstack c from e;
+stack c on b;
+",
+instance-4179.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.
+b is on a.
+d is on b.",ok,"unstack b from d;
+stack b on a;
+pick up d;
+stack d on b;
+",
+instance-4180.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+c is on b.",ok,"unstack a from b;
+stack a on d;
+pick up c;
+stack c on b;
+",
+instance-4181.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.
+e is on a.",ok,"unstack b from e;
+put down b;
+unstack e from d;
+stack e on a;
+",
+instance-4182.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on c.
+c is on a.",ok,"unstack e from b;
+put down e;
+unstack b from d;
+stack b on c;
+",
+instance-4183.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+c is on a.",ok,"unstack a from c;
+stack a on b;
+pick up c;
+stack c on a;
+",
+instance-4184.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on c.
+d is on e.
+e is on b.",ok,"unstack e from a;
+stack e on b;
+pick up d;
+stack d on e;
+",
+instance-4185.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on e.
+c is on b.",ok,"unstack d from b;
+put down d;
+pick up c;
+stack c on b;
+",
+instance-4186.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+c is on e.
+d is on c.",ok,"unstack d from a;
+stack d on c;
+unstack a from b;
+stack a on d;
+",
+instance-4187.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on b.
+b is on c.
+d is on a.",ok,"unstack e from d;
+put down e;
+pick up d;
+stack d on a;
+",
+instance-4188.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+c is on a.",ok,"unstack d from c;
+put down d;
+unstack c from b;
+stack c on a;
+",
+instance-4189.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+d is on c.",ok,"pick up a;
+stack a on e;
+pick up d;
+stack d on c;
+",
+instance-4190.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+e is on a.",ok,"unstack a from e;
+put down a;
+unstack e from c;
+stack e on a;
+",
+instance-4191.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+e is on c.",ok,"unstack c from e;
+put down c;
+unstack e from d;
+stack e on c;
+",
+instance-4192.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.",ok,"unstack e from a;
+put down e;
+pick up a;
+stack a on e;
+",
+instance-4193.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+c is on a.",ok,"pick up a;
+stack a on e;
+unstack c from d;
+stack c on a;
+",
+instance-4194.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on c.",ok,"unstack e from c;
+put down e;
+pick up b;
+stack b on c;
+",
+instance-4195.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on c.",ok,"unstack e from b;
+put down e;
+pick up b;
+stack b on c;
+",
+instance-4196.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on a.
+d is on c.",ok,"unstack b from e;
+stack b on a;
+pick up d;
+stack d on c;
+",
+instance-4197.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on e.
+c is on b.
+d is on a.",ok,"unstack d from b;
+stack d on a;
+pick up c;
+stack c on b;
+",
+instance-4198.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+b is on d.",ok,"unstack a from b;
+put down a;
+unstack b from c;
+stack b on d;
+",
+instance-4199.pddl,"blocks: a, b, c, d, e.
+
+initial state:
+your hand is empty.
+
+goal state:
+a is on d.
+b is on e.
+c is on a.
+e is on c.",ok,"pick up e;
+stack e on c;
+pick up b;
+stack b on e;
+",
