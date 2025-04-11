@@ -5,10 +5,6 @@ DOCKER_IMAGE = learning_to_plan
 DOCKER_TAG = latest
 DOCKERFILE_PATH = .docker/Dockerfile
 
-# Environment file (optional)
-ENV_FILE = .env
-ENV_VARS := $(shell [ -f $(ENV_FILE) ] && cat $(ENV_FILE) | xargs)
-
 # Default target
 default: build
 
