@@ -62,7 +62,7 @@ def parse_args():
         help="Number of epochs for training."
     )
     parser.add_argument(
-        "-run_on_google_colab",
+        "--run_on_google_colab",
         action="store_true",
         help="Whether to run on google colab or not."
     )

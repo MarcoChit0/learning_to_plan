@@ -36,9 +36,14 @@ INSTANCES_SUBDIRECTORY = "generated_basic"
 # Data folders
 GOOGLE_COLAB_DATA_DIR = "/content/drive/MyDrive/projects/learning_to_plan/data/"
 DATA_DIR = "data/"
+RAW_DIR = None
+PAAS_PLAN_FILE_NAME = None
+CHECKPOINTS_DIR = None
 
 def setup_data_dirs(run_on_google_colab=False):
-    if run_on_google_colab: DATA_DIR = GOOGLE_COLAB_DATA_DIR
+    global DATA_DIR, GOOGLE_COLAB_DATA_DIR, RAW_DIR, PAAS_PLAN_FILE_NAME, CHECKPOINTS_DIR
+    if run_on_google_colab: 
+        DATA_DIR = GOOGLE_COLAB_DATA_DIR
     RAW_DIR = os.path.join(DATA_DIR, "raw")
     PAAS_PLANS_DIR = os.path.join(DATA_DIR, "paas_plans")
     FINETUNING_DATASET_DIR = os.path.join(DATA_DIR, "finetuning_dataset")
