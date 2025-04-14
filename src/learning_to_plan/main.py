@@ -61,11 +61,16 @@ def parse_args():
         default=None,
         help="Number of epochs for training."
     )
+    parser.add_argument(
+        "-run_on_google_colab",
+        action="store_true",
+        help="Whether to run on google colab or not."
+    )
     return parser.parse_args()
 
 if __name__ == "__main__":
-    create_data_dirs()
     args = parse_args()
+    setup_data_dirs()
 
     if args.call_paas:
         if args.domain == "":

@@ -19,27 +19,30 @@ MODEL_TRAINING_CONFIG = {
     "optimizer": "adamw_8bit",
 
     # Salvamento e logging
-    "logging_steps": 500,
-    "save_steps": 1000,
+    "logging_steps": 0.05, # save the model each 5% of the training
+    "logging_strategy": "steps",
+    "save_steps": 0.1, # save the model each 10% of the training
+    "save_strategy": "steps",
 
     # Outros
     "bf16": True,
     "deepspeed_config": "deepspeed_zero3.json"
 }
 
-
-# Data directories
-DATA_DIR = "data/"
-RAW_DIR = os.path.join(DATA_DIR, "raw")
-PAAS_PLANS_DIR = os.path.join(DATA_DIR, "paas_plans")
-FINETUNING_DATASET_DIR = os.path.join(DATA_DIR, "finetuning_dataset")
-CHECKPOINTS_DIR = os.path.join(DATA_DIR, "checkpoints")
-
 # Inside each domain directory
 INSTANCES_SUBDIRECTORY = "generated_basic"
 
 
-def create_data_dirs():
+# Data folders
+GOOGLE_COLAB_DATA_DIR = "/content/drive/MyDrive/projects/learning_to_plan/data/"
+DATA_DIR = "data/"
+
+def setup_data_dirs(run_on_google_colab=False):
+    if run_on_google_colab: DATA_DIR = GOOGLE_COLAB_DATA_DIR
+    RAW_DIR = os.path.join(DATA_DIR, "raw")
+    PAAS_PLANS_DIR = os.path.join(DATA_DIR, "paas_plans")
+    FINETUNING_DATASET_DIR = os.path.join(DATA_DIR, "finetuning_dataset")
+    CHECKPOINTS_DIR = os.path.join(DATA_DIR, "checkpoints")
     for dir in [DATA_DIR, RAW_DIR, PAAS_PLANS_DIR, FINETUNING_DATASET_DIR, CHECKPOINTS_DIR]:
         os.makedirs(dir, exist_ok=True)
 
