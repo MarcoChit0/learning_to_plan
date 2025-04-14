@@ -1,13 +1,13 @@
 import datetime
+import os
+import argparse
+import asyncio
+
 from learning_to_plan.build_finetuning_dataset import *
 from learning_to_plan.train import *
 from learning_to_plan.call_paas import *
 from learning_to_plan.task import *
-from learning_to_plan.config import *
-import os
-
-# create a parser for command line arguments
-import argparse
+import learning_to_plan.config as config
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Learning to Plan")
@@ -22,7 +22,6 @@ def parse_args():
         action="store_true",
         help="Whether to call planing as a service to generate plans or not."
     )
-
     parser.add_argument(
         "-n", "--number_of_problems_per_domain",
         type=int,
@@ -50,13 +49,13 @@ def parse_args():
         help="Whether to evaluate or not."
     )
     parser.add_argument(
-        "-m","--model",
+        "-m", "--model",
         type=str,
         default=None,
         help="Model name to use for training."
     )
     parser.add_argument(
-        "-e","--epochs",
+        "-e", "--epochs",
         type=int,
         default=None,
         help="Number of epochs for training."
@@ -69,56 +68,61 @@ def parse_args():
     return parser.parse_args()
 
 if __name__ == "__main__":
-    args = parse_args()
-    setup_data_dirs()
 
-    if args.call_paas:
+    args = parse_args()
+    initilize(args.run_on_google_colab)
+
+    def verify_domain():
         if args.domain == "":
-            print("Please specify a domain with --domain <domain_name> or 'all'.")
-            exit(0)
-        available_domains = os.listdir(RAW_DIR)
-        print(available_domains)
-        if args.domain == "all": 
-            domains = available_domains
+            e = "Please specify a domain with --domain <domain_name> or 'all'."
+            config.logging.error(e)
+            raise ValueError(e)
+    def get_selected_domains(dir_path):
+        available_domains = os.listdir(dir_path)
+        if args.domain == "all":
+            return available_domains
         else:
             domains = args.domain.split(",")
             for d in domains:
                 if d not in available_domains:
-                    raise ValueError(f"Domain {d} not found in {RAW_DIR}.")
+                    raise ValueError(f"Domain {d} not found in {dir_path}.")
+            return domains
+        
+    if args.call_paas:
+        verify_domain()
+        domains = get_selected_domains(config.RAW_DIR)
         for domain in domains:
             tasks = get_tasks_from_domain_directory(domain, args.number_of_problems_per_domain)
-            output_file_path = os.path.join(PAAS_PLANS_DIR, domain, PAAS_PLAN_FILE_NAME)
-            print(f"Calling planning as a service for domain {domain} at time {datetime.datetime.now()}.")
+            output_file_path = os.path.join(config.PAAS_PLANS_DIR, domain, config.PAAS_PLAN_FILE_NAME)
+            config.logging.info(f"Calling planning as a service for domain {domain} at time {datetime.datetime.now()}.")
             asyncio.run(call_paas(tasks, output_file_path, overwrite=args.overwrite_paas_plans))
-            print(f"Finished calling planning as a service for domain {domain} at time {datetime.datetime.now()}.")
+            config.logging.info(f"Finished calling planning as a service for domain {domain} at time {datetime.datetime.now()}.")
         
     if args.build_finetuning_dataset: 
-        for domain in os.listdir(PAAS_PLANS_DIR):
+        logging.info("Building finetuning dataset.")
+        for domain in os.listdir(config.PAAS_PLANS_DIR):
             build_finetuining_dataset(
-                os.path.join(PAAS_PLANS_DIR, domain, PAAS_PLAN_FILE_NAME),
-                train_output=os.path.join(FINETUNING_DATASET_DIR, domain, TRAIN_FILE_NAME),
-                test_output=os.path.join(FINETUNING_DATASET_DIR, domain, VAL_FILE_NAME),
+                os.path.join(config.PAAS_PLANS_DIR, domain, config.PAAS_PLAN_FILE_NAME),
+                train_output=os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TRAIN_FILE_NAME),
+                test_output=os.path.join(config.FINETUNING_DATASET_DIR, domain, config.VAL_FILE_NAME),
             )
-    
+        config.logging.info("Finished building finetuning dataset.")
     if args.train:
-        if args.domain == "":
-            print("Please specify a domain with --domain <domain_name> or 'all'.")
-            exit(0)
-        available_domains = os.listdir(FINETUNING_DATASET_DIR)
-        if args.domain == "all": 
-            domains = available_domains
-        else:
-            domains = args.domain.split(",")
-            for d in domains:
-                if d not in available_domains:
-                    raise ValueError(f"Domain {d} not found in {FINETUNING_DATASET_DIR}.")
+        verify_domain()
+        domains = get_selected_domains(config.FINETUNING_DATASET_DIR)
+        if args.model:
+            config.MODEL_TRAINING_CONFIG["model_name"] = args.model
+        if args.epochs:
+            config.MODEL_TRAINING_CONFIG["num_train_epochs"] = args.epochs
+        config.logging.info(f"Training model {config.MODEL_TRAINING_CONFIG['model_name']} for {config.MODEL_TRAINING_CONFIG['num_train_epochs']} epochs. Starting at {datetime.datetime.now()}.")
         
         # TODO: add two functionalities to 'run_training_procedure' 
         # 1. add the possibility to pass model checkpoints
         # 2. add the possibility to train accross multiple domains
         for domain in domains:
-            train_file = os.path.join(FINETUNING_DATASET_DIR, domain, TRAIN_FILE_NAME)
-            val_file   = os.path.join(FINETUNING_DATASET_DIR, domain, VAL_FILE_NAME)
-            domain_output_dir = os.path.join(CHECKPOINTS_DIR, domain)
+            train_file = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TRAIN_FILE_NAME)
+            val_file   = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.VAL_FILE_NAME)
+            domain_output_dir = os.path.join(config.CHECKPOINTS_DIR, domain)
             create_necessary_dirs(domain_output_dir)
             run_training_procedure(domain_output_dir, train_file, val_file)
+            config.logging.info(f"Finished training model {config.MODEL_TRAINING_CONFIG['model_name']} for domain {domain}. Ending at {datetime.datetime.now()}.")
