@@ -72,5 +72,7 @@ def create_necessary_dirs(file_path):
 PAAS_PLAN_FILE_NAME = "paas_plans.csv"
 VAL_FILE_NAME = "test.jsonl"
 TRAIN_FILE_NAME = "train.jsonl"
+TEST_FILE_NAME = "test.jsonl"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
+TRAINING_HISTORY_FILE_NAME = "training_data.csv"

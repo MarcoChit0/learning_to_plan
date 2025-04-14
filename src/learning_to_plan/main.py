@@ -122,7 +122,8 @@ if __name__ == "__main__":
         for domain in domains:
             train_file = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TRAIN_FILE_NAME)
             val_file   = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.VAL_FILE_NAME)
-            domain_output_dir = os.path.join(config.CHECKPOINTS_DIR, domain)
-            create_necessary_dirs(domain_output_dir)
-            run_training_procedure(domain_output_dir, train_file, val_file)
+            test_file  = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TEST_FILE_NAME)
+            domain_output_dir = os.path.join(config.CHECKPOINTS_DIR, config.MODEL_TRAINING_CONFIG["model_name"], domain)
+            config.create_necessary_dirs(domain_output_dir)
+            run_training_procedure(domain_output_dir, train_file, val_file, test_file)
             config.logging.info(f"Finished training model {config.MODEL_TRAINING_CONFIG['model_name']} for domain {domain}. Ending at {datetime.datetime.now()}.")
