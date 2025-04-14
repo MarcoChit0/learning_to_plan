@@ -104,7 +104,8 @@ if __name__ == "__main__":
             build_finetuining_dataset(
                 os.path.join(config.PAAS_PLANS_DIR, domain, config.PAAS_PLAN_FILE_NAME),
                 train_output=os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TRAIN_FILE_NAME),
-                test_output=os.path.join(config.FINETUNING_DATASET_DIR, domain, config.VAL_FILE_NAME),
+                validation_output=os.path.join(config.FINETUNING_DATASET_DIR, domain, config.VAL_FILE_NAME),
+                test_output=os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TEST_FILE_NAME)
             )
         config.logging.info("Finished building finetuning dataset.")
     if args.train:
