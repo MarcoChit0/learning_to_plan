@@ -4,8 +4,8 @@ import logging
 MODEL_TRAINING_CONFIG = {
     "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
 
-    "max_seq_length": 4096,
-    "max_new_tokens": 4096,
+    "max_seq_length": 2048,
+    "max_new_tokens": 2048,
 
     # Batch
     "batch_size": 1, # 1 - 4,
@@ -20,9 +20,9 @@ MODEL_TRAINING_CONFIG = {
     "optimizer": "adamw_8bit",
 
     # Salvamento e logging
-    "logging_steps": 0.05, # save the model each 5% of the training
+    "logging_steps": 100,
     "logging_strategy": "steps",
-    "save_steps": 0.1, # save the model each 10% of the training
+    "save_steps": 200,
     "save_strategy": "steps",
 
     # Outros

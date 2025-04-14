@@ -61,6 +61,9 @@ def run_training_procedure(output_dir, train_file, val_file):
 
     training_args = TrainingArguments(
         output_dir=output_dir,
+        run_name=f"{config.MODEL_TRAINING_CONFIG['model_name']}-{os.path.basename(output_dir)}-{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}",
+        logging_dir=os.path.join(output_dir, "logs"),
+        report_to="none", 
         num_train_epochs=config.MODEL_TRAINING_CONFIG["num_train_epochs"],
         per_device_train_batch_size=config.MODEL_TRAINING_CONFIG["batch_size"],
         per_device_eval_batch_size=config.MODEL_TRAINING_CONFIG["eval_batch_size"],
@@ -70,7 +73,9 @@ def run_training_procedure(output_dir, train_file, val_file):
         learning_rate=config.MODEL_TRAINING_CONFIG["learning_rate"],
         lr_scheduler_type=config.MODEL_TRAINING_CONFIG["lr_scheduler_type"],
         weight_decay=config.MODEL_TRAINING_CONFIG["weight_decay"],
+        save_strategy=config.MODEL_TRAINING_CONFIG["save_strategy"],
         save_steps=config.MODEL_TRAINING_CONFIG["save_steps"],
+        logging_strategy=config.MODEL_TRAINING_CONFIG["logging_strategy"],
         logging_steps=config.MODEL_TRAINING_CONFIG["logging_steps"],
         optim=config.MODEL_TRAINING_CONFIG["optimizer"],
     )
