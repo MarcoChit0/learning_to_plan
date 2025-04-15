@@ -37,7 +37,7 @@ def params_changed(output_dir):
     with open(params_file, 'r') as f:
         previous_params = json.load(f)
     
-    current_params = {k: v for k, v in config.MODEL_TRAINING_CONFIG.items()}
+    current_params = {k: v for k, v in config.MODEL_TRAINING_CONFIG.items() if k != "num_train_epochs"}
     return current_params != previous_params
 
 class TrainingHistoryCallback(TrainerCallback):
@@ -191,7 +191,7 @@ def run_training_procedure(output_dir, train_file, val_file, test_file, overwrit
         logging_strategy=config.MODEL_TRAINING_CONFIG["logging_strategy"],
         logging_steps=config.MODEL_TRAINING_CONFIG["logging_steps"],
         optim=config.MODEL_TRAINING_CONFIG["optimizer"],
-        evaluation_strategy="epoch",  # Evaluate at the end of each epoch
+        eval_strategy="epoch",  # Evaluate at the end of each epoch
     )
 
 

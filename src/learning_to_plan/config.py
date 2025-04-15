@@ -52,7 +52,6 @@ def initilize(run_on_google_colab=False):
     FINETUNING_DATASET_DIR = os.path.join(DATA_DIR, "finetuning_dataset")
     CHECKPOINTS_DIR = os.path.join(DATA_DIR, "checkpoints")
     for dir in [DATA_DIR, RAW_DIR, PAAS_PLANS_DIR, FINETUNING_DATASET_DIR, CHECKPOINTS_DIR]:
-        print(dir)
         os.makedirs(dir, exist_ok=True)
     
     # initialize logging
@@ -70,9 +69,9 @@ def create_necessary_dirs(file_path):
 
 # File names
 PAAS_PLAN_FILE_NAME = "paas_plans.csv"
-VAL_FILE_NAME = "test.jsonl"
 TRAIN_FILE_NAME = "train.jsonl"
-TEST_FILE_NAME = "test.jsonl"
+VAL_FILE_NAME = "validation.jsonl" # used to compute loss function during training
+TEST_FILE_NAME = "test.jsonl" # ood data to check generalization at each epoch
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
 TRAINING_HISTORY_FILE_NAME = "training_data.csv"
