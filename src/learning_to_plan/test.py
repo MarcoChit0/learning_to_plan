@@ -71,7 +71,7 @@ def run_evaluation_procedure(model_dir, test_file):
         outputs = model.generate(
             **inputs,
             max_new_tokens=config.MODEL_TRAINING_CONFIG["max_new_tokens"],
-            do_sample=False
+            do_sample=True
         )
         generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
