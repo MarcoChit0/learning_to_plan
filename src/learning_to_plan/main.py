@@ -112,8 +112,7 @@ if __name__ == "__main__":
         
     if args.train:
         verify_domain()
-        model_dir = os.path.join(config.CHECKPOINTS_DIR, config.MODEL_TRAINING_CONFIG["model_name"])
-        domains = get_selected_domains(model_dir)
+        domains = get_selected_domains(config.FINETUNING_DATASET_DIR)
         if args.model:
             config.MODEL_TRAINING_CONFIG["model_name"] = args.model
         if args.epochs:
@@ -123,7 +122,7 @@ if __name__ == "__main__":
         for domain in domains:
             train_file = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TRAIN_FILE_NAME)
             val_file   = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.VAL_FILE_NAME)
-            model_checkpoint_dir = os.path.join(model_dir, domain)
+            model_checkpoint_dir = os.path.join(config.CHECKPOINTS_DIR, config.MODEL_TRAINING_CONFIG["model_name"], domain)
             config.create_necessary_dirs(model_checkpoint_dir)
             train.run_training_procedure(model_checkpoint_dir, train_file, val_file)
             config.logging.info(f"Finished training model {config.MODEL_TRAINING_CONFIG['model_name']} for domain {domain}. Ending at {datetime.datetime.now()}.")
