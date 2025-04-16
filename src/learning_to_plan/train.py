@@ -85,7 +85,7 @@ def run_training_procedure(output_dir, train_file, val_file, test_file, overwrit
     tokenizer = AutoTokenizer.from_pretrained(
         model_name,
         trust_remote_code=True,
-        use_auth_token=autentication_token
+        token=autentication_token
     )
 
     # Load initial model (or resume from checkpoint if available)
@@ -94,14 +94,14 @@ def run_training_procedure(output_dir, train_file, val_file, test_file, overwrit
             model_name,
             trust_remote_code=True,
             torch_dtype=torch.bfloat16 if config.MODEL_TRAINING_CONFIG["bf16"] else torch.float16,
-            use_auth_token=autentication_token
+            token=autentication_token
         )
     else:
         model = AutoModelForCausalLM.from_pretrained(
             output_dir,
             trust_remote_code=True,
             torch_dtype=torch.bfloat16 if config.MODEL_TRAINING_CONFIG["bf16"] else torch.float16,
-            use_auth_token=autentication_token
+            token=autentication_token
         )
 
     def tokenize_fn(example):
@@ -191,7 +191,7 @@ def run_training_procedure(output_dir, train_file, val_file, test_file, overwrit
                 output_dir,
                 trust_remote_code=True,
                 torch_dtype=torch.bfloat16 if config.MODEL_TRAINING_CONFIG["bf16"] else torch.float16,
-                use_auth_token=autentication_token
+                token=autentication_token
             )
             eval_args = TrainingArguments(
                 output_dir=output_dir,
@@ -237,7 +237,7 @@ def run_training_procedure(output_dir, train_file, val_file, test_file, overwrit
                 output_dir,
                 trust_remote_code=True,
                 torch_dtype=torch.bfloat16 if config.MODEL_TRAINING_CONFIG["bf16"] else torch.float16,
-                use_auth_token=autentication_token
+                token=autentication_token
             )
         except Exception as e:
             config.logging.error("Failed to reload model for next epoch: %s", e)
