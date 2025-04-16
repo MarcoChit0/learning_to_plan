@@ -128,12 +128,13 @@ if __name__ == "__main__":
             config.logging.info(f"Finished training model {config.MODEL_TRAINING_CONFIG['model_name']} for domain {domain}. Ending at {datetime.datetime.now()}.")
     
     if args.evaluate:
+        model_dir = os.path.join(config.CHECKPOINTS_DIR, config.MODEL_TRAINING_CONFIG["model_name"])
         verify_domain()
-        domains = get_selected_domains(config.CHECKPOINTS_DIR)
+        domains = get_selected_domains(model_dir)
         if args.model:
             config.MODEL_TRAINING_CONFIG["model_name"] = args.model
         for domain in domains:
             test_file = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TEST_FILE_NAME)
-            model_checkpoint_dir = os.path.join(config.CHECKPOINTS_DIR, config.MODEL_TRAINING_CONFIG["model_name"], domain)
+            model_checkpoint_dir = os.path.join(model_dir, domain)
             config.logging.info("Evaluating model %s for domain %s", config.MODEL_TRAINING_CONFIG["model_name"], domain)
             test.run_evaluation_procedure(model_checkpoint_dir, test_file)
