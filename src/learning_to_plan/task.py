@@ -239,12 +239,12 @@ class BlocksworldTask(Task):
         }
         return json.dumps(data, ensure_ascii=False)
 
-from learning_to_plan.config import *
+import learning_to_plan.config as config
 
 def get_tasks_from_domain_directory(domain, number_of_problems_per_domain=None):
     tasks = {}
-    instance_directory = os.path.join(RAW_DIR, domain, INSTANCES_SUBDIRECTORY)
-    domain_file_path = os.path.join(RAW_DIR, domain, DOMAIN_FILE_NAME)
+    instance_directory = os.path.join(config.RAW_DIR, domain, config.INSTANCES_SUBDIRECTORY)
+    domain_file_path = os.path.join(config.RAW_DIR, domain, config.DOMAIN_FILE_NAME)
     for file_name in os.listdir(instance_directory):
         if instance_pattern.search(file_name).group(0):
             instance_file_path = os.path.join(instance_directory, file_name)

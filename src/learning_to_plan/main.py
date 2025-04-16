@@ -65,12 +65,18 @@ def parse_args():
         action="store_true",
         help="Whether to run on google colab or not."
     )
+    parser.add_argument(
+        "--max_retries",
+        type=int,
+        default=3,
+        help="Number of retries for planning as a service."
+    )
     return parser.parse_args()
 
 if __name__ == "__main__":
 
     args = parse_args()
-    initilize(args.run_on_google_colab)
+    config.initilize(args.run_on_google_colab)
 
     def verify_domain():
         if args.domain == "":
@@ -95,11 +101,11 @@ if __name__ == "__main__":
             tasks = get_tasks_from_domain_directory(domain, args.number_of_problems_per_domain)
             output_file_path = os.path.join(config.PAAS_PLANS_DIR, domain, config.PAAS_PLAN_FILE_NAME)
             config.logging.info(f"Calling planning as a service for domain {domain} at time {datetime.datetime.now()}.")
-            asyncio.run(call_paas(tasks, output_file_path, overwrite=args.overwrite_paas_plans))
+            asyncio.run(call_paas(tasks, output_file_path, overwrite=args.overwrite_paas_plans, max_retries=args.max_retries))
             config.logging.info(f"Finished calling planning as a service for domain {domain} at time {datetime.datetime.now()}.")
         
     if args.build_finetuning_dataset: 
-        logging.info("Building finetuning dataset.")
+        config.logging.info("Building finetuning dataset.")
         for domain in os.listdir(config.PAAS_PLANS_DIR):
             build_finetuining_dataset(
                 os.path.join(config.PAAS_PLANS_DIR, domain, config.PAAS_PLAN_FILE_NAME),
