@@ -20,9 +20,9 @@ MODEL_TRAINING_CONFIG = {
     "optimizer": "adamw_8bit",
 
     # Salvamento e logging
-    "logging_steps": 100,
+    "logging_steps": 400,
     "logging_strategy": "steps",
-    "save_steps": 200,
+    "save_steps": 800,
     "save_strategy": "steps",
 
     # Outros
