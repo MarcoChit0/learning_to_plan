@@ -3,11 +3,12 @@ import os
 import argparse
 import asyncio
 
-from learning_to_plan.build_finetuning_dataset import *
-from learning_to_plan.train import *
-from learning_to_plan.call_paas import *
-from learning_to_plan.task import *
-import learning_to_plan.config as config
+from learning_to_plan import build_finetuning_dataset
+from learning_to_plan import train
+from learning_to_plan import call_paas
+from learning_to_plan import task
+from learning_to_plan import config
+from learning_to_plan import test
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Learning to Plan")
@@ -20,7 +21,7 @@ def parse_args():
     parser.add_argument(
         "--call_paas",
         action="store_true",
-        help="Whether to call planing as a service to generate plans or not."
+        help="Whether to call planning as a service to generate plans or not."
     )
     parser.add_argument(
         "-n", "--number_of_problems_per_domain",
@@ -52,7 +53,7 @@ def parse_args():
         "-m", "--model",
         type=str,
         default=None,
-        help="Model name to use for training."
+        help="Model name to use for training/evaluation."
     )
     parser.add_argument(
         "-e", "--epochs",
@@ -64,12 +65,6 @@ def parse_args():
         "--run_on_google_colab",
         action="store_true",
         help="Whether to run on google colab or not."
-    )
-    parser.add_argument(
-        "--max_retries",
-        type=int,
-        default=3,
-        help="Number of retries for planning as a service."
     )
     return parser.parse_args()
 
@@ -98,22 +93,23 @@ if __name__ == "__main__":
         verify_domain()
         domains = get_selected_domains(config.RAW_DIR)
         for domain in domains:
-            tasks = get_tasks_from_domain_directory(domain, args.number_of_problems_per_domain)
+            tasks = task.get_tasks_from_domain_directory(domain, args.number_of_problems_per_domain)
             output_file_path = os.path.join(config.PAAS_PLANS_DIR, domain, config.PAAS_PLAN_FILE_NAME)
             config.logging.info(f"Calling planning as a service for domain {domain} at time {datetime.datetime.now()}.")
-            asyncio.run(call_paas(tasks, output_file_path, overwrite=args.overwrite_paas_plans, max_retries=args.max_retries))
+            asyncio.run(call_paas.call_paas(tasks, output_file_path, overwrite=args.overwrite_paas_plans, max_retries=args.max_retries))
             config.logging.info(f"Finished calling planning as a service for domain {domain} at time {datetime.datetime.now()}.")
         
     if args.build_finetuning_dataset: 
         config.logging.info("Building finetuning dataset.")
         for domain in os.listdir(config.PAAS_PLANS_DIR):
-            build_finetuining_dataset(
+            build_finetuning_dataset.build_finetuining_dataset(
                 os.path.join(config.PAAS_PLANS_DIR, domain, config.PAAS_PLAN_FILE_NAME),
                 train_output=os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TRAIN_FILE_NAME),
                 validation_output=os.path.join(config.FINETUNING_DATASET_DIR, domain, config.VAL_FILE_NAME),
                 test_output=os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TEST_FILE_NAME)
             )
         config.logging.info("Finished building finetuning dataset.")
+        
     if args.train:
         verify_domain()
         domains = get_selected_domains(config.FINETUNING_DATASET_DIR)
@@ -123,14 +119,21 @@ if __name__ == "__main__":
             config.MODEL_TRAINING_CONFIG["num_train_epochs"] = args.epochs
         config.logging.info(f"Training model {config.MODEL_TRAINING_CONFIG['model_name']} for {config.MODEL_TRAINING_CONFIG['num_train_epochs']} epochs. Starting at {datetime.datetime.now()}.")
         
-        # TODO: add two functionalities to 'run_training_procedure' 
-        # 1. add the possibility to pass model checkpoints
-        # 2. add the possibility to train accross multiple domains
         for domain in domains:
             train_file = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TRAIN_FILE_NAME)
             val_file   = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.VAL_FILE_NAME)
-            test_file  = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TEST_FILE_NAME)
-            domain_output_dir = os.path.join(config.CHECKPOINTS_DIR, config.MODEL_TRAINING_CONFIG["model_name"], domain)
-            config.create_necessary_dirs(domain_output_dir)
-            run_training_procedure(domain_output_dir, train_file, val_file, test_file)
+            model_checkpoint_dir = os.path.join(config.CHECKPOINTS_DIR, config.MODEL_TRAINING_CONFIG["model_name"], domain)
+            config.create_necessary_dirs(model_checkpoint_dir)
+            train.run_training_procedure(model_checkpoint_dir, train_file, val_file)
             config.logging.info(f"Finished training model {config.MODEL_TRAINING_CONFIG['model_name']} for domain {domain}. Ending at {datetime.datetime.now()}.")
+    
+    if args.evaluate:
+        verify_domain()
+        domains = get_selected_domains(config.CHECKPOINTS_DIR)
+        if args.model:
+            config.MODEL_TRAINING_CONFIG["model_name"] = args.model
+        for domain in domains:
+            test_file = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TEST_FILE_NAME)
+            model_checkpoint_dir = os.path.join(config.CHECKPOINTS_DIR, config.MODEL_TRAINING_CONFIG["model_name"], domain)
+            config.logging.info("Evaluating model %s for domain %s", config.MODEL_TRAINING_CONFIG["model_name"], domain)
+            test.run_evaluation_procedure(model_checkpoint_dir, test_file)

@@ -7,10 +7,13 @@ MODEL_TRAINING_CONFIG = {
     "max_seq_length": 2048,
     "max_new_tokens": 2048,
 
-    # Batch
+    # Training
     "batch_size": 1, # 1 - 4,
-    "eval_batch_size": 1, # 8, 16, 32
     "gradient_accumulation_steps": 1, # 1 - 2
+    
+    # Evaluation
+    "eval_strategy": "epoch",
+    "eval_batch_size": 1, # 8, 16, 32
 
     # Optimization
     "learning_rate": 1.0e-5,
@@ -24,10 +27,11 @@ MODEL_TRAINING_CONFIG = {
     "logging_strategy": "steps",
     "save_steps": 800,
     "save_strategy": "steps",
+    "save_total_limit": 1,
 
     # Outros
     "bf16": True,
-    "deepspeed_config": "deepspeed_zero3.json"
+    # "deepspeed_config": "deepspeed_zero3.json"
 }
 
 # Inside each domain directory
@@ -39,8 +43,8 @@ GOOGLE_COLAB_DATA_DIR = "../drive/MyDrive/projects/learning_to_plan/data/"
 DATA_DIR = "data/"
 RAW_DIR = None
 PAAS_PLANS_DIR = None
-CHECKPOINTS_DIR = None
 FINETUNING_DATASET_DIR = None
+CHECKPOINTS_DIR = None
 
 def initilize(run_on_google_colab=False):
     # initialize directories
@@ -74,4 +78,6 @@ VAL_FILE_NAME = "validation.jsonl" # used to compute loss function during traini
 TEST_FILE_NAME = "test.jsonl" # ood data to check generalization at each epoch
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
-TRAINING_HISTORY_FILE_NAME = "training_data.csv"
+TRAINING_PARAMETERS_FILE_NAME = "training_parameters.json"
+TEST_METRICS_FILE_NAME = "metrics.csv"
+TEST_DATA_FILE_NAME = "test_{index}.jsonl"
