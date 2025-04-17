@@ -81,4 +81,4 @@ DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
 TRAINING_PARAMETERS_FILE_NAME = "training_parameters.json"
 TEST_METRICS_FILE_NAME = "metrics.csv"
-TEST_DATA_FILE_NAME = "test_{index}.jsonl"evaluation_strategy
+TEST_DATA_FILE_NAME = "test_{index}.jsonl"
