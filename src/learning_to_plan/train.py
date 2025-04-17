@@ -6,10 +6,12 @@ from datasets import load_dataset
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
+    BitsAndBytesConfig,
     TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling,
 )
+from peft import LoraConfig, get_peft_model
 from transformers.trainer_utils import get_last_checkpoint
 
 import learning_to_plan.config as config
@@ -45,15 +47,37 @@ def run_training_procedure(model_checkpoint_dir, train_file, val_file):
     hf_token = os.getenv("HUGGINGFACE_TOKEN")
 
     tokenizer = AutoTokenizer.from_pretrained(model_source, trust_remote_code=True, token=hf_token)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_source,
-        trust_remote_code=True,
-        torch_dtype=None 
-            if cfg("load_in_8bit") 
-            else (torch.bfloat16 if cfg("bf16") else torch.float16),
-        load_in_8bit=cfg("load_in_8bit"),
-        token=hf_token,
-    )
+
+    # ---------- quantized‑load + optional LoRA --------------------------------
+    if cfg("load_in_8bit"):
+        quant_cfg = BitsAndBytesConfig(load_in_8bit=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_source,
+            trust_remote_code=True,
+            device_map="auto",
+            quantization_config=quant_cfg,
+            token=hf_token,
+        )
+
+        # attach LoRA adapter so the model becomes trainable
+        lora_cfg = LoraConfig(
+            r=cfg("lora_r"),
+            lora_alpha=cfg("lora_r") * 4,
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                            "up_proj", "down_proj", "gate_proj"],
+            lora_dropout=0.05,
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        model = get_peft_model(model, lora_cfg)
+        model.print_trainable_parameters()
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_source,
+            trust_remote_code=True,
+            torch_dtype=torch.bfloat16 if cfg("bf16") else torch.float16,
+            token=hf_token,
+        )
 
 
     def tokenize_fn(ex):

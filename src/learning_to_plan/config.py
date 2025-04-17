@@ -33,6 +33,7 @@ MODEL_TRAINING_CONFIG = {
     # Outros
     "bf16": True,
     "load_in_8bit": False,
+    "lora_r": 8,
     # "deepspeed_config": "deepspeed_zero3.json"
 }
 
