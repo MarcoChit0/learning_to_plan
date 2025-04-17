@@ -106,7 +106,7 @@ def run_evaluation_procedure(
             outputs = model.generate(
                 **inputs,
                 max_new_tokens=config.MODEL_TRAINING_CONFIG["max_new_tokens"],
-                do_sample=False,
+                do_sample=True,
                 eos_token_id=tokenizer.eos_token_id,
                 pad_token_id=tokenizer.eos_token_id,
             )

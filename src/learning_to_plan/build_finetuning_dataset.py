@@ -24,18 +24,33 @@ def build_finetuining_dataset(
         raise ValueError(e)
 
     df = pd.read_csv(csv_path)
-    df_valid = df[(df["status"] == "ok") & (df["plan"].notna()) & (df["plan"].str.strip() != "")]
-    if not len(df_valid) == 4200:
-        e = f"CSV file must contain at least 4200 rows, but only {len(df_valid)} rows were found."
+    # Filter valid rows and separate into longer and basic plans
+    valid_mask = (df["status"] == "ok") & (df["plan"].notna()) & (df["plan"].str.strip() != "")
+    df_valid = df[valid_mask]
+
+    if not len(df_valid) == 4400:
+        e = f"CSV file must contain at least 4400 valid rows, but only {len(df_valid)} rows were found."
         config.logging.error(e)
         raise ValueError(e)
 
+    # Extract longer plans and basic plans
+    longer_df = df_valid[df_valid["is_longer_plan"] == True]
+    basic_df = df_valid[df_valid["is_longer_plan"] == False]
+    
+    # Check if exactly 200 rows have is_longer_plan as True
+    if len(longer_df) != 200:
+        e = f"Expected 200 rows with 'is_longer_plan' as True, but found {len(longer_df)} rows."
+        config.logging.error(e)
+        raise ValueError(e)
+    
+    # Only split the basic dataset
     train_df, temp_df = train_test_split(
-        df_valid, test_size=1000, random_state=random_seed
+        basic_df, test_size=800, random_state=random_seed
     )
-    validation_df, test_df = train_test_split(
+    validation_df, basic_test_df = train_test_split(
         temp_df, test_size=200, random_state=random_seed
     )
+    test_df = pd.concat([longer_df, basic_test_df], ignore_index=True)
 
     def write_dataset(df, output_path):
         config.create_necessary_dirs(output_path)

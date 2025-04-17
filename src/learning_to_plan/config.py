@@ -38,8 +38,8 @@ MODEL_TRAINING_CONFIG = {
 }
 
 # Inside each domain directory
-INSTANCES_SUBDIRECTORY = "generated_basic"
-
+BASIC_INSTANCES = "generated_basic"
+LONG_INSTANCES = "generated_basic_longer_plan_len"
 
 # Data folders
 GOOGLE_COLAB_DATA_DIR = "../drive/MyDrive/projects/learning_to_plan/data/"

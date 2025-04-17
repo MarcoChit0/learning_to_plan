@@ -71,6 +71,13 @@ def parse_args():
         action="store_true",
         help="Whether to load the model in 8bit or not."
     )
+    parser.add_argument(
+        "--problem_size",
+        type=str,
+        default=None,
+        choices=["basic", "long"],
+        help="Problem size to call planning as a service for."
+    )
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -98,7 +105,9 @@ if __name__ == "__main__":
         verify_domain()
         domains = get_selected_domains(config.RAW_DIR)
         for domain in domains:
-            tasks = task.get_tasks_from_domain_directory(domain, args.number_of_problems_per_domain)
+            tasks = task.get_tasks_from_domain_directory(domain, args.number_of_problems_per_domain, args.problem_size)
+            if not tasks:
+                raise ValueError(f"No tasks found in {domain} domain.")
             output_file_path = os.path.join(config.PAAS_PLANS_DIR, domain, config.PAAS_PLAN_FILE_NAME)
             config.logging.info(f"Calling planning as a service for domain {domain} at time {datetime.datetime.now()}.")
             asyncio.run(call_paas.call_paas(tasks, output_file_path, overwrite=args.overwrite_paas_plans, max_retries=args.max_retries))

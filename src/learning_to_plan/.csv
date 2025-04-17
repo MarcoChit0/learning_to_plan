@@ -1,0 +1,2 @@
+timestamp,trained_epochs,accuracy,mean_lcs,std_lcs,mean_lcs_ratio,std_lcs_ratio,mean_generated_plan_length,std_generated_plan_length
+2025-04-17 15:25:22,20,15.0,6.695,3.4412170812083334,0.7444738455988456,0.17333354523415384,280.35,119.89060638765656

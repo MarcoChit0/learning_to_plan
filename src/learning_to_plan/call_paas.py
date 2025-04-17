@@ -75,7 +75,7 @@ async def call_paas(
 
     config.create_necessary_dirs(output_file_path)
     with open(output_file_path, "w", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=["domain_file_path", "instance_file_path", "domain", "instance", "status", "plan", "error"])
+        writer = csv.DictWriter(csvfile, fieldnames=["domain_file_path", "instance_file_path", "domain", "instance", "status", "plan", "error", "is_longer_plan"])
         writer.writeheader()
 
         for t in sorted(tasks.values()):

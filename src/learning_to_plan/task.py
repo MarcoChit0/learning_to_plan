@@ -13,6 +13,7 @@ class Task(abc.ABC):
         self._domain_file_path = domain_file_path 
         self._instance_file_path = instance_file_path
         self._instance = instance_pattern.search(self._instance_file_path).group(0)
+        self._is_longer_plan = True if config.LONG_INSTANCES in self._instance_file_path else False
         self._status = None
         self._error_message = None
         self._plan = None
@@ -32,6 +33,10 @@ class Task(abc.ABC):
     def __lt__(self, other):
         if not isinstance(other, Task):
             return NotImplemented
+        
+        if self._is_longer_plan != other._is_longer_plan:
+            return self._is_longer_plan
+        
         self_match = instance_pattern.search(self._instance_file_path)
         other_match = instance_pattern.search(other._instance_file_path)
         if self_match and other_match:
@@ -55,6 +60,7 @@ class Task(abc.ABC):
             "plan": self._plan,
             "error": self._error_message,
             "domain": self._domain,
+            "is_longer_plan": self._is_longer_plan
         }
 
     def update_status(self, response):
@@ -178,6 +184,7 @@ class BlocksworldTask(Task):
         assert type(self._plan) == str, "Plan should be a string."
         problem_description = self.convert_instance_into_natural_language(self.read_instance())
         data = {
+            "is_longer_plan": self._is_longer_plan,
             "prompt": (
                 "# Goal.\n\n"
                 "Use the available actions to transform the initial state into the goal state.\n\n"
@@ -241,15 +248,31 @@ class BlocksworldTask(Task):
 
 import learning_to_plan.config as config
 
-def get_tasks_from_domain_directory(domain, number_of_problems_per_domain=None):
-    tasks = {}
-    instance_directory = os.path.join(config.RAW_DIR, domain, config.INSTANCES_SUBDIRECTORY)
+def get_tasks_from_domain_directory(domain, number_of_problems_per_domain=None, problem_size=None):
+    tasks = []
     domain_file_path = os.path.join(config.RAW_DIR, domain, config.DOMAIN_FILE_NAME)
-    for file_name in os.listdir(instance_directory):
-        if instance_pattern.search(file_name).group(0):
-            instance_file_path = os.path.join(instance_directory, file_name)
-            task = get_task_from_domain(domain, domain_file_path, instance_file_path)
-            tasks[task._instance] = task
+    
+    instance_dirs = []
+    if problem_size == "basic" or problem_size == None:
+        instance_dir.append(os.path.join(config.RAW_DIR, domain, config.BASIC_INSTANCES))
+    if problem_size == "long" or problem_size == None:
+        instance_dirs.append(os.path.join(config.RAW_DIR, domain, config.LONG_INSTANCES))
+
+    for instance_dir in instance_dirs:
+        if not os.path.exists(instance_dir):
+            raise ValueError(f"Instance directory not found: {instance_dir}")
+            
+        for file_name in os.listdir(instance_dir):
+            match = instance_pattern.search(file_name)
+            if match:
+                instance_file_path = os.path.join(instance_dir, file_name)
+                task = get_task_from_domain(domain, domain_file_path, instance_file_path)
+                tasks.append(task)
+    
+    tasks.sort()
     if number_of_problems_per_domain:
-        tasks = {k: v for k, v in sorted(tasks.items(), key=lambda item: item[1])[:number_of_problems_per_domain]}
-    return tasks
+        if number_of_problems_per_domain > len(tasks):
+            raise ValueError(f"Number of problems per domain exceeds available tasks: {len(tasks)}")
+        tasks = tasks[:number_of_problems_per_domain]
+    
+    return {task._instance: task for task in tasks}
