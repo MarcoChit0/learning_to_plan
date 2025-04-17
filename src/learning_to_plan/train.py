@@ -28,13 +28,14 @@ def run_training_procedure(model_checkpoint_dir, train_file, val_file):
         datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
 
+    os.makedirs(model_checkpoint_dir, exist_ok=True)
     last_checkpoint = get_last_checkpoint(model_checkpoint_dir)
-    if last_checkpoint is not None:
-        model_source = last_checkpoint
-        config.logging.info("Resuming from checkpoint %s", last_checkpoint)
-    else:
-        model_source = cfg("model_name")
-        config.logging.info("No checkpoint found – starting fresh from %s", model_source)
+    model_source = last_checkpoint if last_checkpoint else cfg("model_name")
+    config.logging.info(
+        "%s checkpoint %s",
+        "Resuming from" if last_checkpoint else "No checkpoint found – starting fresh from",
+        model_source
+    )
 
     dataset = load_dataset("json", data_files={"train": train_file, "validation": val_file})
     if len(dataset["train"]) == 0 or len(dataset["validation"]) == 0:
