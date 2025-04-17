@@ -66,12 +66,20 @@ def parse_args():
         action="store_true",
         help="Whether to run on google colab or not."
     )
+    parser.add_argument(
+        "--load_in_8bit",
+        action="store_true",
+        help="Whether to load the model in 8bit or not."
+    )
     return parser.parse_args()
 
 if __name__ == "__main__":
 
     args = parse_args()
     config.initilize(args.run_on_google_colab)
+    if args.load_in_8bit:
+        config.MODEL_TRAINING_CONFIG["load_in_8bit"] = True
+        config.MODEL_TRAINING_CONFIG["bf16"] = False
 
     def verify_domain():
         if args.domain == "":

@@ -48,9 +48,13 @@ def run_training_procedure(model_checkpoint_dir, train_file, val_file):
     model = AutoModelForCausalLM.from_pretrained(
         model_source,
         trust_remote_code=True,
-        torch_dtype=torch.bfloat16 if cfg("bf16") else torch.float16,
+        torch_dtype=None 
+            if cfg("load_in_8bit") 
+            else (torch.bfloat16 if cfg("bf16") else torch.float16),
+        load_in_8bit=cfg("load_in_8bit"),
         token=hf_token,
     )
+
 
     def tokenize_fn(ex):
         return tokenizer(
