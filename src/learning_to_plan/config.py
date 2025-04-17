@@ -49,11 +49,23 @@ PAAS_PLANS_DIR = None
 FINETUNING_DATASET_DIR = None
 CHECKPOINTS_DIR = None
 
-def initilize(run_on_google_colab=False):
-    # initialize directories
+def initilize(args):
     global DATA_DIR, GOOGLE_COLAB_DATA_DIR, RAW_DIR, PAAS_PLANS_DIR, FINETUNING_DATASET_DIR, CHECKPOINTS_DIR
-    if run_on_google_colab: 
+    # initialize parameters
+    if args.load_in_8bit:
+        MODEL_TRAINING_CONFIG["load_in_8bit"] = True
+        MODEL_TRAINING_CONFIG["bf16"] = False
+    
+    if args.model:
+        MODEL_TRAINING_CONFIG["model_name"] = args.model
+    
+    if args.epochs:
+        MODEL_TRAINING_CONFIG["num_train_epochs"] = args.epochs
+
+    if args.run_on_google_colab: 
         DATA_DIR = GOOGLE_COLAB_DATA_DIR
+
+    # initialize directories
     RAW_DIR = os.path.join(DATA_DIR, "raw")
     PAAS_PLANS_DIR = os.path.join(DATA_DIR, "paas_plans")
     FINETUNING_DATASET_DIR = os.path.join(DATA_DIR, "finetuning_dataset")

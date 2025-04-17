@@ -76,10 +76,7 @@ def parse_args():
 if __name__ == "__main__":
 
     args = parse_args()
-    config.initilize(args.run_on_google_colab)
-    if args.load_in_8bit:
-        config.MODEL_TRAINING_CONFIG["load_in_8bit"] = True
-        config.MODEL_TRAINING_CONFIG["bf16"] = False
+    config.initilize(args)
 
     def verify_domain():
         if args.domain == "":
@@ -121,10 +118,6 @@ if __name__ == "__main__":
     if args.train:
         verify_domain()
         domains = get_selected_domains(config.FINETUNING_DATASET_DIR)
-        if args.model:
-            config.MODEL_TRAINING_CONFIG["model_name"] = args.model
-        if args.epochs:
-            config.MODEL_TRAINING_CONFIG["num_train_epochs"] = args.epochs
         config.logging.info(f"Training model {config.MODEL_TRAINING_CONFIG['model_name']} for {config.MODEL_TRAINING_CONFIG['num_train_epochs']} epochs. Starting at {datetime.datetime.now()}.")
         
         for domain in domains:
