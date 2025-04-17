@@ -44,12 +44,12 @@ def run_training_procedure(model_checkpoint_dir, train_file, val_file):
     load_dotenv()
     hf_token = os.getenv("HUGGINGFACE_TOKEN")
 
-    tokenizer = AutoTokenizer.from_pretrained(model_source, trust_remote_code=True, use_auth_token=hf_token)
+    tokenizer = AutoTokenizer.from_pretrained(model_source, trust_remote_code=True, token=hf_token)
     model = AutoModelForCausalLM.from_pretrained(
         model_source,
         trust_remote_code=True,
         torch_dtype=torch.bfloat16 if cfg("bf16") else torch.float16,
-        use_auth_token=hf_token,
+        token=hf_token,
     )
 
     def tokenize_fn(ex):
