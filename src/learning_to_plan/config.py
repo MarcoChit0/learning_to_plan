@@ -6,6 +6,7 @@ MODEL_TRAINING_CONFIG = {
 
     "max_seq_length": 2048,
     "max_new_tokens": 2048,
+    "report_to": "none",
 
     # Training
     "batch_size": 1, # 1 - 4,
@@ -80,4 +81,4 @@ DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
 TRAINING_PARAMETERS_FILE_NAME = "training_parameters.json"
 TEST_METRICS_FILE_NAME = "metrics.csv"
-TEST_DATA_FILE_NAME = "test_{index}.jsonl"
+TEST_DATA_FILE_NAME = "test_{index}.jsonl"evaluation_strategy
