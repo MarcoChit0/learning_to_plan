@@ -1,7 +1,29 @@
-name: learning_to_plan
+# environment.yml (Minimalist + VAL Build Tools Version)
+
+# Using underscore as requested
+name: learning_to_plan_env
+
+# Channels define where conda looks for packages
 channels:
-  - conda-forge
+  - pytorch # Still good to list relevant channels
+  - nvidia
+  - conda-forge # Essential for build tools
   - defaults
+
 dependencies:
+  # --- Core Conda Packages ---
   - python=3.11
   - pip
+
+  # --- VAL Build Tool Dependencies (Managed by Conda) ---
+  - cmake # From conda-forge
+  - make # From conda-forge (usually) or defaults
+  - cxx-compiler # Provides g++/clang++ via conda-forge
+  - flex # From conda-forge
+  - bison # From conda-forge
+
+  # --- Pip dependencies ---
+  - pip:
+      # This tells conda to run 'pip install -e .' after setting up the environment.
+      # Pip will use your pyproject.toml to find and install all other Python dependencies.
+      - -e .

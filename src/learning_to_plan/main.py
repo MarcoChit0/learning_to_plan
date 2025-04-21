@@ -82,9 +82,6 @@ def parse_args():
 
 if __name__ == "__main__":
 
-    args = parse_args()
-    config.initilize(args)
-
     def verify_domain():
         if args.domain == "":
             e = "Please specify a domain with --domain <domain_name> or 'all'."
@@ -100,7 +97,10 @@ if __name__ == "__main__":
                 if d not in available_domains:
                     raise ValueError(f"Domain {d} not found in {dir_path}.")
             return domains
-        
+    
+    args = parse_args()
+    config.initilize(args)
+
     if args.call_paas:
         verify_domain()
         domains = get_selected_domains(config.RAW_DIR)
@@ -110,7 +110,7 @@ if __name__ == "__main__":
                 raise ValueError(f"No tasks found in {domain} domain.")
             output_file_path = os.path.join(config.PAAS_PLANS_DIR, domain, config.PAAS_PLAN_FILE_NAME)
             config.logging.info(f"Calling planning as a service for domain {domain} at time {datetime.datetime.now()}.")
-            asyncio.run(call_paas.call_paas(tasks, output_file_path, overwrite=args.overwrite_paas_plans, max_retries=args.max_retries))
+            asyncio.run(call_paas.call_paas(tasks, output_file_path, overwrite=args.overwrite_paas_plans))
             config.logging.info(f"Finished calling planning as a service for domain {domain} at time {datetime.datetime.now()}.")
         
     if args.build_finetuning_dataset: 

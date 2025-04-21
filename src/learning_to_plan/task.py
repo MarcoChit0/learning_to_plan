@@ -17,7 +17,7 @@ class Task(abc.ABC):
         self._status = None
         self._error_message = None
         self._plan = None
-    
+
     @abc.abstractmethod
     def convert_instance_into_natural_language(self, plan) -> str:
         raise NotImplementedError("Subclasses must implement this method.")
@@ -35,7 +35,7 @@ class Task(abc.ABC):
             return NotImplemented
         
         if self._is_longer_plan != other._is_longer_plan:
-            return self._is_longer_plan
+            return not self._is_longer_plan
         
         self_match = instance_pattern.search(self._instance_file_path)
         other_match = instance_pattern.search(other._instance_file_path)
@@ -44,6 +44,17 @@ class Task(abc.ABC):
         else:
             raise ValueError("Invalid instance file path format.")
 
+    def __str__(self):
+        size = "longer" if self._is_longer_plan else "basic"
+        return f"{self._domain} - {size} - {self._instance} : {self._status}"
+
+    def __hash__(self):
+        return hash((self._domain_file_path, self._instance_file_path))
+    
+    def __eq__(self, other):
+        if not isinstance(other, Task):
+            return NotImplemented
+        return self._instance_file_path == other._instance_file_path and self._domain_file_path == other._domain_file_path
 
     def read_from_dict(self, row):
         if row.get("instance", None) == self._instance:
@@ -248,13 +259,13 @@ class BlocksworldTask(Task):
 
 import learning_to_plan.config as config
 
-def get_tasks_from_domain_directory(domain, number_of_problems_per_domain=None, problem_size=None):
+def get_tasks_from_domain_directory(domain, number_of_problems_per_domain=None, problem_size=None) -> set[Task]:
     tasks = []
     domain_file_path = os.path.join(config.RAW_DIR, domain, config.DOMAIN_FILE_NAME)
     
     instance_dirs = []
     if problem_size == "basic" or problem_size == None:
-        instance_dir.append(os.path.join(config.RAW_DIR, domain, config.BASIC_INSTANCES))
+        instance_dirs.append(os.path.join(config.RAW_DIR, domain, config.BASIC_INSTANCES))
     if problem_size == "long" or problem_size == None:
         instance_dirs.append(os.path.join(config.RAW_DIR, domain, config.LONG_INSTANCES))
 
@@ -275,4 +286,4 @@ def get_tasks_from_domain_directory(domain, number_of_problems_per_domain=None, 
             raise ValueError(f"Number of problems per domain exceeds available tasks: {len(tasks)}")
         tasks = tasks[:number_of_problems_per_domain]
     
-    return {task._instance: task for task in tasks}
+    return set(tasks)
