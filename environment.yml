@@ -1,7 +1,7 @@
 # environment.yml (Minimalist + VAL Build Tools Version)
 
 # Using underscore as requested
-name: learning_to_plan_env
+name: learning_to_plan
 
 # Channels define where conda looks for packages
 channels:
