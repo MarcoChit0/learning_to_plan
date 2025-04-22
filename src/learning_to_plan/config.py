@@ -43,7 +43,7 @@ LONG_INSTANCES = "generated_basic_longer_plan_len"
 
 # Data folders
 # Google Colab : "../drive/MyDrive/projects/learning_to_plan/data/"
-# Kaggle : ""
+# Kaggle : "/kaggle/input/learning-to-plan-dataset/"
 DATA_DIR = "data/"
 RAW_DIR = None
 PAAS_PLANS_DIR = None
@@ -65,8 +65,8 @@ def initilize(args):
     if args.epochs:
         MODEL_TRAINING_CONFIG["num_train_epochs"] = args.epochs
 
-    if args.data_dir: 
-        DATA_DIR = args.data_dir
+    if args.data_dir_path: 
+        DATA_DIR = args.data_dir_path
 
     if args.huggingface_token:
         HUGGINGFACE_TOKEN = args.huggingface_token
