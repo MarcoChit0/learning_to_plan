@@ -4,9 +4,9 @@
 # Updated names to use underscores
 CONDA_ENV_NAME = learning_to_plan_env
 DOCKER_IMAGE_NAME = learning_to_plan_app
-MAIN_SCRIPT = main.py # Path to your main script at the root
-VAL_DIR = utils/VAL # Path to VAL submodule
-VAL_BUILD_DIR = $(VAL_DIR)/build # Should evaluate to utils/VAL/build
+MAIN_SCRIPT = main.py# Path to your main script at the root
+VAL_DIR = utils/VAL# Path to VAL submodule
+VAL_BUILD_DIR = $(VAL_DIR)/build# Should evaluate to utils/VAL/build
 ENV_FILE ?= .env # Default environment file name (can be overridden: make docker_bash ENV_FILE=my.env)
 
 # --- Default Target ---

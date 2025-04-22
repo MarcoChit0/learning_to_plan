@@ -42,10 +42,9 @@ def run_evaluation_procedure(
 
     # ── Load model & tokenizer ──────────────────────────────────────────
     load_dotenv()
-    hf_token = os.getenv("HUGGINGFACE_TOKEN")
 
     tokenizer = AutoTokenizer.from_pretrained(
-        model_dir, trust_remote_code=True, token=hf_token
+        model_dir, trust_remote_code=True, token=config.HUGGINGFACE_TOKEN
     )
     model = AutoModelForCausalLM.from_pretrained(
         model_dir,
@@ -53,7 +52,7 @@ def run_evaluation_procedure(
         torch_dtype=torch.bfloat16
         if config.MODEL_TRAINING_CONFIG["bf16"]
         else torch.float16,
-        token=hf_token,
+        token=config.HUGGINGFACE_TOKEN,
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

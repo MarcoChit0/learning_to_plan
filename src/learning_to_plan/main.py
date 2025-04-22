@@ -62,9 +62,10 @@ def parse_args():
         help="Number of epochs for training."
     )
     parser.add_argument(
-        "--run_on_google_colab",
-        action="store_true",
-        help="Whether to run on google colab or not."
+        "--data_dir_path",
+        type=str,
+        default=None,
+        help="Path to the data directory."
     )
     parser.add_argument(
         "--load_in_8bit",
@@ -77,6 +78,12 @@ def parse_args():
         default=None,
         choices=["basic", "long"],
         help="Problem size to call planning as a service for."
+    )
+    parser.add_argument(
+        "--huggingface_token",
+        type=str,
+        default=None,
+        help="Huggingface token to use for loading the model."
     )
     return parser.parse_args()
 

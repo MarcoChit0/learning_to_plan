@@ -44,9 +44,9 @@ def run_training_procedure(model_checkpoint_dir, train_file, val_file):
         raise ValueError("Train/validation dataset is empty.")
 
     load_dotenv()
-    hf_token = os.getenv("HUGGINGFACE_TOKEN")
+    config.HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
 
-    tokenizer = AutoTokenizer.from_pretrained(model_source, trust_remote_code=True, token=hf_token)
+    tokenizer = AutoTokenizer.from_pretrained(model_source, trust_remote_code=True, token=config.HUGGINGFACE_TOKEN)
 
     # ---------- quantized‑load + optional LoRA --------------------------------
     if cfg("load_in_8bit"):
@@ -56,7 +56,7 @@ def run_training_procedure(model_checkpoint_dir, train_file, val_file):
             trust_remote_code=True,
             device_map="auto",
             quantization_config=quant_cfg,
-            token=hf_token,
+            token=config.HUGGINGFACE_TOKEN,
         )
 
         # attach LoRA adapter so the model becomes trainable
@@ -76,7 +76,7 @@ def run_training_procedure(model_checkpoint_dir, train_file, val_file):
             model_source,
             trust_remote_code=True,
             torch_dtype=torch.bfloat16 if cfg("bf16") else torch.float16,
-            token=hf_token,
+            token=config.HUGGINGFACE_TOKEN,
         )
 
 

@@ -42,12 +42,15 @@ BASIC_INSTANCES = "generated_basic"
 LONG_INSTANCES = "generated_basic_longer_plan_len"
 
 # Data folders
-GOOGLE_COLAB_DATA_DIR = "../drive/MyDrive/projects/learning_to_plan/data/"
+# Google Colab : "../drive/MyDrive/projects/learning_to_plan/data/"
+# Kaggle : ""
 DATA_DIR = "data/"
 RAW_DIR = None
 PAAS_PLANS_DIR = None
 FINETUNING_DATASET_DIR = None
 CHECKPOINTS_DIR = None
+
+HUGGINGFACE_TOKEN = None
 
 def initilize(args):
     global DATA_DIR, GOOGLE_COLAB_DATA_DIR, RAW_DIR, PAAS_PLANS_DIR, FINETUNING_DATASET_DIR, CHECKPOINTS_DIR
@@ -62,8 +65,17 @@ def initilize(args):
     if args.epochs:
         MODEL_TRAINING_CONFIG["num_train_epochs"] = args.epochs
 
-    if args.run_on_google_colab: 
-        DATA_DIR = GOOGLE_COLAB_DATA_DIR
+    if args.data_dir: 
+        DATA_DIR = args.data_dir
+
+    if args.huggingface_token:
+        HUGGINGFACE_TOKEN = args.huggingface_token
+    else:
+        from dotenv import load_dotenv
+        load_dotenv()
+        HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN", None)
+        if HUGGINGFACE_TOKEN is None:
+            raise ValueError("Huggingface token not found. Please set it in .env file or pass it as an argument.")
 
     # initialize directories
     RAW_DIR = os.path.join(DATA_DIR, "raw")
