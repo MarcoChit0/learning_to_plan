@@ -1,0 +1,9 @@
+{
+    "model_name": "Qwen/Qwen2.5-7B-Instruct",
+    "max_seq_length": 2048,
+    "max_new_tokens": 2048,
+    "bf16": true,
+    "load_in_8bit": false,
+    "do_sample": true,
+    "generate_batch_size": 1
+}
