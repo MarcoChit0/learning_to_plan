@@ -200,18 +200,15 @@ def _setup_paths_and_logging(args: Optional[argparse.Namespace]):
     global HUGGINGFACE_TOKEN, LOGGING_INITIALIZED, logger
 
     # --- Handle Hugging Face Token ---
-    token_source = "None"
     temp_token = None
     if args is not None and hasattr(args, 'huggingface_token') and args.huggingface_token:
         temp_token = args.huggingface_token
-        token_source = "Argument"
     else:
+        import dotenv
+        dotenv.load_dotenv()
         temp_token = os.getenv("HUGGINGFACE_TOKEN")
-        if temp_token:
-            token_source = "Environment Variable"
 
     HUGGINGFACE_TOKEN = temp_token
-    log(f"Hugging Face token source: {token_source}.")
     if not HUGGINGFACE_TOKEN:
         # Make missing token fatal as per previous version logic
         msg = "Hugging Face token not provided. Set it via --huggingface_token or HUGGINGFACE_TOKEN environment variable."

@@ -2,11 +2,9 @@
 import os
 import argparse
 import asyncio
-import logging # Import standard logging for potential direct use if needed
-from typing import Optional
+import logging 
 
 # Import project modules
-from learning_to_plan import build_finetuning_dataset
 from learning_to_plan import train
 from learning_to_plan import utils
 from learning_to_plan import task
@@ -18,7 +16,7 @@ def parse_args():
     parser.add_argument(
         "-d", "--domain",
         type=str,
-        default="",
+        default="all",
         help="List of domains separated by commas (e.g., 'blocksworld,logistics') or 'all'."
     )
     # --- Action Flags ---
@@ -112,17 +110,16 @@ def parse_args():
 
     return parser.parse_args()
 
-# --- Helper Functions ---
-def verify_domain(args):
+def get_selected_domains(args, base_dir):
     if not args.domain:
         # Use config's logger/printer
         config.log("Please specify a domain with --domain <domain_name> or 'all'.", level=logging.ERROR)
         raise ValueError("Domain not specified.")
 
-def get_selected_domains(args, base_dir):
     if not os.path.isdir(base_dir):
-         config.log(f"Base directory for domains not found: {base_dir}", level=logging.ERROR)
-         raise FileNotFoundError(f"Base directory not found: {base_dir}")
+        m = f"Base directory for domains not found: {base_dir}"
+        config.log(m, level=logging.ERROR)
+        raise FileNotFoundError(m)
     try:
         available_domains = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
     except OSError as e:
@@ -130,25 +127,22 @@ def get_selected_domains(args, base_dir):
         raise e
 
     if not available_domains:
-        config.log(f"No domain subdirectories found in {base_dir}.", level=logging.WARNING)
-        return []
+        m = f"No domain subdirectories found in {base_dir}."
+        config.log(m, level=logging.ERROR)
+        raise ValueError(m)
 
     if args.domain.lower() == "all":
         config.log(f"Processing all found domains: {', '.join(available_domains)}")
         return available_domains
     else:
         selected = args.domain.split(",")
-        valid_domains = []
         for d in selected:
-            if d in available_domains:
-                valid_domains.append(d)
-            else:
-                config.log(f"Specified domain '{d}' not found in {base_dir}. Skipping.", level=logging.WARNING)
-        if not valid_domains:
-             config.log(f"None of the specified domains ({args.domain}) were found in {base_dir}.", level=logging.ERROR)
-             raise ValueError(f"Specified domains not found: {args.domain}")
-        config.log(f"Processing selected domains: {', '.join(valid_domains)}")
-        return valid_domains
+            if d not in available_domains:
+                m = f"Domain '{d}' not found in {base_dir}. Available domains: {', '.join(available_domains)}"
+                config.log(m, level=logging.ERROR)
+                raise ValueError(m)
+        config.log(f"Processing selected domains: {', '.join(selected)}")
+        return selected
 
 # --- Main Execution ---
 if __name__ == "__main__":
@@ -159,7 +153,6 @@ if __name__ == "__main__":
     # --- Action Blocks ---
     if args.call_paas:
         config.log("--- Starting Planning as a Service (PaaS) Calls ---")
-        verify_domain(args)
         domains = get_selected_domains(args, config.RAW_DIR)
         for domain in domains:
             config.log(f"Processing PaaS for domain: {domain}")
@@ -175,7 +168,6 @@ if __name__ == "__main__":
 
     elif args.split_dataset:
         config.log("--- Starting Dataset Splitting ---")
-        verify_domain(args)
         domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
         for domain in domains:
             config.log(f"Splitting dataset for domain: {domain}")
@@ -190,8 +182,6 @@ if __name__ == "__main__":
 
     elif args.train:
         config.log("--- Starting Model Training ---")
-        verify_domain(args)
-
         domains = get_selected_domains(args, config.FINETUNING_DATASET_DIR)
         for domain in domains:
             config.log(f"Starting training for domain: {domain}")

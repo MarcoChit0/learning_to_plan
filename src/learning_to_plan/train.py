@@ -15,7 +15,9 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def run_training_procedure(model_checkpoint_dir, data_file_path):
     start_time = datetime.datetime.now()
-    config.log(f"Training {config.training_params('model_name')} -- started {start_time.strftime("%Y-%m-%d %H:%M:%S")}", level=config.logging.INFO, exc_info=True)
+    model_name = config.training_params('model_name')
+    start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
+    config.log(f"Training {model_name} -- started {start_time_str}", level=config.logging.INFO, exc_info=True)
 
     os.makedirs(model_checkpoint_dir, exist_ok=True)
     # Load the dataset from the single JSON file
@@ -89,10 +91,12 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
 
     config.log(f"Training started at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", level=config.logging.INFO, exc_info=True)
     trainer.train(resume_from_checkpoint=last_checkpoint)
-    config.log(f"Training finished at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", level=config.logging.INFO, exc_info=True)
-    trainer.save_model(model_checkpoint_dir)
     config.log(f"Model saved to {model_checkpoint_dir}", level=config.logging.INFO, exc_info=True)
 
     end_time = datetime.datetime.now()
+    model_name = config.training_params('model_name') # Re-fetch in case it's needed again, or use the one from above if scope allows
+    end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
+    config.log(f"Training {model_name} -- finished {end_time_str}", level=config.logging.INFO, exc_info=True)
+    config.log(f"Total training time: {end_time - start_time}", level=config.logging.INFO, exc_info=True)
     config.log(f"Training {config.training_params('model_name')} -- finished {end_time.strftime('%Y-%m-%d %H:%M:%S')}", level=config.logging.INFO, exc_info=True)
     config.log(f"Total training time: {end_time - start_time}", level=config.logging.INFO, exc_info=True)

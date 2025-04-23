@@ -1,8 +1,7 @@
-from learning_to_plan.task import Task, get_task_from_csv
+import learning_to_plan.task as task
 import asyncio
 import aiohttp
 import os
-import csv
 import learning_to_plan.config as config
 import datetime
 
@@ -35,7 +34,7 @@ async def get_plan_from_paas(domain_content, instance_content, instance_name, so
         return {"status": "error", "error": "Max retries exceeded or no valid plan returned."}
 
 async def call_paas(
-    tasks: set[Task],
+    tasks: set[task.Task],
     data_file_path: str,
     max_retries=3,
     num_workers=4,
@@ -61,15 +60,10 @@ async def call_paas(
             config.logging.warning(f"Overwriting existing dataset at {data_file_path}.")
         else:
             config.logging.info(f"Loading existing dataset at {data_file_path}. Skipping recalculation for already processed tasks.")
-            with open(data_file_path, "r", newline="") as csvfile:
-                reader = csv.DictReader(csvfile)
-                for row in reader:
-                    task = get_task_from_csv(row)
-                    if task in tasks and task._status == "ok":
-                        config.logging.info(f"Skipping {task._instance}.")
-                        processed_tasks.add(task)
-                        tasks.remove(task)
-
+            processed_tasks = task.get_tasks_from_jsonl(data_file_path)
+            # filter out for the tasks that have status "ok"
+            processed_tasks = {t for t in processed_tasks if t.status == "ok"}
+            tasks = tasks - processed_tasks
     semaphore = asyncio.Semaphore(num_workers)
     await asyncio.gather(*[process_instance(task) for task in tasks])
 

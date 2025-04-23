@@ -9,9 +9,6 @@ from enum import Enum
 instance_pattern = re.compile(r"instance-(\d+)\.pddl$")
 lock = threading.Lock()
 
-
-
-
 class Task(abc.ABC): 
     class TaskType(Enum):
         TRAINING = "training"
@@ -289,7 +286,7 @@ def get_task_from_domain(domain, domain_file_path, instance_file_path):
         raise ValueError(f"Unknown domain: {domain}")
     return task
 
-def get_task_from_json_object(json_obj):
+def get_task_from_json(json_obj):
     domain = json_obj.get("domain", None)
     instance_file_path = json_obj.get("instance_file_path", None)
     domain_file_path = json_obj.get("domain_file_path", None)
@@ -303,6 +300,24 @@ def get_task_from_json_object(json_obj):
     )
     task.from_json(json_obj)
     return task
+
+def get_tasks_from_json(json_file_path):
+    tasks = set()
+    with open(json_file_path, "r") as f:
+        for line in f:
+            try:
+                json_obj = json.loads(line)
+                task = get_task_from_json(json_obj)
+                tasks.add(task)
+            except json.JSONDecodeError as e:
+                m = f"Error decoding JSON {json_file_path}: {e}"
+                config.log(m, level=config.logging.ERROR)
+                raise e
+            except Exception as e:
+                m = f"Error processing task from file {json_file_path}: {e}"
+                config.log(m, level=config.logging.ERROR)
+                raise e
+    return tasks
 
 from typing import Union, Set
 def get_tasks_from_domain_directory(domain: str, number_of_problems_per_domain: Union[str, int] = "all") -> Set[Task]:
