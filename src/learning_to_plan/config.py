@@ -296,3 +296,120 @@ def create_necessary_dirs(file_path: str) -> None:
         log(f"Error creating directories for {file_path}: {e}", level=logging.ERROR, exc_info=True)
     except Exception as e:
         log(f"Unexpected error in create_necessary_dirs for {file_path}: {e}", level=logging.ERROR, exc_info=True)
+
+
+import torch
+from transformers import (
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    BitsAndBytesConfig,
+    PreTrainedModel,
+    PreTrainedTokenizer,
+)
+from transformers.trainer_utils import get_last_checkpoint
+from typing import Tuple, Optional
+
+def load_model_and_tokenizer(checkpoint_dir: str) -> Tuple[PreTrainedModel, PreTrainedTokenizer]:
+    """
+    Loads a Hugging Face model and tokenizer, handling checkpoints,
+    quantization (8-bit), and data types (bf16/fp16).
+
+    Args:
+        model_name_or_path: The name (Hugging Face Hub) or local path of the base model.
+        load_in_8bit: Whether to load the model with 8-bit quantization.
+        bf16: Whether to use bfloat16. If False and not 8-bit, uses float16.
+        hf_token: Hugging Face API token.
+        trust_remote_code: Whether to trust remote code for model loading.
+        checkpoint_dir: The directory where checkpoints are saved/looked for.
+
+    Returns:
+        A tuple containing the loaded model and tokenizer.
+
+    Raises:
+        ValueError: If loading fails or parameters are incompatible.
+    """
+
+    last_checkpoint = get_last_checkpoint(checkpoint_dir)
+    model_source = last_checkpoint if last_checkpoint else get_config("model_name", None)
+    assert model_source, "Model source is None. Check your configuration."
+
+    if get_config("load_in_8bit", False):
+        log("Applying 8-bit quantization.", level=logging.INFO, do_print=False)
+        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+    elif get_config("load_in_4bit", False):
+        log("Applying 4-bit quantization.", level=logging.INFO, do_print=False)
+        quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+    else:
+        log("Loading model without quantization.", level=logging.INFO, do_print=False)
+        quantization_config = None
+        
+
+    # --- Load Tokenizer ---
+    assert HUGGINGFACE_TOKEN, "Hugging Face token is not set. Cannot load tokenizer."
+    try:
+        log(f"Loading tokenizer from: {model_source}", level=logging.INFO)
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_source,
+            trust_remote_code=get_config("trust_remote_code", True),
+            token=HUGGINGFACE_TOKEN,
+        )
+        # Set pad token if missing (common practice)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+            log("Tokenizer pad token set to EOS token.", level=logging.INFO, do_print=False)
+        log(f"Tokenizer loaded successfully from {model_source}.", level=logging.INFO)
+    except Exception as e:
+        m = f"Failed to load tokenizer from {model_source}: {e}"
+        log(m, level=logging.ERROR, exc_info=True)
+        raise ValueError(m) from e
+
+    # --- Load Model ---
+    try:
+        log(f"Loading model from: {model_source}", level=logging.INFO)
+        if quantization_config:
+            log("Loading 8-bit quantization config.", level=logging.INFO, do_print=False)
+            model = AutoModelForCausalLM.from_pretrained(
+                model_source,
+                trust_remote_code=get_config("trust_remote_code", True),
+                token=HUGGINGFACE_TOKEN,
+                quantization_config=quantization_config,
+                device_map="auto" if torch.cuda.is_available() else None,
+            )
+            from peft import LoraConfig, get_peft_model
+            r = get_config("lora_r", 8)
+            alpha = get_config("lora_alpha", r * 4)
+            lora_cfg = LoraConfig(
+                r=r,
+                lora_alpha=alpha,
+                target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                                "up_proj", "down_proj", "gate_proj"],
+                lora_dropout=0.05,
+                bias="none",
+                task_type="CAUSAL_LM",
+            )
+            model = get_peft_model(model, lora_cfg)
+            model.print_trainable_parameters()
+            log("LoRA model loaded successfully.", level=logging.INFO)
+        else:
+            log("Loading model without quantization.", level=logging.INFO, do_print=False)
+            if get_config("bf16", False):
+                log("Using bfloat16.", level=logging.INFO, do_print=False)
+                torch_dtype = torch.bfloat16
+            else:
+                log("Using float16.", level=logging.INFO, do_print=False)
+                torch_dtype = torch.float16
+            model = AutoModelForCausalLM.from_pretrained(
+                model_source,
+                trust_remote_code=get_config("trust_remote_code", True),
+                torch_dtype=torch_dtype,
+                token=HUGGINGFACE_TOKEN,
+                device_map="auto" if torch.cuda.is_available() else None,
+            )
+            log(f"Model loaded successfully from {model_source}.", level=logging.INFO)
+
+    except Exception as e:
+        m = f"Failed to load model from {model_source}: {e}"
+        log(m, level=logging.ERROR, exc_info=True)
+        raise ValueError(m) from e
+
+    return model, tokenizer

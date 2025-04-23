@@ -78,12 +78,11 @@ def generate_single(
 
 # --- Batch Generation from File ---
 def generate_batch(
-    model_dir: str,
+    checkpoint_model_dir: str,
     test_file: str,
     output_jsonl_path: str,
     *,
-    max_instances: Optional[int] = None,
-    batch_size: int = 1 # Keep batch_size=1 as generate_single handles one prompt
+    max_instances: Optional[int] = None
 ):
     """
     Loads model, generates plans for instances in a test file, saves results.
@@ -97,45 +96,16 @@ def generate_batch(
     """
     start_time = datetime.datetime.now()
     # Use config.log function
-    config.log(
-        f"Starting generation – checkpoint: {model_dir}, input: {test_file}, output: {output_jsonl_path} – time: {start_time}",
-        level=logging.INFO
-    )
+    config.log(f"Starting generation – checkpoint: {checkpoint_model_dir}, input: {test_file}, output: {output_jsonl_path} – time: {start_time}", level=logging.INFO)
 
-    # --- Load Model & Tokenizer (Once) ---
-    # config.initialize should have set the HUGGINGFACE_TOKEN globally
-    hf_token = config.HUGGINGFACE_TOKEN # Access global token set by config.initialize
-    # No need for os.getenv here if config.initialize handles it
+    model, tokenizer = config.load_model_and_tokenizer(checkpoint_dir=checkpoint_model_dir)
 
-    if not hf_token:
-         # This case should be handled by config.initialize raising an error now
-         config.log("HUGGINGFACE_TOKEN was not set during config initialization.", level=logging.ERROR)
-         raise ValueError("Hugging Face token missing after config initialization.")
+    device = "auto" if torch.cuda.is_available() else "cpu"
+    model.to(device)
+    model.eval() 
+    config.log(f"Model and tokenizer loaded successfully onto device: {device}", level=logging.INFO)
 
-    # Get config values using the helper
-    torch_dtype = torch.bfloat16 if config.get_config("bf16", False) else torch.float16
-
-    try:
-        config.log(f"Loading tokenizer from: {model_dir}")
-        tokenizer = AutoTokenizer.from_pretrained(
-            model_dir, trust_remote_code=True, token=hf_token
-        )
-        config.log(f"Loading model from: {model_dir}")
-        model = AutoModelForCausalLM.from_pretrained(
-            model_dir,
-            trust_remote_code=True,
-            torch_dtype=torch_dtype,
-            token=hf_token,
-            # device_map="auto" # Consider uncommenting for large models/multi-GPU
-        )
-    except Exception as e:
-        config.log(f"Fatal error loading model/tokenizer from {model_dir}: {e}", level=logging.ERROR, exc_info=True)
-        raise e # Stop execution
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device) # Move model to device ONCE
-    model.eval()      # Set model to evaluation mode ONCE
-    config.log(f"Model and tokenizer loaded successfully onto device: {device}")
+    batch_size = config.get_config("generate_batch_size", 1)
 
     # --- Load Dataset ---
     try:

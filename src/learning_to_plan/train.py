@@ -1,17 +1,11 @@
 import os
 import datetime
-import torch
-from dotenv import load_dotenv
 from datasets import load_dataset
 from transformers import (
-    AutoTokenizer,
-    AutoModelForCausalLM,
-    BitsAndBytesConfig,
     TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling,
 )
-from peft import LoraConfig, get_peft_model
 from transformers.trainer_utils import get_last_checkpoint
 
 import learning_to_plan.config as config
@@ -20,61 +14,14 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 def run_training_procedure(model_checkpoint_dir, train_file, val_file):
-    config.logging.info(
-        "Training %s – start: %s",
-        config.training_params("model_name"),
-        datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    )
+    start_time = datetime.datetime.now()
+    config.log(f"Training {config.training_params('model_name')} -- started {start_time.strftime("%Y-%m-%d %H:%M:%S")}", level=config.logging.INFO, exc_info=True)
 
     os.makedirs(model_checkpoint_dir, exist_ok=True)
-    last_checkpoint = get_last_checkpoint(model_checkpoint_dir)
-    model_source = last_checkpoint if last_checkpoint else config.training_params("model_name")
-    config.logging.info(
-        "%s checkpoint %s",
-        "Resuming from" if last_checkpoint else "No checkpoint found – starting fresh from",
-        model_source
-    )
-
     dataset = load_dataset("json", data_files={"train": train_file, "validation": val_file})
     if len(dataset["train"]) == 0 or len(dataset["validation"]) == 0:
         raise ValueError("Train/validation dataset is empty.")
-
-    load_dotenv()
-    config.HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
-
-    tokenizer = AutoTokenizer.from_pretrained(model_source, trust_remote_code=True, token=config.HUGGINGFACE_TOKEN)
-
-    # ---------- quantized‑load + optional LoRA --------------------------------
-    if config.training_params("load_in_8bit"):
-        quant_config.training_params = BitsAndBytesConfig(load_in_8bit=True)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_source,
-            trust_remote_code=True,
-            device_map="auto",
-            quantization_config=quant_config.training_params,
-            token=config.HUGGINGFACE_TOKEN,
-        )
-
-        # attach LoRA adapter so the model becomes trainable
-        lora_config.training_params = LoraConfig(
-            r=config.training_params("lora_r"),
-            lora_alpha=config.training_params("lora_r") * 4,
-            target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                            "up_proj", "down_proj", "gate_proj"],
-            lora_dropout=0.05,
-            bias="none",
-            task_type="CAUSAL_LM",
-        )
-        model = get_peft_model(model, lora_config.training_params)
-        model.print_trainable_parameters()
-    else:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_source,
-            trust_remote_code=True,
-            torch_dtype=torch.bfloat16 if config.training_params("bf16") else torch.float16,
-            token=config.HUGGINGFACE_TOKEN,
-        )
-
+    model, tokenizer = config.load_model_and_tokenizer(checkpoint_dir=model_checkpoint_dir)
 
     def tokenize_fn(ex):
         return tokenizer(
@@ -119,8 +66,18 @@ def run_training_procedure(model_checkpoint_dir, train_file, val_file):
         processing_class=tokenizer,
     )
 
-    config.logging.info("Starting training at %s", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    last_checkpoint = get_last_checkpoint(model_checkpoint_dir)
+    if last_checkpoint is None:
+        config.log("No checkpoint found. Starting training from scratch.", level=config.logging.INFO, exc_info=True)
+    else:
+        config.log(f"Resuming training from checkpoint: {last_checkpoint}", level=config.logging.INFO, exc_info=True)
+
+    config.log(f"Training started at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", level=config.logging.INFO, exc_info=True)
     trainer.train(resume_from_checkpoint=last_checkpoint)
-    config.logging.info("Training finished at %s.", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    config.log(f"Training finished at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", level=config.logging.INFO, exc_info=True)
     trainer.save_model(model_checkpoint_dir)
-    config.logging.info("Model saved to %s", model_checkpoint_dir)
+    config.log(f"Model saved to {model_checkpoint_dir}", level=config.logging.INFO, exc_info=True)
+
+    end_time = datetime.datetime.now()
+    config.log(f"Training {config.training_params('model_name')} -- finished {end_time.strftime('%Y-%m-%d %H:%M:%S')}", level=config.logging.INFO, exc_info=True)
+    config.log(f"Total training time: {end_time - start_time}", level=config.logging.INFO, exc_info=True)

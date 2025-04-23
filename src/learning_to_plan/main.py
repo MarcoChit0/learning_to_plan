@@ -266,7 +266,7 @@ if __name__ == "__main__":
 
             # Call the generation function from generate.py
             generate.generate_batch(
-                model_dir=model_domain_checkpoint_dir,
+                checkpoint_model_dir=model_domain_checkpoint_dir,
                 test_file=test_file,
                 output_jsonl_path=output_file_path
                 # Pass other args like max_instances if needed
