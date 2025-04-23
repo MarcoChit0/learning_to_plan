@@ -152,7 +152,3 @@ def generate_batch(
     except Exception as e:
         config.log(f"Error saving results: {e}", level=logging.ERROR, exc_info=True)
         raise e
-
-
-
-    

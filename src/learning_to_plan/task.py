@@ -3,22 +3,36 @@ import abc
 import re
 import json
 import os
+from typing import Optional
+from enum import Enum
 
 instance_pattern = re.compile(r"instance-(\d+)\.pddl$")
 lock = threading.Lock()
 
+
+
+
 class Task(abc.ABC): 
-    def __init__(self, domain, domain_file_path, instance_file_path):
-        self._domain = domain
-        self._domain_file_path = domain_file_path 
-        self._instance_file_path = instance_file_path
-        self._instance = instance_pattern.search(self._instance_file_path).group(0)
-        self._is_longer_plan = True if config.LONG_INSTANCES in self._instance_file_path else False
-        self._status = None
-        self._error_message = None
-        self._plan = None
-        self._type = None # training, validation, test | None
-        self._generated_plans = None
+    class TaskType(Enum):
+        TRAINING = "training"
+        VALIDATION = "validation"
+        TEST = "test"
+
+    class TaskStatus(Enum):
+        OK = "ok"
+        ERROR = "error"
+    
+    def __init__(self, domain : str, domain_file_path : str, instance_file_path : str):
+        self._domain :str = domain
+        self._domain_file_path : str = domain_file_path 
+        self._instance_file_path : str = instance_file_path
+        self._instance : str = instance_pattern.search(self._instance_file_path).group(0)
+        self._is_longer_plan : bool = True if config.LONG_INSTANCES in self._instance_file_path else False
+        self._status : Optional[Task.TaskStatus] = None
+        self._error_message : Optional[str] = None
+        self._plan : Optional[str] = None
+        self._type : Optional[Task.TaskType] = None # training, validation, test | None
+        self._generated_plans : Optional[list[str]] = None
 
     @abc.abstractmethod
     def convert_instance_into_natural_language(self, plan) -> str:
@@ -84,11 +98,30 @@ class Task(abc.ABC):
         return self._instance_file_path == other._instance_file_path and self._domain_file_path == other._domain_file_path
 
     def from_json(self, json_obj):
-        if json_obj.get("instance", None) == self._instance:
-            self._status = json_obj.get("status", self._status)
-            self._plan = json_obj.get("plan", self._plan)
-            self._error_message = json_obj.get("error", self._error_message)
-            self._type = json_obj.get("type", self._type)
+        # Process enum fields with consistent approach
+        for field_name, enum_type in [("status", Task.TaskStatus), ("type", Task.TaskType)]:
+            if field_name in json_obj:
+                try:
+                    setattr(self, f"_{field_name}", enum_type(json_obj[field_name]))
+                except (ValueError, KeyError):
+                    msg = f"Invalid {field_name} value: {json_obj[field_name]}"
+                    config.log(msg, level=config.logging.ERROR)
+                    raise ValueError(msg)
+        
+        # Process string fields 
+        for field_name in ["plan", "error_message"]:
+            value = json_obj.get(field_name, getattr(self, f"_{field_name}"))
+            if value is not None:
+                if not isinstance(value, str):
+                    raise TypeError(f"{field_name} must be a string")
+                setattr(self, f"_{field_name}", value)
+        
+        # Process generated_plans list of strings
+        plans = json_obj.get("generated_plans", self._generated_plans)
+        if plans is not None:
+            if not isinstance(plans, list) or not all(isinstance(plan, str) for plan in plans):
+                raise TypeError("generated_plans must be a list of strings")
+            self._generated_plans = plans
 
     def update_status(self, response):
         status = response.get("status", "error")

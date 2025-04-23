@@ -172,6 +172,7 @@ if __name__ == "__main__":
             asyncio.run(utils.call_paas(tasks, data_file_path, overwrite=args.overwrite_paas_plans))
             config.log(f"Finished PaaS calls for domain: {domain}")
         config.log("--- Finished All PaaS Calls ---")
+
     elif args.split_dataset:
         config.log("--- Starting Dataset Splitting ---")
         verify_domain(args)
@@ -186,6 +187,7 @@ if __name__ == "__main__":
                 config.log(f"Error splitting dataset for domain {domain}: {e}", level=logging.ERROR)
                 continue
         config.log("--- Finished All Dataset Splitting ---")
+
     elif args.train:
         config.log("--- Starting Model Training ---")
         verify_domain(args)
