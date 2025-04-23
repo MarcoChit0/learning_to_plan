@@ -17,6 +17,8 @@ class Task(abc.ABC):
         self._status = None
         self._error_message = None
         self._plan = None
+        self._type = None # training, validation, test | None
+        self._generated_plans = None
 
     @abc.abstractmethod
     def convert_instance_into_natural_language(self, plan) -> str:
@@ -27,9 +29,34 @@ class Task(abc.ABC):
         raise NotImplementedError("Subclasses must implement this method.")
     
     @abc.abstractmethod
-    def build_prompt(self, **kwargs):
+    def build_prompt(self, **kwargs) -> str:
         raise NotImplementedError("Subclasses must implement this method.")
+
+    def add_separator(self, prompt: str) -> str:
+        if "## Plan." in prompt:
+            return prompt
+        else:
+            return prompt + "\n## Plan.\n\n"
     
+    def to_json(self):
+        data = {
+            "domain_file_path": self._domain_file_path,
+            "instance_file_path": self._instance_file_path,
+            "instance": self._instance,
+            "status": self._status,
+            "plan": self._plan,
+            "error": self._error_message,
+            "domain": self._domain,
+            "is_longer_plan": self._is_longer_plan,
+            "type": self._type,
+            "generated_plans": self._generated_plans
+        }
+        try:
+            data['prompt'] = self.add_separator(self.build_prompt())
+        except (NotImplementedError, AssertionError, Exception) as e:
+            data['prompt'] = None
+        return json.dumps(data, ensure_ascii=False, indent=4)
+
     def __lt__(self, other):
         if not isinstance(other, Task):
             return NotImplemented
@@ -56,23 +83,12 @@ class Task(abc.ABC):
             return NotImplemented
         return self._instance_file_path == other._instance_file_path and self._domain_file_path == other._domain_file_path
 
-    def read_from_dict(self, row):
-        if row.get("instance", None) == self._instance:
-            self._status = row["status"]
-            self._plan = row["plan"]
-            self._error_message = row["error"]
-
-    def write_to_dict(self):
-        return {
-            "domain_file_path": self._domain_file_path,
-            "instance_file_path": self._instance_file_path,
-            "instance": self._instance,
-            "status": self._status,
-            "plan": self._plan,
-            "error": self._error_message,
-            "domain": self._domain,
-            "is_longer_plan": self._is_longer_plan
-        }
+    def from_json(self, json_obj):
+        if json_obj.get("instance", None) == self._instance:
+            self._status = json_obj.get("status", self._status)
+            self._plan = json_obj.get("plan", self._plan)
+            self._error_message = json_obj.get("error", self._error_message)
+            self._type = json_obj.get("type", self._type)
 
     def update_status(self, response):
         status = response.get("status", "error")
@@ -96,28 +112,7 @@ class Task(abc.ABC):
         with lock and open(self._domain_file_path, "r") as f:
             domain_content = f.read()
         return domain_content
-
-def get_task_from_domain(domain, domain_file_path, instance_file_path):
-    if domain == "blocksworld":
-        task = BlocksworldTask(domain_file_path, instance_file_path)
-    else:
-        raise ValueError(f"Unknown domain: {domain}")
-    return task
-
-def get_task_from_csv(row):
-    domain = row.get("domain", None)
-    instance_file_path = row.get("instance_file_path", None)
-    domain_file_path = row.get("domain_file_path", None)
-    assert domain, "Domain is not specified in the CSV row."
-    assert instance_file_path, "Instance file path is not specified in the CSV row."
-    assert domain_file_path, "Domain file path is not specified in the CSV row."
-    task = get_task_from_domain(
-        domain,
-        domain_file_path,
-        instance_file_path
-    )
-    task.read_from_dict(row)
-    return task
+    
 
 class BlocksworldTask(Task):
     def __init__(self, domain_file_path, instance_file_path):
@@ -192,11 +187,8 @@ class BlocksworldTask(Task):
         return nl_plan
     
     def build_prompt(self, **kwargs):
-        assert type(self._plan) == str, "Plan should be a string."
         problem_description = self.convert_instance_into_natural_language(self.read_instance())
-        data = {
-            "is_longer_plan": self._is_longer_plan,
-            "prompt": (
+        prompt = (
                 "# Goal.\n\n"
                 "Use the available actions to transform the initial state into the goal state.\n\n"
                 "# Output Format.\n\n"
@@ -252,38 +244,75 @@ class BlocksworldTask(Task):
                 "## Instance.\n\n"
                 + problem_description + "\n\n"
                 "## Plan.\n\n"
-                + self._plan
             )
-        }
-        return json.dumps(data, ensure_ascii=False)
+        return prompt
 
 import learning_to_plan.config as config
 
-def get_tasks_from_domain_directory(domain, number_of_problems_per_domain=None, problem_size=None) -> set[Task]:
-    tasks = []
+def get_task_from_domain(domain, domain_file_path, instance_file_path):
+    if domain == "blocksworld":
+        task = BlocksworldTask(domain_file_path, instance_file_path)
+    else:
+        raise ValueError(f"Unknown domain: {domain}")
+    return task
+
+def get_task_from_json_object(json_obj):
+    domain = json_obj.get("domain", None)
+    instance_file_path = json_obj.get("instance_file_path", None)
+    domain_file_path = json_obj.get("domain_file_path", None)
+    assert domain, "Domain is not specified in the JSON object."
+    assert instance_file_path, "Instance file path is not specified in the JSON object."
+    assert domain_file_path, "Domain file path is not specified in the JSON object."
+    task = get_task_from_domain(
+        domain,
+        domain_file_path,
+        instance_file_path
+    )
+    task.from_json(json_obj)
+    return task
+
+from typing import Union, Set
+def get_tasks_from_domain_directory(domain: str, number_of_problems_per_domain: Union[str, int] = "all") -> Set[Task]:
+    """
+    Get tasks from a domain directory.
+    
+    Args:
+        domain: Domain name
+        number_of_problems_per_domain: "all", "basic", "long", or a positive integer
+    
+    Returns:
+        Set of Task objects
+    """
     domain_file_path = os.path.join(config.RAW_DIR, domain, config.DOMAIN_FILE_NAME)
     
+    # Determine which instance directories to include
     instance_dirs = []
-    if problem_size == "basic" or problem_size == None:
+    if number_of_problems_per_domain in ("basic", "all") or isinstance(number_of_problems_per_domain, int):
         instance_dirs.append(os.path.join(config.RAW_DIR, domain, config.BASIC_INSTANCES))
-    if problem_size == "long" or problem_size == None:
+    if number_of_problems_per_domain in ("long", "all") or isinstance(number_of_problems_per_domain, int):
         instance_dirs.append(os.path.join(config.RAW_DIR, domain, config.LONG_INSTANCES))
 
+    # Collect tasks
+    tasks = []
     for instance_dir in instance_dirs:
         if not os.path.exists(instance_dir):
             raise ValueError(f"Instance directory not found: {instance_dir}")
-            
-        for file_name in os.listdir(instance_dir):
-            match = instance_pattern.search(file_name)
-            if match:
-                instance_file_path = os.path.join(instance_dir, file_name)
-                task = get_task_from_domain(domain, domain_file_path, instance_file_path)
-                tasks.append(task)
+        
+        # Get tasks from this directory using list comprehension
+        tasks.extend([
+            get_task_from_domain(domain, domain_file_path, os.path.join(instance_dir, file_name))
+            for file_name in os.listdir(instance_dir)
+            if instance_pattern.search(file_name)
+        ])
     
+    # Sort tasks
     tasks.sort()
-    if number_of_problems_per_domain:
-        if number_of_problems_per_domain > len(tasks):
-            raise ValueError(f"Number of problems per domain exceeds available tasks: {len(tasks)}")
-        tasks = tasks[:number_of_problems_per_domain]
+    
+    # Limit number of tasks if specified
+    if isinstance(number_of_problems_per_domain, int):
+        if number_of_problems_per_domain <= 0:
+            raise ValueError(f"Number of problems per domain must be positive")
+        elif number_of_problems_per_domain < len(tasks):
+            tasks = tasks[:number_of_problems_per_domain]
     
     return set(tasks)

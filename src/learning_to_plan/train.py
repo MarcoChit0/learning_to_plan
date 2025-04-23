@@ -13,26 +13,41 @@ import learning_to_plan.config as config
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
-def run_training_procedure(model_checkpoint_dir, train_file, val_file):
+def run_training_procedure(model_checkpoint_dir, data_file_path):
     start_time = datetime.datetime.now()
     config.log(f"Training {config.training_params('model_name')} -- started {start_time.strftime("%Y-%m-%d %H:%M:%S")}", level=config.logging.INFO, exc_info=True)
 
     os.makedirs(model_checkpoint_dir, exist_ok=True)
-    dataset = load_dataset("json", data_files={"train": train_file, "validation": val_file})
+    # Load the dataset from the single JSON file
+    dataset = load_dataset("json", data_files=data_file_path)
+    
+    # Filter into train and validation sets based on the "type" field
+    train_dataset = dataset["train"].filter(lambda example: example["type"] == "train")
+    validation_dataset = dataset["train"].filter(lambda example: example["type"] == "validation")
+    
+    # Combine into a dataset dictionary with train and validation splits
+    dataset = {
+        "train": train_dataset,
+        "validation": validation_dataset
+    }
     if len(dataset["train"]) == 0 or len(dataset["validation"]) == 0:
         raise ValueError("Train/validation dataset is empty.")
     model, tokenizer = config.load_model_and_tokenizer(checkpoint_dir=model_checkpoint_dir)
 
-    def tokenize_fn(ex):
+    def tokenize_fn(example):
+        # Concatenate prompt and plan
+        full_prompt = example["prompt"] + example["plan"]  # You may want to add a separator if needed
         return tokenizer(
-            ex["prompt"],
+            full_prompt,
             max_length=config.training_params("max_seq_length"),
             truncation=True,
             padding="max_length",
         )
 
-    tokenized_train = dataset["train"].map(tokenize_fn, batched=True, remove_columns=["prompt"])
-    tokenized_val   = dataset["validation"].map(tokenize_fn, batched=True, remove_columns=["prompt"])
+    # Update the map function to remove both columns
+    tokenized_train = dataset["train"].map(tokenize_fn, batched=True, remove_columns=["prompt", "plan"])
+    tokenized_val = dataset["validation"].map(tokenize_fn, batched=True, remove_columns=["prompt", "plan"])
+
     collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
     training_args = TrainingArguments(

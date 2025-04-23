@@ -12,8 +12,7 @@ _CONFIG_STORE: Dict[str, Any] = {} # Holds model/training/generation parameters
 # --- Global Variables for Paths and Token (Set during initialization) ---
 DATA_DIR: Optional[str] = None
 RAW_DIR: Optional[str] = None
-PAAS_PLANS_DIR: Optional[str] = None
-FINETUNING_DATASET_DIR: Optional[str] = None
+PROCESSED_DATA_DIR: Optional[str] = None
 CHECKPOINTS_DIR: Optional[str] = None
 HUGGINGFACE_TOKEN: Optional[str] = None
 LOGGING_INITIALIZED: bool = False # Flag to prevent duplicate logging setup
@@ -32,10 +31,7 @@ DEFAULT_TRAIN_CONFIG = "train_config.json"
 DEFAULT_GENERATE_CONFIG = "generate_config.json"
 BASIC_INSTANCES = "generated_basic"
 LONG_INSTANCES = "generated_basic_longer_plan_len"
-PAAS_PLAN_FILE_NAME = "paas_plans.csv"
-TRAIN_FILE_NAME = "train.jsonl"
-VAL_FILE_NAME = "validation.jsonl"
-TEST_FILE_NAME = "test.jsonl"
+PROCESSED_DATA_FILE_NAME = "data.json"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
 # --- End Constants ---
@@ -85,7 +81,7 @@ def initialize(
         config_path: Path to a specific JSON configuration file to load (optional).
     """
     global _CONFIG_STORE, HUGGINGFACE_TOKEN
-    global DATA_DIR, RAW_DIR, PAAS_PLANS_DIR, FINETUNING_DATASET_DIR, CHECKPOINTS_DIR
+    global DATA_DIR, RAW_DIR, PROCESSED_DATA_DIR, CHECKPOINTS_DIR
     global LOGGING_INITIALIZED, logger # Use the global logger
 
     # Initial message uses the basic setup
@@ -200,7 +196,7 @@ def initialize(
 
 def _setup_paths_and_logging(args: Optional[argparse.Namespace]):
     """Helper function to set up paths and file logging."""
-    global DATA_DIR, RAW_DIR, PAAS_PLANS_DIR, FINETUNING_DATASET_DIR, CHECKPOINTS_DIR
+    global DATA_DIR, RAW_DIR, PROCESSED_DATA_DIR, CHECKPOINTS_DIR
     global HUGGINGFACE_TOKEN, LOGGING_INITIALIZED, logger
 
     # --- Handle Hugging Face Token ---
@@ -230,11 +226,10 @@ def _setup_paths_and_logging(args: Optional[argparse.Namespace]):
 
     DATA_DIR = os.path.abspath(base_data_dir)
     RAW_DIR = os.path.join(DATA_DIR, "raw")
-    PAAS_PLANS_DIR = os.path.join(DATA_DIR, "paas_plans")
-    FINETUNING_DATASET_DIR = os.path.join(DATA_DIR, "finetuning_dataset")
+    PROCESSED_DATA_DIR = os.path.join(DATA_DIR, "processed")
     CHECKPOINTS_DIR = os.path.join(DATA_DIR, "checkpoints")
 
-    for dir_path in [DATA_DIR, RAW_DIR, PAAS_PLANS_DIR, FINETUNING_DATASET_DIR, CHECKPOINTS_DIR]:
+    for dir_path in [DATA_DIR, RAW_DIR, PROCESSED_DATA_DIR, CHECKPOINTS_DIR]:
         try:
             os.makedirs(dir_path, exist_ok=True)
         except OSError as e:

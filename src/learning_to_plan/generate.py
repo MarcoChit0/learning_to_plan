@@ -1,195 +1,158 @@
-# generate.py
+# generate.py (Modified)
 
 import os
 import datetime
 import json
 import logging # Import standard logging for level constants
-from typing import Optional
+from typing import Optional, List, Dict, Any # Added List, Dict, Any
 
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel, PreTrainedTokenizer
+# Removed direct AutoTokenizer/AutoModelForCausalLM imports as they are now in config.py
+from transformers import PreTrainedModel, PreTrainedTokenizer
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import pandas as pd
 
 # Import the refactored config module
 import learning_to_plan.config as config
 
-# --- Single Prompt Generation ---
+# --- Single Prompt Generation (Modified) ---
 def generate_single(
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizer,
     prompt_text: str,
     device: torch.device,
-) -> str:
+) -> List[str]: # Return type changed to List[str]
     """
-    Generates a plan for a single prompt using the provided model and tokenizer.
+    Generates one or more plan candidates for a single prompt.
 
     Parameters:
-        model: The loaded Hugging Face model (already on device).
+        model: The loaded Hugging Face model.
         tokenizer: The loaded Hugging Face tokenizer.
         prompt_text: The input prompt text (including the '## Plan.\n\n' marker).
-        device: The device (CPU or CUDA) to run inference on.
+        device: The device (CPU or CUDA) to run inference on (less relevant if using device_map).
 
     Returns:
-        The generated plan text.
+        A list of generated plan texts.
     """
     model.eval() # Ensure model is in eval mode
 
-    # Get generation parameters from config
-    # Use config.get_config instead of the non-existent config.eval_params
-    max_len = config.get_config("max_seq_length", 2048)
-    new_tokens = config.get_config("max_new_tokens", 2048)
-    do_sampling = config.get_config("do_sample", True) # Default to True as before
-    temperature = config.get_config("temperature", 0.7) # Default from previous snippet, adjust if needed
-
     # Determine dtype from model if possible, fallback to config
     dtype = model.dtype if hasattr(model, 'dtype') else (torch.bfloat16 if config.get_config("bf16", False) else torch.float16)
+    model_device_type = next(model.parameters()).device.type if torch.cuda.is_available() else 'cpu'
+    effective_device = torch.device(model_device_type)
 
     with torch.no_grad(), torch.autocast(
-        device_type=device.type,
-        dtype=dtype, # Use determined dtype
+        device_type=effective_device.type,
+        dtype=dtype,
+        enabled=effective_device.type == 'cuda' # Only enable autocast on CUDA
     ):
         inputs = tokenizer(
             prompt_text,
             return_tensors="pt",
             padding=False,
             truncation=True,
-            max_length=max_len, # Use variable from get_config
-        ).to(device)
+            max_length=config.get_config("max_seq_length", 2048),
+        ).to(effective_device) # Send inputs to the model's device
 
         outputs = model.generate(
             **inputs,
-            max_new_tokens=new_tokens,    # Use variable
-            do_sample=do_sampling,        # Use variable
-            temperature=temperature,      # Use variable
+            max_new_tokens=config.get_config("max_new_tokens", 2048),
+            do_sample=config.get_config("do_sample", True),
+            temperature=config.get_config("temperature", 0.7),
             eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id, # Use eos token for padding
+            pad_token_id=tokenizer.eos_token_id,
+            num_return_sequences=config.get_config("num_return_sequences", 1),
         )
 
-        # Decode only the newly generated part
-        input_len = inputs['input_ids'].shape[1]
-        # Ensure output is on CPU for decoding if needed, and handle potential batches (though batch=1 here)
-        generated_ids = outputs[0, input_len:].cpu()
-        decoded = tokenizer.decode(generated_ids, skip_special_tokens=True)
-        generated_text = decoded.strip()
+        # Decode all the sequences
+        return tokenizer.batch_decode(outputs, skip_special_tokens=True)
 
-        return generated_text
-
-# --- Batch Generation from File ---
+# --- Batch Generation from File (Modified) ---
 def generate_batch(
-    checkpoint_model_dir: str,
-    test_file: str,
-    output_jsonl_path: str,
-    *,
-    max_instances: Optional[int] = None
+    checkpoint_model_dir: str, # Renamed from model_dir for clarity
+    data_file_path: str,
 ):
     """
-    Loads model, generates plans for instances in a test file, saves results.
+    Loads model, generates plans for instances in a test file, saves results
+    including original instance data and multiple generated plans.
 
     Parameters:
-        model_dir: Path to the HF checkpoint directory.
-        test_file: Path to the input JSONL file.
+        checkpoint_model_dir: Path to the HF checkpoint directory for the specific model/domain.
+        test_file: Path to the input JSONL file (expected to have a 'prompt' key).
         output_jsonl_path: Path to save the output JSONL file.
         max_instances: Max instances to process (None for all).
-        batch_size: Processing batch size (currently only 1 supported effectively).
     """
     start_time = datetime.datetime.now()
-    # Use config.log function
-    config.log(f"Starting generation – checkpoint: {checkpoint_model_dir}, input: {test_file}, output: {output_jsonl_path} – time: {start_time}", level=logging.INFO)
+    config.log(
+        f"Starting generation – checkpoint: {checkpoint_model_dir}, data: {data_file_path} – time: {start_time}",
+        level=logging.INFO
+    )
 
-    model, tokenizer = config.load_model_and_tokenizer(checkpoint_dir=checkpoint_model_dir)
+    try:
+        model, tokenizer = config.load_model_and_tokenizer(checkpoint_dir=checkpoint_model_dir)
+    except Exception as e:
+        config.log(f"Fatal error loading model/tokenizer from {checkpoint_model_dir}: {e}", level=logging.ERROR, exc_info=True)
+        raise e # Stop execution
 
-    device = "auto" if torch.cuda.is_available() else "cpu"
-    model.to(device)
-    model.eval() 
-    config.log(f"Model and tokenizer loaded successfully onto device: {device}", level=logging.INFO)
+    effective_device = next(model.parameters()).device
+    config.log(f"Model and tokenizer loaded successfully. Effective device via device_map: {effective_device}")
 
-    batch_size = config.get_config("generate_batch_size", 1)
+    model.eval()
 
     # --- Load Dataset ---
     try:
-        dataset = load_dataset("json", data_files={"test": test_file})["test"]
-        if len(dataset) == 0:
-            raise ValueError("Test dataset is empty.")
+        config.log(f"Loading test data from {data_file_path}")
+        dataset = load_dataset("json", data_files=data_file_path)
+        
+        # Filter into train and validation sets based on the "type" field
+        test_dataset = dataset["test"].filter(lambda example: example["type"] == "train")
+        
+        instances = list(test_dataset)    
+        # Log the size
+        config.log(f"Loaded test dataset with {len(instances)} instances")
     except Exception as e:
-         config.log(f"Fatal error loading dataset from {test_file}: {e}", level=logging.ERROR, exc_info=True)
-         raise e
+        config.log(f"Error loading test data: {e}", level=logging.ERROR, exc_info=True)
+        raise e
 
-    if max_instances is not None and max_instances > 0:
-        dataset = dataset.select(range(min(max_instances, len(dataset))))
-    total_instances = len(dataset)
-    config.log(f"Loaded {total_instances} instances for generation.")
-
-    # --- Generation Loop ---
-    results_to_save = []
-    loader = DataLoader(dataset, batch_size=batch_size) # batch_size=1 default
-
-    for batch_data in tqdm(loader, total=len(loader), desc="Generating plans", unit="batch"):
-        items_to_process = batch_data["prompt"]
-        for item_str in items_to_process:
-            instance_data_json = None
-            full_prompt = None
-            ground_truth_plan = ""
-
-            try:
-                instance_data = json.loads(item_str)
-                full_prompt = instance_data.get("prompt", "")
-                instance_data_json = item_str
-
-                if "## Plan." not in full_prompt:
-                    config.log(f"Skipping sample without '## Plan.' separator: {full_prompt[:100]}...", level=logging.WARNING)
-                    continue
-
-                prompt_part, _, ground_truth_plan_raw = full_prompt.partition("## Plan.")
-                generation_prompt = prompt_part.strip() + "\n## Plan.\n\n"
-                ground_truth_plan = ground_truth_plan_raw.strip()
-
-            except json.JSONDecodeError:
-                 config.log(f"Skipping malformed JSON line: {item_str[:100]}...", level=logging.WARNING)
-                 continue
-            except Exception as e:
-                config.log(f"Error processing instance data: {item_str[:100]}... Error: {e}", level=logging.ERROR, exc_info=True)
-                continue
-
-            # --- Call Single Generation ---
-            try:
-                generated_plan = generate_single(
-                    model=model,
-                    tokenizer=tokenizer,
-                    prompt_text=generation_prompt,
-                    device=device
-                )
-
-                results_to_save.append({
-                    "instance_data": instance_data_json,
-                    "ground_truth_plan": ground_truth_plan,
-                    "generated_plan": generated_plan,
-                })
-
-            except Exception as e:
-                 config.log(f"Error during generation for prompt: {generation_prompt[:100]}... Error: {e}", level=logging.ERROR, exc_info=True)
-                 results_to_save.append({
-                    "instance_data": instance_data_json,
-                    "ground_truth_plan": ground_truth_plan,
-                    "generated_plan": f"GENERATION_ERROR: {e}",
-                 })
-
+    # --- Generate Plans ---
+    config.log("Starting plan generation...")    
+    for index, instance in tqdm(enumerate(instances), total=len(instances), desc="Generating plans"):
+        try:
+            # Check if we're updating existing plans
+            is_update = 'generated_plans' in instance and instance['generated_plans']
+            if is_update:
+                config.log(f"Updating existing plans for instance {index}")
+                
+            # Generate plans
+            generated_plans = generate_single(
+                model=model,
+                tokenizer=tokenizer,
+                prompt_text=instance['prompt'],
+                device=effective_device
+            )
+            
+            # Update the instance in-place
+            # This ensures changes are directly reflected in the testing data
+            instance['generated_plans'] = generated_plans
+        except Exception as e:
+            config.log(f"Error generating plan for instance {index}: {e}", level=logging.ERROR, exc_info=True)
+            instance['generated_plans'] = ["Error: " + str(e)]
+            continue
+    
+    config.log(f"Plan generation completed. {len(instances)} instances ready for saving.")
     # --- Save Results ---
     try:
-        # Use config helper to ensure directory exists
-        config.create_necessary_dirs(output_jsonl_path)
-
-        with open(output_jsonl_path, "w", encoding="utf-8") as f:
-            for result in results_to_save:
-                f.write(json.dumps(result, ensure_ascii=False) + "\n")
-        config.log(f"Saved {len(results_to_save)} generated results to {output_jsonl_path}")
-
+        config.log(f"Saving results to {data_file_path}")
+        with open(data_file_path, "w") as json_file:
+            for instance in instances:
+                json_file.write(json.dumps(instance) + "\n")
+        config.log(f"Results saved successfully to {data_file_path}")
     except Exception as e:
-        config.log(f"Error saving results to {output_jsonl_path}: {e}", level=logging.ERROR, exc_info=True)
+        config.log(f"Error saving results: {e}", level=logging.ERROR, exc_info=True)
+        raise e
 
-    end_time = datetime.datetime.now()
-    config.log(
-        f"Generation finished – Total time: {str(end_time - start_time)}",
-        level=logging.INFO
-    )
+
+
+    

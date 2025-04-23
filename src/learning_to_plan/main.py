@@ -1,15 +1,14 @@
 # main.py
-
-import datetime
 import os
 import argparse
 import asyncio
 import logging # Import standard logging for potential direct use if needed
+from typing import Optional
 
 # Import project modules
 from learning_to_plan import build_finetuning_dataset
 from learning_to_plan import train
-from learning_to_plan import call_paas
+from learning_to_plan import utils
 from learning_to_plan import task
 from learning_to_plan import config # Import the refactored config
 from learning_to_plan import generate # Import the new generate module
@@ -29,9 +28,9 @@ def parse_args():
         help="Call planning as a service to generate plans."
     )
     parser.add_argument(
-        "--build_finetuning_dataset",
+        "--split_dataset",
         action="store_true",
-        help="Build the finetuning dataset from PaaS results."
+        help="Split the dataset into training, validation, and test sets."
     )
     parser.add_argument(
         "--train",
@@ -81,22 +80,27 @@ def parse_args():
     )
     # --- PaaS Specific ---
     parser.add_argument(
-        "-n", "--number_of_problems_per_domain",
-        type=int,
-        default=None,
-        help="Selects the first n problems for PaaS per domain ('all' for all)."
-    )
-    parser.add_argument(
         "--overwrite_paas_plans",
         action="store_true",
         help="Overwrite existing PaaS plan files."
     )
+    # Custom type function to accept positive integers or specific strings
+    def parse_number_of_problems_arg(arg):
+        if arg in ["all", "long", "basic"]:
+            return arg
+        try:
+            val = int(arg)
+            if val <= 0:
+                raise argparse.ArgumentTypeError("Integer must be positive")
+            return val
+        except ValueError:
+            raise argparse.ArgumentTypeError("Must be a positive integer or 'all', 'long', or 'basic'")
+    
     parser.add_argument(
-        "--problem_size",
-        type=str,
-        default=None,
-        choices=["basic", "long"],
-        help="Problem size ('basic', 'long', or both if None) for PaaS."
+        "-n", "--number_of_problems",
+        type=parse_number_of_problems_arg,
+        default="all",
+        help="Number of problems per domain: positive integer or 'all', 'long', 'basic'"
     )
     # --- Credentials ---
     parser.add_argument(
@@ -150,8 +154,6 @@ def get_selected_domains(args, base_dir):
 if __name__ == "__main__":
     args = parse_args()
 
-    # Initialize configuration - This sets up logging, paths, loads config JSON based on context
-    # It needs 'args' to determine context (train/generate) for default config loading
     config.initialize(args, config_path=args.config_path)
 
     # --- Action Blocks ---
@@ -165,36 +167,25 @@ if __name__ == "__main__":
             if not tasks:
                 config.log(f"No tasks found for domain {domain}. Skipping.", level=logging.WARNING)
                 continue
-            output_file_path = os.path.join(config.PAAS_PLANS_DIR, domain, config.PAAS_PLAN_FILE_NAME)
-            config.log(f"Outputting PaaS results to: {output_file_path}")
-            asyncio.run(call_paas.call_paas(tasks, output_file_path, overwrite=args.overwrite_paas_plans))
+            data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
+            config.log(f"Outputting PaaS results to: {data_file_path}")
+            asyncio.run(utils.call_paas(tasks, data_file_path, overwrite=args.overwrite_paas_plans))
             config.log(f"Finished PaaS calls for domain: {domain}")
         config.log("--- Finished All PaaS Calls ---")
-
-    elif args.build_finetuning_dataset:
-        config.log("--- Starting Finetuning Dataset Construction ---")
-        # Ensure PAAS_PLANS_DIR exists and has content
-        if not os.path.isdir(config.PAAS_PLANS_DIR) or not os.listdir(config.PAAS_PLANS_DIR):
-             msg = f"PaaS plans directory is empty or does not exist: {config.PAAS_PLANS_DIR}. Cannot build dataset."
-             config.log(msg, level=logging.ERROR)
-             raise FileNotFoundError(msg)
-
-        for domain in os.listdir(config.PAAS_PLANS_DIR):
-             domain_paas_path = os.path.join(config.PAAS_PLANS_DIR, domain)
-             if os.path.isdir(domain_paas_path): # Process only directories
-                paas_csv_path = os.path.join(domain_paas_path, config.PAAS_PLAN_FILE_NAME)
-                if os.path.exists(paas_csv_path):
-                    config.log(f"Building dataset for domain: {domain} from {paas_csv_path}")
-                    build_finetuning_dataset.build_finetuining_dataset(
-                        paas_csv_path,
-                        train_output=os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TRAIN_FILE_NAME),
-                        validation_output=os.path.join(config.FINETUNING_DATASET_DIR, domain, config.VAL_FILE_NAME),
-                        test_output=os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TEST_FILE_NAME)
-                    )
-                else:
-                    config.log(f"PaaS CSV file not found for domain {domain} at {paas_csv_path}. Skipping dataset build.", level=logging.WARNING)
-        config.log("--- Finished Finetuning Dataset Construction ---")
-
+    elif args.split_dataset:
+        config.log("--- Starting Dataset Splitting ---")
+        verify_domain(args)
+        domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
+        for domain in domains:
+            config.log(f"Splitting dataset for domain: {domain}")
+            data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
+            try:
+                utils.split_dataset(data_file_path)
+                config.log(f"Finished splitting dataset for domain: {domain}")
+            except Exception as e:
+                config.log(f"Error splitting dataset for domain {domain}: {e}", level=logging.ERROR)
+                continue
+        config.log("--- Finished All Dataset Splitting ---")
     elif args.train:
         config.log("--- Starting Model Training ---")
         verify_domain(args)
@@ -245,7 +236,7 @@ if __name__ == "__main__":
             config.log(f"Starting generation for domain: {domain}")
             test_file = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TEST_FILE_NAME)
             model_domain_checkpoint_dir = os.path.join(model_checkpoints_base_dir, domain) # Path to the specific trained checkpoint
-            output_file_path = os.path.join(args.output_dir, model_name_from_config, domain, "generated_plans.jsonl")
+            data_file_path = os.path.join(args.output_dir, model_name_from_config, domain, "generated_plans.jsonl")
 
             # Ensure input test file exists
             if not os.path.exists(test_file):
@@ -259,16 +250,16 @@ if __name__ == "__main__":
 
             config.log(f"Using model checkpoint: {model_domain_checkpoint_dir}")
             config.log(f"Using test instances: {test_file}")
-            config.log(f"Saving generated outputs to: {output_file_path}")
+            config.log(f"Saving generated outputs to: {data_file_path}")
 
             # Create output directory if needed
-            config.create_necessary_dirs(output_file_path)
+            config.create_necessary_dirs(data_file_path)
 
             # Call the generation function from generate.py
             generate.generate_batch(
                 checkpoint_model_dir=model_domain_checkpoint_dir,
                 test_file=test_file,
-                output_jsonl_path=output_file_path
+                output_jsonl_path=data_file_path
                 # Pass other args like max_instances if needed
             )
             config.log(f"Finished generation for domain: {domain}")

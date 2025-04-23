@@ -36,7 +36,7 @@ async def get_plan_from_paas(domain_content, instance_content, instance_name, so
 
 async def call_paas(
     tasks: set[Task],
-    output_file_path: str,
+    data_file_path: str,
     max_retries=3,
     num_workers=4,
     overwrite=False
@@ -56,12 +56,12 @@ async def call_paas(
                 raise e
 
     processed_tasks = set()
-    if os.path.exists(output_file_path):
+    if os.path.exists(data_file_path):
         if overwrite:
-            config.logging.warning(f"Overwriting existing dataset at {output_file_path}.")
+            config.logging.warning(f"Overwriting existing dataset at {data_file_path}.")
         else:
-            config.logging.info(f"Loading existing dataset at {output_file_path}. Skipping recalculation for already processed tasks.")
-            with open(output_file_path, "r", newline="") as csvfile:
+            config.logging.info(f"Loading existing dataset at {data_file_path}. Skipping recalculation for already processed tasks.")
+            with open(data_file_path, "r", newline="") as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
                     task = get_task_from_csv(row)
@@ -74,13 +74,62 @@ async def call_paas(
     await asyncio.gather(*[process_instance(task) for task in tasks])
 
     processed_tasks.update(tasks)
-    config.create_necessary_dirs(output_file_path)
-    with open(output_file_path, "w", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=["domain_file_path", "instance_file_path", "domain", "instance", "status", "plan", "error", "is_longer_plan"])
-        writer.writeheader()
-
-        for t in sorted(processed_tasks):
-            writer.writerow(t.write_to_dict())
-            config.logging.info(f"Processed {t}.")
+    config.create_necessary_dirs(data_file_path)
+    with open(data_file_path, "w") as json_file:
+        for task in sorted(processed_tasks):
+            json_file.write(task.to_jsonl() + "\n")
+    config.logging.info(f"Finished writing to {data_file_path}.")
 
     config.logging.info(f"Finished call to planning as a service at {datetime.datetime.now()}.")
+
+from sklearn.model_selection import train_test_split
+import pandas as pd
+
+def split_dataset(
+    data_file_path,
+    random_seed=42
+):
+    config.log(f"Starting to build finetuning dataset at {datetime.datetime.now()}.", level=config.logging.INFO)
+    if not os.path.exists(data_file_path):
+        e = f"Data file not found: {data_file_path}"
+        config.log(e, level=config.logging.ERROR)
+        raise ValueError(e)
+
+    df = pd.read_json(data_file_path, lines=True)
+    # Filter valid rows and separate into longer and basic plans
+    valid_mask = (df["status"] == "ok") & (df["plan"].notna()) & (df["plan"].str.strip() != "")
+    df_valid = df[valid_mask]
+
+    if not len(df_valid) == 4400:
+        e = f"Data file must contain at least 4400 valid instances, but only {len(df_valid)} instances were found."
+        config.log(e, level=config.logging.ERROR)
+        raise ValueError(e)
+
+    # Extract longer plans and basic plans
+    longer_df = df_valid[df_valid["is_longer_plan"] == True]
+    basic_df = df_valid[df_valid["is_longer_plan"] == False]
+    
+    # Check if exactly 200 rows have is_longer_plan as True
+    if len(longer_df) != 200:
+        e = f"Expected 200 instances with 'is_longer_plan' as True, but found {len(longer_df)} instances."
+        config.log(e, level=config.logging.ERROR)
+        raise ValueError(e)
+    
+    # Only split the basic dataset
+    train_df, temp_df = train_test_split(
+        basic_df, test_size=800, random_state=random_seed
+    )
+    validation_df, basic_test_df = train_test_split(
+        temp_df, test_size=200, random_state=random_seed
+    )
+    test_df = pd.concat([longer_df, basic_test_df], ignore_index=True)
+    train_df["type"] = "train"
+    validation_df["type"] = "validation"
+    test_df["type"] = "test"
+    # Concatenate all dataframes
+    all_df = pd.concat([train_df, validation_df, test_df], ignore_index=True)
+    # Save the final dataset
+    with open(data_file_path, "w") as f:
+        all_df.to_json(f, orient="records", lines=True)
+    
+    config.log(f"Finished building finetuning dataset. Ending at {datetime.datetime.now()}", level=config.logging.INFO)
