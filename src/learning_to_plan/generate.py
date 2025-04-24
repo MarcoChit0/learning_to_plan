@@ -164,7 +164,7 @@ def generate_batch(
                 tokenizer=tokenizer,
                 prompt_text=current_task.add_separator(current_task.build_prompt())
             )
-
+            print(generated_plans)
             # Store the generated plans directly in the Task object
             current_task.generated_plans = generated_plans
             config.log(f"Generated {len(generated_plans)} plans for task {current_task}.")
