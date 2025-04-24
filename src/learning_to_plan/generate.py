@@ -157,6 +157,7 @@ def generate_batch(
             if is_update:
                 config.log(f"Task {current_task.task_id} already has plans, will overwrite.") # Log if overwriting
 
+            config.log(f"Generating plans for task {current_task}")
             # Generate plans using the task's prompt
             generated_plans = generate_single(
                 model=model,
@@ -166,16 +167,15 @@ def generate_batch(
 
             # Store the generated plans directly in the Task object
             current_task.generated_plans = generated_plans
-
+            config.log(f"Generated {len(generated_plans)} plans for task {current_task}.")
         except Exception as e:
-            task_id_str = getattr(current_task, 'task_id', 'UNKNOWN_ID') # Get task_id if available
-            config.log(f"Error generating plan for task {task_id_str}: {e}", level=logging.ERROR, exc_info=True)
-            # Store error message in the task object
+            config.log(f"Error generating plan for task {current_task}: {e}", level=logging.ERROR, exc_info=True)
             current_task.generated_plans = ["Error: " + str(e)]
-            continue # Continue with the next task
+            continue 
     config.log(f"Plan generation completed. {len(instances)} instances ready for saving.")
     # --- Save Results ---
     try:
+        config.log(f"Saving generated plans to {data_file_path}...")
         task.save_tasks_to_jsonl(all_tasks, data_file_path)
         config.log(f"Results saved to {data_file_path}.")
     except Exception as e:
