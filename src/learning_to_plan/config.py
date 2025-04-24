@@ -31,7 +31,7 @@ DEFAULT_TRAIN_CONFIG = "train_config.json"
 DEFAULT_GENERATE_CONFIG = "generate_config.json"
 BASIC_INSTANCES = "generated_basic"
 LONG_INSTANCES = "generated_basic_longer_plan_len"
-PROCESSED_DATA_FILE_NAME = "data.json"
+PROCESSED_DATA_FILE_NAME = "data.jsonl"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
 # --- End Constants ---
