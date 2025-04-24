@@ -75,12 +75,6 @@ def parse_args():
         default=None, # Default is handled in config.py now
         help="Path to the base data directory (containing raw, paas_plans, etc.). Defaults to './data/'."
     )
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        default=None,
-        help="Directory to save generated outputs (e.g., generated_plans.jsonl). Required if --generate is used."
-    )
     # --- PaaS Specific ---
     parser.add_argument(
         "--overwrite_paas_plans",
@@ -205,54 +199,31 @@ if __name__ == "__main__":
         config.log("--- Finished All Training ---")
 
     elif args.generate:
-        config.log("--- Starting Plan Generation ---")
-        if not args.output_dir:
-             config.log("--output_dir is required when using --generate.", level=logging.ERROR)
-             raise ValueError("--output_dir not specified.")
-
         model_name_from_config = config.get_config("model_name") # Get name used/loaded during init
-        if not model_name_from_config:
-             config.log("Model name not found in configuration. Cannot determine checkpoint directory.", level=logging.ERROR)
-             raise ValueError("Model name missing in config for generation.")
+        assert model_name_from_config, "Model name not found in config. Please check your configuration."
 
-        # Base directory where domain-specific checkpoints are stored
         model_checkpoints_base_dir = os.path.join(config.CHECKPOINTS_DIR, model_name_from_config)
         config.log(f"Looking for checkpoints in base directory: {model_checkpoints_base_dir}")
 
-        domains = get_selected_domains(args, model_checkpoints_base_dir) # Check domains within the specific model's checkpoint dir
-        if not domains:
-             config.log(f"No trained domain checkpoints found for model '{model_name_from_config}' in {model_checkpoints_base_dir}.", level=logging.ERROR)
-             raise FileNotFoundError("No matching domain checkpoints found.")
+        domains = get_selected_domains(args, model_checkpoints_base_dir)
+        assert domains, f"No valid domains found in {model_checkpoints_base_dir}. Please check your checkpoints."
 
         for domain in domains:
             config.log(f"Starting generation for domain: {domain}")
-            test_file = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TEST_FILE_NAME)
-            model_domain_checkpoint_dir = os.path.join(model_checkpoints_base_dir, domain) # Path to the specific trained checkpoint
-            data_file_path = os.path.join(args.output_dir, model_name_from_config, domain, "generated_plans.jsonl")
+            data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
+            assert os.path.exists(data_file_path), f"Data file not found: {data_file_path}"
 
-            # Ensure input test file exists
-            if not os.path.exists(test_file):
-                config.log(f"Test file not found: {test_file}. Skipping generation for domain {domain}.", level=logging.ERROR)
-                continue
+            model_checkpoint_dir = os.path.join(model_checkpoints_base_dir, domain) 
+            assert os.path.exists(model_checkpoint_dir), f"Checkpoint directory not found: {model_checkpoint_dir}"
 
-            # Ensure checkpoint directory exists
-            if not os.path.isdir(model_domain_checkpoint_dir):
-                 config.log(f"Checkpoint directory not found: {model_domain_checkpoint_dir}. Skipping generation for domain {domain}.", level=logging.ERROR)
-                 continue
-
-            config.log(f"Using model checkpoint: {model_domain_checkpoint_dir}")
-            config.log(f"Using test instances: {test_file}")
-            config.log(f"Saving generated outputs to: {data_file_path}")
-
-            # Create output directory if needed
-            config.create_necessary_dirs(data_file_path)
+            config.log(f"Using model checkpoint: {model_checkpoint_dir}")
+            config.log(f"Using data: {data_file_path}")
 
             # Call the generation function from generate.py
             generate.generate_batch(
-                checkpoint_model_dir=model_domain_checkpoint_dir,
-                test_file=test_file,
-                output_jsonl_path=data_file_path
-                # Pass other args like max_instances if needed
+                checkpoint_model_dir=model_checkpoint_dir,
+                data_file_path=data_file_path,
+                number_of_problems_per_domain=args.number_of_problems_per_domain
             )
             config.log(f"Finished generation for domain: {domain}")
         config.log("--- Finished All Generation ---")

@@ -81,9 +81,13 @@ def generate_single(
         return generated_texts
 
 # --- Batch Generation from File (Modified) ---
+from typing import Union 
+from learning_to_plan import task
+
 def generate_batch(
     checkpoint_model_dir: str, # Renamed from model_dir for clarity
     data_file_path: str,
+    number_of_problems_per_domain: Union[int, str] = None,
 ):
     """
     Loads model, generates plans for instances in a test file, saves results
@@ -110,52 +114,70 @@ def generate_batch(
     model.eval()
 
     # --- Load Dataset ---
+    config.log(f"Loading tasks from {data_file_path}")
     try:
-        config.log(f"Loading test data from {data_file_path}")
-        dataset = load_dataset("json", data_files=data_file_path)
-        
-        # Filter into train and validation sets based on the "type" field
-        test_dataset = dataset["test"].filter(lambda example: example["type"] == "train")
-        
-        instances = list(test_dataset)    
-        # Log the size
-        config.log(f"Loaded test dataset with {len(instances)} instances")
-    except Exception as e:
-        config.log(f"Error loading test data: {e}", level=logging.ERROR, exc_info=True)
-        raise e
+        all_tasks:set[task.Task] = task.get_tasks_from_jsonl(data_file_path)
+        test_tasks = [t for t in all_tasks if t._type == task.Task.TaskType.TEST]
+        config.log(f"Found {len(test_tasks)} test tasks.")
+        instances = [] 
 
-    # --- Generate Plans ---
+        if number_of_problems_per_domain is None or (isinstance(number_of_problems_per_domain, str) and number_of_problems_per_domain.lower() == "all"):
+            instances = sorted(test_tasks)
+            config.log(f"Selecting all {len(instances)} test tasks.")
+        elif isinstance(number_of_problems_per_domain, str):
+            mode = number_of_problems_per_domain.lower()
+            if mode == "basic":
+                instances = sorted([t for t in test_tasks if not t._is_longer_plan])
+                config.log(f"Selecting {len(instances)} basic test tasks.")
+            elif mode == "long":
+                instances = sorted([t for t in test_tasks if t._is_longer_plan])
+                config.log(f"Selecting {len(instances)} long test tasks.")
+            else:
+                raise ValueError(f"Invalid string value for selection: '{number_of_problems_per_domain}'. Expected 'all', 'basic', or 'long'.")
+        elif isinstance(number_of_problems_per_domain, int):
+            if number_of_problems_per_domain > 0:
+                sorted_test_tasks = sorted(test_tasks)
+                num_to_take = min(number_of_problems_per_domain, len(sorted_test_tasks))
+                instances = sorted_test_tasks[:num_to_take]
+                config.log(f"Selecting the first {len(instances)} sorted test tasks (requested {number_of_problems_per_domain}).")
+            else:
+                raise ValueError(f"Number of problems must be a positive integer, got: {number_of_problems_per_domain}.")
+        else:
+            raise TypeError(f"Unsupported type for selection criteria: {type(number_of_problems_per_domain)}. Expected int, str, or None.")
+            config.log(f"Selected {len(instances)} final instances for generation.")
+    except Exception as e: # Catch any error during loading or selection
+        config.log(f"Error loading or selecting tasks from {data_file_path}: {e}", level=logging.ERROR, exc_info=True)
+        raise e
+    # -- Generate Plans ---
     config.log("Starting plan generation...")    
-    for index, instance in tqdm(enumerate(instances), total=len(instances), desc="Generating plans"):
+    for current_task in tqdm(instances, total=len(instances), desc="Generating plans"):
         try:
-            # Check if we're updating existing plans
-            is_update = 'generated_plans' in instance and instance['generated_plans']
+            # Check if the task already has generated plans (for potential updates, though typically we generate fresh)
+            is_update = hasattr(current_task, 'generated_plans') and current_task.generated_plans
             if is_update:
-                config.log(f"Updating existing plans for instance {index}")
-                
-            # Generate plans
+                config.log(f"Task {current_task.task_id} already has plans, will overwrite.") # Log if overwriting
+
+            # Generate plans using the task's prompt
             generated_plans = generate_single(
                 model=model,
                 tokenizer=tokenizer,
-                prompt_text=instance['prompt']
+                prompt_text=current_task.prompt # Access prompt from the Task object
             )
-            
-            # Update the instance in-place
-            # This ensures changes are directly reflected in the testing data
-            instance['generated_plans'] = generated_plans
+
+            # Store the generated plans directly in the Task object
+            current_task.generated_plans = generated_plans
+
         except Exception as e:
-            config.log(f"Error generating plan for instance {index}: {e}", level=logging.ERROR, exc_info=True)
-            instance['generated_plans'] = ["Error: " + str(e)]
-            continue
-    
+            task_id_str = getattr(current_task, 'task_id', 'UNKNOWN_ID') # Get task_id if available
+            config.log(f"Error generating plan for task {task_id_str}: {e}", level=logging.ERROR, exc_info=True)
+            # Store error message in the task object
+            current_task.generated_plans = ["Error: " + str(e)]
+            continue # Continue with the next task
     config.log(f"Plan generation completed. {len(instances)} instances ready for saving.")
     # --- Save Results ---
     try:
-        config.log(f"Saving results to {data_file_path}")
-        with open(data_file_path, "w") as json_file:
-            for instance in instances:
-                json_file.write(json.dumps(instance) + "\n")
-        config.log(f"Results saved successfully to {data_file_path}")
+        task.save_tasks_to_jsonl(all_tasks, data_file_path)
+        config.log(f"Results saved to {data_file_path}.")
     except Exception as e:
-        config.log(f"Error saving results: {e}", level=logging.ERROR, exc_info=True)
+        config.log(f"Error saving tasks to {data_file_path}: {e}", level=logging.ERROR, exc_info=True)
         raise e
