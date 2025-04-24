@@ -26,7 +26,8 @@ logger = logging.getLogger(__name__) # Module-level logger
 
 
 # --- Constants for directory/file names ---
-CONFIGS_DIR = "configs"
+CONFIGS_DIR_NAME = "configs"
+CONFIGS_DIR = os.path.join("src", CONFIGS_DIR_NAME)
 DEFAULT_TRAIN_CONFIG = "train_config.json"
 DEFAULT_GENERATE_CONFIG = "generate_config.json"
 BASIC_INSTANCES = "generated_basic"
@@ -174,6 +175,18 @@ def initialize(
                         log(f"  Overriding '{config_key}': {original_value} -> {arg_value}")
                     loaded_config[config_key] = arg_value
 
+        if hasattr(args, 'load_in_4bit') and args.load_in_4bit:
+            if loaded_config.get("load_in_8bit", False):
+                log("  Overriding 'load_in_8bit': True -> False (due to --load_in_4bit)")
+                loaded_config["load_in_8bit"] = False
+            # Ensure load_in_4bit is set if arg is true, even if not in JSON
+            if loaded_config.get("bf16", False):
+                log("  Overriding 'bf16': True -> False (due to --load_in_4bit)")
+                loaded_config["bf16"] = False
+            # Ensure load_in_4bit is set if arg is true, even if not in JSON
+            loaded_config["load_in_4bit"] = True
+
+        
         if hasattr(args, 'load_in_8bit') and args.load_in_8bit:
             if loaded_config.get("bf16", False):
                 log("  Overriding 'bf16': True -> False (due to --load_in_8bit)")
@@ -320,12 +333,12 @@ def load_model_and_tokenizer(checkpoint_dir: str) -> Tuple[PreTrainedModel, PreT
     model_source = last_checkpoint if last_checkpoint else get_config("model_name", None)
     assert model_source, "Model source is None. Check your configuration."
 
-    if get_config("load_in_8bit", False):
-        log("Applying 8-bit quantization.", level=logging.INFO, do_print=False)
-        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
-    elif get_config("load_in_4bit", False):
+    if get_config("load_in_4bit", False):
         log("Applying 4-bit quantization.", level=logging.INFO, do_print=False)
         quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+    elif get_config("load_in_8bit", False):
+        log("Applying 8-bit quantization.", level=logging.INFO, do_print=False)
+        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
     else:
         log("Loading model without quantization.", level=logging.INFO, do_print=False)
         quantization_config = None
@@ -354,13 +367,13 @@ def load_model_and_tokenizer(checkpoint_dir: str) -> Tuple[PreTrainedModel, PreT
     try:
         log(f"Loading model from: {model_source}", level=logging.INFO)
         if quantization_config:
-            log("Loading 8-bit quantization config.", level=logging.INFO, do_print=False)
+            log(f"Loading model with quantization {quantization_config}.", level=logging.INFO, do_print=False)
             model = AutoModelForCausalLM.from_pretrained(
                 model_source,
                 trust_remote_code=get_config("trust_remote_code", True),
                 token=HUGGINGFACE_TOKEN,
                 quantization_config=quantization_config,
-                device_map="auto" if torch.cuda.is_available() else None,
+                device_map= "auto" if torch.cuda.is_available() else None,
             )
             from peft import LoraConfig, get_peft_model
             r = get_config("lora_r", 8)
@@ -390,7 +403,7 @@ def load_model_and_tokenizer(checkpoint_dir: str) -> Tuple[PreTrainedModel, PreT
                 trust_remote_code=get_config("trust_remote_code", True),
                 torch_dtype=torch_dtype,
                 token=HUGGINGFACE_TOKEN,
-                device_map="auto" if torch.cuda.is_available() else None,
+                device_map= "auto" if torch.cuda.is_available() else None,
             )
             log(f"Model loaded successfully from {model_source}.", level=logging.INFO)
 

@@ -15,7 +15,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def run_training_procedure(model_checkpoint_dir, data_file_path):
     start_time = datetime.datetime.now()
-    model_name = config.training_params('model_name')
+    model_name = config.get_config('model_name')
     start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
     config.log(f"Training {model_name} -- started {start_time_str}", level=config.logging.INFO, exc_info=True)
 
@@ -36,12 +36,12 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         raise ValueError("Train/validation dataset is empty.")
     model, tokenizer = config.load_model_and_tokenizer(checkpoint_dir=model_checkpoint_dir)
 
-    def tokenize_fn(example):
-        # Concatenate prompt and plan
-        full_prompt = example["prompt"] + example["plan"]  # You may want to add a separator if needed
+    def tokenize_fn(batch):
+        # Concatenate prompt and plan for each example in the batch
+        full_prompts = [p + pl for p, pl in zip(batch["prompt"], batch["plan"])] # You may want to add a separator if needed
         return tokenizer(
-            full_prompt,
-            max_length=config.training_params("max_seq_length"),
+            full_prompts,
+            max_length=config.get_config("max_seq_length"),
             truncation=True,
             padding="max_length",
         )
@@ -54,26 +54,25 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
 
     training_args = TrainingArguments(
         output_dir=model_checkpoint_dir,
-        run_name=f"{config.training_params('model_name')}-{os.path.basename(model_checkpoint_dir)}-{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}",
-        report_to=config.training_params("report_to"),
-        num_train_epochs=config.training_params("num_train_epochs"),
-        per_device_train_batch_size=config.training_params("batch_size"),
-        per_device_eval_batch_size=config.training_params("per_device_eval_batch_size"),
-        gradient_accumulation_steps=config.training_params("gradient_accumulation_steps"),
-        fp16=not config.training_params("bf16"),
-        bf16=config.training_params("bf16"),
-        learning_rate=config.training_params("learning_rate"),
-        lr_scheduler_type=config.training_params("lr_scheduler_type"),
-        weight_decay=config.training_params("weight_decay"),
-        save_strategy=config.training_params("save_strategy"),
-        save_steps=config.training_params("save_steps"),
-        save_total_limit=config.training_params("save_total_limit"),
-        logging_strategy=config.training_params("logging_strategy"),
-        logging_steps=config.training_params("logging_steps"),
-        eval_strategy=config.training_params("eval_strategy"),
-        optim=config.training_params("optimizer"),
+        run_name=f"{config.get_config('model_name')}-{os.path.basename(model_checkpoint_dir)}-{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        report_to=config.get_config("report_to"),
+        num_train_epochs=config.get_config("num_train_epochs"),
+        per_device_train_batch_size=config.get_config("batch_size"),
+        per_device_eval_batch_size=config.get_config("per_device_eval_batch_size"),
+        gradient_accumulation_steps=config.get_config("gradient_accumulation_steps"),
+        fp16=not config.get_config("bf16"),
+        bf16=config.get_config("bf16"),
+        learning_rate=config.get_config("learning_rate"),
+        lr_scheduler_type=config.get_config("lr_scheduler_type"),
+        weight_decay=config.get_config("weight_decay"),
+        save_strategy=config.get_config("save_strategy"),
+        save_steps=config.get_config("save_steps"),
+        save_total_limit=config.get_config("save_total_limit"),
+        logging_strategy=config.get_config("logging_strategy"),
+        logging_steps=config.get_config("logging_steps"),
+        eval_strategy=config.get_config("eval_strategy"),
+        optim=config.get_config("optimizer"),
     )
-
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -94,9 +93,9 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
     config.log(f"Model saved to {model_checkpoint_dir}", level=config.logging.INFO, exc_info=True)
 
     end_time = datetime.datetime.now()
-    model_name = config.training_params('model_name') # Re-fetch in case it's needed again, or use the one from above if scope allows
+    model_name = config.get_config('model_name') # Re-fetch in case it's needed again, or use the one from above if scope allows
     end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
     config.log(f"Training {model_name} -- finished {end_time_str}", level=config.logging.INFO, exc_info=True)
     config.log(f"Total training time: {end_time - start_time}", level=config.logging.INFO, exc_info=True)
-    config.log(f"Training {config.training_params('model_name')} -- finished {end_time.strftime('%Y-%m-%d %H:%M:%S')}", level=config.logging.INFO, exc_info=True)
+    config.log(f"Training {config.get_config('model_name')} -- finished {end_time.strftime('%Y-%m-%d %H:%M:%S')}", level=config.logging.INFO, exc_info=True)
     config.log(f"Total training time: {end_time - start_time}", level=config.logging.INFO, exc_info=True)

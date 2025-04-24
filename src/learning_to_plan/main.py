@@ -60,6 +60,11 @@ def parse_args():
         help="Override number of training epochs specified in config."
     )
     parser.add_argument(
+        "--load_in_4bit",
+        action="store_true",
+        help="Override config to load the base model in 4bit (for training/generation)."
+    )
+    parser.add_argument(
         "--load_in_8bit",
         action="store_true",
         help="Override config to load the base model in 8bit (for training/generation)."
@@ -182,24 +187,20 @@ if __name__ == "__main__":
 
     elif args.train:
         config.log("--- Starting Model Training ---")
-        domains = get_selected_domains(args, config.FINETUNING_DATASET_DIR)
+        domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
         for domain in domains:
             config.log(f"Starting training for domain: {domain}")
-            train_file = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.TRAIN_FILE_NAME)
-            val_file   = os.path.join(config.FINETUNING_DATASET_DIR, domain, config.VAL_FILE_NAME)
+            data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
+            assert os.path.exists(data_file_path), f"Data file not found: {data_file_path}"
+            
             # Construct checkpoint dir using the potentially overridden model name
             current_model_name = config.get_config("model_name") # Get final model name after potential override
             model_checkpoint_dir = os.path.join(config.CHECKPOINTS_DIR, current_model_name, domain)
-
             config.create_necessary_dirs(model_checkpoint_dir) # Use helper from config
             config.log(f"Checkpoints will be saved to: {model_checkpoint_dir}")
 
-            # Ensure input files exist
-            if not os.path.exists(train_file) or not os.path.exists(val_file):
-                config.log(f"Train ({train_file}) or Validation ({val_file}) file missing for domain {domain}. Skipping training.", level=logging.ERROR)
-                raise FileNotFoundError(f"Missing train/validation files for domain {domain}.")
 
-            train.run_training_procedure(model_checkpoint_dir, train_file, val_file)
+            train.run_training_procedure(model_checkpoint_dir, data_file_path)
             config.log(f"Finished training for domain: {domain}")
         config.log("--- Finished All Training ---")
 
