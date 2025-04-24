@@ -18,6 +18,8 @@ import pandas as pd
 import learning_to_plan.config as config
 
 # --- Single Prompt Generation (Modified) ---
+# TODO: CALL GEMINI API 
+# TODO: THIS SHOULD RETURN A MAP WHERE THE KEY IS THE LLM AND THE VALUE IS A LIST OF PLANS IT GENERATED
 def generate_single(
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizer,
@@ -83,7 +85,7 @@ def generate_single(
 # --- Batch Generation from File (Modified) ---
 from typing import Union 
 from learning_to_plan import task
-
+# TODO: VERIFY WHETHER THIS IS BEING SAVED
 def generate_batch(
     checkpoint_model_dir: str, # Renamed from model_dir for clarity
     data_file_path: str,
@@ -116,29 +118,27 @@ def generate_batch(
     # --- Load Dataset ---
     config.log(f"Loading tasks from {data_file_path}")
     try:
-        all_tasks:set[task.Task] = task.get_tasks_from_jsonl(data_file_path)
-        test_tasks = [t for t in all_tasks if t._type == task.Task.TaskType.TEST]
+        tasks:set[task.Task] = task.get_tasks_from_jsonl(data_file_path)
+        test_tasks = [t for t in tasks if t._type == task.Task.TaskType.TEST]
         config.log(f"Found {len(test_tasks)} test tasks.")
-        instances = [] 
+        instances : set[task.Task] = set()
 
         if number_of_problems_per_domain is None or (isinstance(number_of_problems_per_domain, str) and number_of_problems_per_domain.lower() == "all"):
-            instances = sorted(test_tasks)
+            instances = test_tasks
             config.log(f"Selecting all {len(instances)} test tasks.")
         elif isinstance(number_of_problems_per_domain, str):
             mode = number_of_problems_per_domain.lower()
             if mode == "basic":
-                instances = sorted([t for t in test_tasks if not t._is_longer_plan])
+                instances = {t for t in test_tasks if not t._is_longer_plan}
                 config.log(f"Selecting {len(instances)} basic test tasks.")
             elif mode == "long":
-                instances = sorted([t for t in test_tasks if t._is_longer_plan])
+                instances = {t for t in test_tasks if t._is_longer_plan}
                 config.log(f"Selecting {len(instances)} long test tasks.")
             else:
                 raise ValueError(f"Invalid string value for selection: '{number_of_problems_per_domain}'. Expected 'all', 'basic', or 'long'.")
         elif isinstance(number_of_problems_per_domain, int):
             if number_of_problems_per_domain > 0:
-                sorted_test_tasks = sorted(test_tasks)
-                num_to_take = min(number_of_problems_per_domain, len(sorted_test_tasks))
-                instances = sorted_test_tasks[:num_to_take]
+                instances = set(sorted(test_tasks)[:min(number_of_problems_per_domain, len(test_tasks))])
                 config.log(f"Selecting the first {len(instances)} sorted test tasks (requested {number_of_problems_per_domain}).")
             else:
                 raise ValueError(f"Number of problems must be a positive integer, got: {number_of_problems_per_domain}.")
@@ -148,37 +148,37 @@ def generate_batch(
     except Exception as e: # Catch any error during loading or selection
         config.log(f"Error loading or selecting tasks from {data_file_path}: {e}", level=logging.ERROR, exc_info=True)
         raise e
+    tasks = tasks - instances
     # -- Generate Plans ---
     config.log("Starting plan generation...")    
-    for current_task in tqdm(instances, total=len(instances), desc="Generating plans"):
+    for t in tqdm(instances, total=len(instances), desc="Generating plans"):
         try:
             # Check if the task already has generated plans (for potential updates, though typically we generate fresh)
-            is_update = hasattr(current_task, 'generated_plans') and current_task.generated_plans
+            is_update = hasattr(t, 'generated_plans') and t.generated_plans
             if is_update:
-                config.log(f"Task {current_task.task_id} already has plans, will overwrite.") # Log if overwriting
+                config.log(f"Task {t.task_id} already has plans, will overwrite.") # Log if overwriting
 
-            config.log(f"Generating plans for task {current_task}")
+            config.log(f"Generating plans for task {t}")
             # Generate plans using the task's prompt
             generated_plans = generate_single(
                 model=model,
                 tokenizer=tokenizer,
-                prompt_text=current_task.add_separator(current_task.build_prompt())
+                prompt_text=t.add_separator(t.build_prompt())
             )
             print(generated_plans)
             # Store the generated plans directly in the Task object
-            current_task.generated_plans = generated_plans
-            config.log(f"Generated {len(generated_plans)} plans for task {current_task}.")
-            all_tasks.remove(current_task)
-            all_tasks.add(current_task) # Update the set with the modified task
+            t.generated_plans = generated_plans
+            config.log(f"Generated {len(generated_plans)} plans for task {t}.")
+            tasks.add(t)
         except Exception as e:
-            config.log(f"Error generating plan for task {current_task}: {e}", level=logging.ERROR, exc_info=True)
-            current_task.generated_plans = ["Error: " + str(e)]
+            config.log(f"Error generating plan for task {t}: {e}", level=logging.ERROR, exc_info=True)
+            t.generated_plans = ["Error: " + str(e)]
             continue 
     config.log(f"Plan generation completed. {len(instances)} instances ready for saving.")
     # --- Save Results ---
     try:
         config.log(f"Saving generated plans to {data_file_path}...")
-        task.save_tasks_to_jsonl(all_tasks, data_file_path)
+        task.save_tasks_to_jsonl(tasks, data_file_path)
         config.log(f"Results saved to {data_file_path}.")
     except Exception as e:
         config.log(f"Error saving tasks to {data_file_path}: {e}", level=logging.ERROR, exc_info=True)
