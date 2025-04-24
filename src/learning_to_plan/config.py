@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any
 _CONFIG_STORE: Dict[str, Any] = {} # Holds model/training/generation parameters
 
 # --- Global Variables for Paths and Token (Set during initialization) ---
-DATA_DIR: Optional[str] = None
+DATA_DIR = "data/"
 RAW_DIR: Optional[str] = None
 PROCESSED_DATA_DIR: Optional[str] = None
 CHECKPOINTS_DIR: Optional[str] = None
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__) # Module-level logger
 
 
 # --- Constants for directory/file names ---
-CONFIGS_DIR_NAME = "configs"
+CONFIGS_DIR = "configs"
 DEFAULT_TRAIN_CONFIG = "train_config.json"
 DEFAULT_GENERATE_CONFIG = "generate_config.json"
 BASIC_INSTANCES = "generated_basic"
@@ -35,9 +35,6 @@ PROCESSED_DATA_FILE_NAME = "data.jsonl"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
 # --- End Constants ---
-
-# Determine the path to the configs directory relative to this file
-CONFIGS_DIR = os.path.join(os.path.dirname(__file__), CONFIGS_DIR_NAME)
 
 # --- New Print and Log Function ---
 def log(
@@ -216,12 +213,10 @@ def _setup_paths_and_logging(args: Optional[argparse.Namespace]):
         raise ValueError(msg)
 
     # --- Initialize Directories ---
-    base_data_dir = "data/" # Default base
+   
     if args is not None and hasattr(args, 'data_dir_path') and args.data_dir_path:
-        base_data_dir = args.data_dir_path
-    log(f"Base data directory: {base_data_dir}")
-
-    DATA_DIR = os.path.abspath(base_data_dir)
+        DATA_DIR = args.data_dir_path
+    log(f"Using DATA_DIR: {DATA_DIR}")
     RAW_DIR = os.path.join(DATA_DIR, "raw")
     PROCESSED_DATA_DIR = os.path.join(DATA_DIR, "processed")
     CHECKPOINTS_DIR = os.path.join(DATA_DIR, "checkpoints")

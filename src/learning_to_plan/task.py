@@ -9,19 +9,19 @@ from enum import Enum
 instance_pattern = re.compile(r"instance-(\d+)\.pddl$")
 lock = threading.Lock()
 
-class Task(abc.ABC): 
+class Task(abc.ABC):
     class TaskType(Enum):
-        TRAINING = "training"
+        TRAIN = "train"
         VALIDATION = "validation"
         TEST = "test"
 
     class TaskStatus(Enum):
         OK = "ok"
         ERROR = "error"
-    
+
     def __init__(self, domain : str, domain_file_path : str, instance_file_path : str):
         self._domain :str = domain
-        self._domain_file_path : str = domain_file_path 
+        self._domain_file_path : str = domain_file_path
         self._instance_file_path : str = instance_file_path
         self._instance : str = instance_pattern.search(self._instance_file_path).group(0)
         self._is_longer_plan : bool = True if config.LONG_INSTANCES in self._instance_file_path else False
@@ -38,7 +38,7 @@ class Task(abc.ABC):
     @abc.abstractmethod
     def convert_plan_into_natural_language(self, plan) -> str:
         raise NotImplementedError("Subclasses must implement this method.")
-    
+
     @abc.abstractmethod
     def build_prompt(self, **kwargs) -> str:
         raise NotImplementedError("Subclasses must implement this method.")
@@ -48,77 +48,93 @@ class Task(abc.ABC):
             return prompt
         else:
             return prompt + "\n## Plan.\n\n"
-    
+
     def to_json(self):
         data = {
             "domain_file_path": self._domain_file_path,
             "instance_file_path": self._instance_file_path,
             "instance": self._instance,
-            "status": self._status,
+            "status": self._status.value if self._status else None, # Convert enum to string for JSON
             "plan": self._plan,
             "error": self._error_message,
             "domain": self._domain,
             "is_longer_plan": self._is_longer_plan,
-            "type": self._type,
+            "type": self._type.value if self._type else None, # Convert enum to string for JSON
             "generated_plans": self._generated_plans
         }
         try:
-            data['prompt'] = self.add_separator(self.build_prompt())
+             data['prompt'] = self.add_separator(self.build_prompt())
         except (NotImplementedError, AssertionError, Exception) as e:
             data['prompt'] = None
-        return json.dumps(data, ensure_ascii=False, indent=4)
+
+        return json.dumps(data, ensure_ascii=False)
 
     def __lt__(self, other):
         if not isinstance(other, Task):
             return NotImplemented
-        
+
         if self._is_longer_plan != other._is_longer_plan:
             return not self._is_longer_plan
-        
+
         self_match = instance_pattern.search(self._instance_file_path)
         other_match = instance_pattern.search(other._instance_file_path)
         if self_match and other_match:
             return int(self_match.group(1)) < int(other_match.group(1))
         else:
-            raise ValueError("Invalid instance file path format.")
+            return self._instance_file_path < other._instance_file_path
+
 
     def __str__(self):
-        size = "longer" if self._is_longer_plan else "basic"
-        return f"{self._domain} - {size} - {self._instance} : {self._status}"
+        # size = "longer" if self._is_longer_plan else "basic"
+        # return f"{self._domain} - {size} - {self._instance} : {self._status}, {self._type}"
+        return f"{self._domain_file_path} - {self._instance_file_path} : {self._status}, {self._type}"
 
     def __hash__(self):
         return hash((self._domain_file_path, self._instance_file_path))
-    
+
     def __eq__(self, other):
         if not isinstance(other, Task):
             return NotImplemented
         return self._instance_file_path == other._instance_file_path and self._domain_file_path == other._domain_file_path
 
     def from_json(self, json_obj):
-        # Process enum fields with consistent approach
         for field_name, enum_type in [("status", Task.TaskStatus), ("type", Task.TaskType)]:
-            if field_name in json_obj:
+            json_value = json_obj.get(field_name)
+            if json_value is not None:
+                # Ensure the value is a string before stripping
+                if not isinstance(json_value, str):
+                     msg = f"Expected string for {field_name}, but got {type(json_value)}"
+                     config.log(msg, level=config.logging.ERROR)
+                     # Depending on desired behavior, could raise error or skip
+                     continue # Skip this field if not a string
+
                 try:
-                    setattr(self, f"_{field_name}", enum_type(json_obj[field_name]))
+                    # Strip whitespace and convert to enum
+                    setattr(self, f"_{field_name}", enum_type(json_value.strip()))
+
                 except (ValueError, KeyError):
-                    msg = f"Invalid {field_name} value: {json_obj[field_name]}"
+                    msg = f"Invalid {field_name} value in JSON: '{json_value}'" # Added quotes to show value
                     config.log(msg, level=config.logging.ERROR)
                     raise ValueError(msg)
-        
-        # Process string fields 
+
         for field_name in ["plan", "error_message"]:
-            value = json_obj.get(field_name, getattr(self, f"_{field_name}"))
+            value = json_obj.get(field_name)
             if value is not None:
-                if not isinstance(value, str):
-                    raise TypeError(f"{field_name} must be a string")
-                setattr(self, f"_{field_name}", value)
-        
-        # Process generated_plans list of strings
-        plans = json_obj.get("generated_plans", self._generated_plans)
+                 if not isinstance(value, str):
+                    raise TypeError(f"{field_name} must be a string or null, but got {type(value)}")
+                 setattr(self, f"_{field_name}", value)
+
+
+        plans = json_obj.get("generated_plans")
         if plans is not None:
             if not isinstance(plans, list) or not all(isinstance(plan, str) for plan in plans):
-                raise TypeError("generated_plans must be a list of strings")
+                raise TypeError("generated_plans must be a list of strings or null")
             self._generated_plans = plans
+
+        if "is_longer_plan" in json_obj:
+             # Ensure the value is treated as boolean
+             self._is_longer_plan = bool(json_obj["is_longer_plan"])
+
 
     def update_status(self, response):
         status = response.get("status", "error")
@@ -129,20 +145,20 @@ class Task(abc.ABC):
         else:
             plain_text_plan = ""
             err_msg = response.get("error", "Missing plan details or planning failed.")
-        self._status = status
+        self._status = Task.TaskStatus(status) if status in [e.value for e in Task.TaskStatus] else None
         self._plan = plain_text_plan
         self._error_message = err_msg
 
     def read_instance(self):
-        with lock and open(self._instance_file_path, "r") as f:
+        with lock and open(self._instance_file_path, "r", encoding='utf-8') as f:
             instance_content = f.read()
         return instance_content
 
     def read_domain(self):
-        with lock and open(self._domain_file_path, "r") as f:
+        with lock and open(self._domain_file_path, "r", encoding='utf-8') as f:
             domain_content = f.read()
         return domain_content
-    
+
 
 class BlocksworldTask(Task):
     def __init__(self, domain_file_path, instance_file_path):
@@ -215,7 +231,7 @@ class BlocksworldTask(Task):
                 else:
                     raise ValueError(f"Unknown action: {action}")
         return nl_plan
-    
+
     def build_prompt(self, **kwargs):
         problem_description = self.convert_instance_into_natural_language(self.read_instance())
         prompt = (
@@ -301,40 +317,52 @@ def get_task_from_json(json_obj):
     task.from_json(json_obj)
     return task
 
-def get_tasks_from_json(json_file_path):
+def get_tasks_from_jsonl(jsonl_file_path):
     tasks = set()
-    with open(json_file_path, "r") as f:
+    with open(jsonl_file_path, "r", encoding='utf-8') as f:
         for line in f:
             try:
                 json_obj = json.loads(line)
                 task = get_task_from_json(json_obj)
                 tasks.add(task)
             except json.JSONDecodeError as e:
-                m = f"Error decoding JSON {json_file_path}: {e}"
+                m = f"Error decoding JSONL {jsonl_file_path}: {e}"
                 config.log(m, level=config.logging.ERROR)
                 raise e
             except Exception as e:
-                m = f"Error processing task from file {json_file_path}: {e}"
+                m = f"Error processing task from file {jsonl_file_path}: {e}"
                 config.log(m, level=config.logging.ERROR)
                 raise e
     return tasks
+
+def save_tasks_to_jsonl(tasks:set[Task], jsonl_file_path:str):
+    with open(jsonl_file_path, "w", encoding='utf-8') as f:
+        for task in tasks:
+            try:
+                json_str = task.to_json() # Get the JSON string representation
+                f.write(json_str + "\n") # Write the JSON string followed by a newline
+            except Exception as e:
+                m = f"Error saving task to file {jsonl_file_path}: {e}"
+                config.log(m, level=config.logging.ERROR)
+                raise e
 
 from typing import Union, Set
 def get_tasks_from_domain_directory(domain: str, number_of_problems_per_domain: Union[str, int] = "all") -> Set[Task]:
     """
     Get tasks from a domain directory.
-    
+
     Args:
         domain: Domain name
         number_of_problems_per_domain: "all", "basic", "long", or a positive integer
-    
+
     Returns:
         Set of Task objects
     """
     domain_file_path = os.path.join(config.RAW_DIR, domain, config.DOMAIN_FILE_NAME)
-    
+
     # Determine which instance directories to include
     instance_dirs = []
+    # Corrected variable name here
     if number_of_problems_per_domain in ("basic", "all") or isinstance(number_of_problems_per_domain, int):
         instance_dirs.append(os.path.join(config.RAW_DIR, domain, config.BASIC_INSTANCES))
     if number_of_problems_per_domain in ("long", "all") or isinstance(number_of_problems_per_domain, int):
@@ -345,22 +373,22 @@ def get_tasks_from_domain_directory(domain: str, number_of_problems_per_domain: 
     for instance_dir in instance_dirs:
         if not os.path.exists(instance_dir):
             raise ValueError(f"Instance directory not found: {instance_dir}")
-        
+
         # Get tasks from this directory using list comprehension
         tasks.extend([
             get_task_from_domain(domain, domain_file_path, os.path.join(instance_dir, file_name))
             for file_name in os.listdir(instance_dir)
             if instance_pattern.search(file_name)
         ])
-    
+
     # Sort tasks
     tasks.sort()
-    
+
     # Limit number of tasks if specified
     if isinstance(number_of_problems_per_domain, int):
         if number_of_problems_per_domain <= 0:
             raise ValueError(f"Number of problems per domain must be positive")
         elif number_of_problems_per_domain < len(tasks):
             tasks = tasks[:number_of_problems_per_domain]
-    
+
     return set(tasks)

@@ -83,7 +83,7 @@ def parse_args():
         help="Overwrite existing PaaS plan files."
     )
     # Custom type function to accept positive integers or specific strings
-    def parse_number_of_problems_arg(arg):
+    def parse_number_of_problems_per_domain_arg(arg):
         if arg in ["all", "long", "basic"]:
             return arg
         try:
@@ -95,8 +95,8 @@ def parse_args():
             raise argparse.ArgumentTypeError("Must be a positive integer or 'all', 'long', or 'basic'")
     
     parser.add_argument(
-        "-n", "--number_of_problems",
-        type=parse_number_of_problems_arg,
+        "-n", "--number_of_problems_per_domain",
+        type=parse_number_of_problems_per_domain_arg,
         default="all",
         help="Number of problems per domain: positive integer or 'all', 'long', 'basic'"
     )
@@ -156,7 +156,7 @@ if __name__ == "__main__":
         domains = get_selected_domains(args, config.RAW_DIR)
         for domain in domains:
             config.log(f"Processing PaaS for domain: {domain}")
-            tasks = task.get_tasks_from_domain_directory(domain, args.number_of_problems_per_domain, args.problem_size)
+            tasks = task.get_tasks_from_domain_directory(domain, args.number_of_problems_per_domain)
             if not tasks:
                 config.log(f"No tasks found for domain {domain}. Skipping.", level=logging.WARNING)
                 continue
@@ -205,7 +205,6 @@ if __name__ == "__main__":
 
     elif args.generate:
         config.log("--- Starting Plan Generation ---")
-        verify_domain(args)
         if not args.output_dir:
              config.log("--output_dir is required when using --generate.", level=logging.ERROR)
              raise ValueError("--output_dir not specified.")
