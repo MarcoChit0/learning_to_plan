@@ -162,7 +162,7 @@ def generate_batch(
             generated_plans = generate_single(
                 model=model,
                 tokenizer=tokenizer,
-                prompt_text=current_task.prompt # Access prompt from the Task object
+                prompt_text=current_task.add_separator(current_task.build_prompt())
             )
 
             # Store the generated plans directly in the Task object
