@@ -22,7 +22,6 @@ def generate_single(
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizer,
     prompt_text: str,
-    device: torch.device,
 ) -> List[str]: # Return type changed to List[str]
     """
     Generates one or more plan candidates for a single prompt.
@@ -31,22 +30,25 @@ def generate_single(
         model: The loaded Hugging Face model.
         tokenizer: The loaded Hugging Face tokenizer.
         prompt_text: The input prompt text (including the '## Plan.\n\n' marker).
-        device: The device (CPU or CUDA) to run inference on (less relevant if using device_map).
 
     Returns:
         A list of generated plan texts.
     """
     model.eval() # Ensure model is in eval mode
 
+    # Determine the device the model is actually on
+    # If CUDA is available, the model loading should have placed it there.
+    # Otherwise, it will be on CPU.
+    effective_device = next(model.parameters()).device
+    device_type = next(model.parameters()).device.type
+
     # Determine dtype from model if possible, fallback to config
     dtype = model.dtype if hasattr(model, 'dtype') else (torch.bfloat16 if config.get_config("bf16", False) else torch.float16)
-    model_device_type = next(model.parameters()).device.type if torch.cuda.is_available() else 'cpu'
-    effective_device = torch.device(model_device_type)
 
     with torch.no_grad(), torch.autocast(
-        device_type=effective_device.type,
+        device_type=device_type,
         dtype=dtype,
-        enabled=effective_device.type == 'cuda' # Only enable autocast on CUDA
+        enabled=(device_type == 'cuda') # Only enable autocast on CUDA
     ):
         inputs = tokenizer(
             prompt_text,
@@ -62,12 +64,21 @@ def generate_single(
             do_sample=config.get_config("do_sample", True),
             temperature=config.get_config("temperature", 0.7),
             eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.eos_token_id, # Use EOS token for padding
             num_return_sequences=config.get_config("num_return_sequences", 1),
         )
 
-        # Decode all the sequences
-        return tokenizer.batch_decode(outputs, skip_special_tokens=True)
+        # Decode all the sequences, removing the prompt part
+        generated_texts = []
+        input_length = inputs.input_ids.shape[1]
+        for output_sequence in outputs:
+            # Slice the output sequence to get only the generated tokens
+            generated_tokens = output_sequence[input_length:]
+            # Decode the generated tokens
+            decoded_text = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+            generated_texts.append(decoded_text.strip()) # Add stripped text
+
+        return generated_texts
 
 # --- Batch Generation from File (Modified) ---
 def generate_batch(
@@ -95,9 +106,6 @@ def generate_batch(
     except Exception as e:
         config.log(f"Fatal error loading model/tokenizer from {checkpoint_model_dir}: {e}", level=logging.ERROR, exc_info=True)
         raise e # Stop execution
-
-    effective_device = next(model.parameters()).device
-    config.log(f"Model and tokenizer loaded successfully. Effective device via device_map: {effective_device}")
 
     model.eval()
 
@@ -129,8 +137,7 @@ def generate_batch(
             generated_plans = generate_single(
                 model=model,
                 tokenizer=tokenizer,
-                prompt_text=instance['prompt'],
-                device=effective_device
+                prompt_text=instance['prompt']
             )
             
             # Update the instance in-place

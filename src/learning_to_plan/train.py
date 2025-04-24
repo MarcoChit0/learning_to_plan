@@ -58,7 +58,7 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         report_to=config.get_config("report_to"),
         num_train_epochs=config.get_config("num_train_epochs"),
         per_device_train_batch_size=config.get_config("batch_size"),
-        per_device_eval_batch_size=config.get_config("per_device_eval_batch_size"),
+        per_device_eval_batch_size=config.get_config("eval_batch_size"),
         gradient_accumulation_steps=config.get_config("gradient_accumulation_steps"),
         fp16=not config.get_config("bf16"),
         bf16=config.get_config("bf16"),
