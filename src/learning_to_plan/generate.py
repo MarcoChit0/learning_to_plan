@@ -168,6 +168,8 @@ def generate_batch(
             # Store the generated plans directly in the Task object
             current_task.generated_plans = generated_plans
             config.log(f"Generated {len(generated_plans)} plans for task {current_task}.")
+            all_tasks.remove(current_task)
+            all_tasks.add(current_task) # Update the set with the modified task
         except Exception as e:
             config.log(f"Error generating plan for task {current_task}: {e}", level=logging.ERROR, exc_info=True)
             current_task.generated_plans = ["Error: " + str(e)]
