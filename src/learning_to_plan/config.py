@@ -208,7 +208,7 @@ def initialize(
 def _setup_paths_and_logging(args: Optional[argparse.Namespace]):
     """Helper function to set up paths and file logging."""
     global DATA_DIR, RAW_DIR, PROCESSED_DATA_DIR, CHECKPOINTS_DIR
-    global HUGGINGFACE_TOKEN, GOOGLE_API_KEY, LOGGING_INITIALIZED, logger # Added GOOGLE_API_KEY
+    global HUGGINGFACE_TOKEN, GOOGLE_API_KEY, LOGGING_INITIALIZED, logger
 
     # --- Handle Hugging Face Token ---
     temp_hf_token = None
@@ -391,7 +391,6 @@ def load_model_and_tokenizer(checkpoint_dir: str) -> Tuple[PreTrainedModel, PreT
                 trust_remote_code=get_config("trust_remote_code", True),
                 token=HUGGINGFACE_TOKEN,
                 quantization_config=quantization_config,
-                device_map= "auto" if torch.cuda.is_available() else None,
             )
             from peft import LoraConfig, get_peft_model
             r = get_config("lora_r", 8)
@@ -421,7 +420,6 @@ def load_model_and_tokenizer(checkpoint_dir: str) -> Tuple[PreTrainedModel, PreT
                 trust_remote_code=get_config("trust_remote_code", True),
                 torch_dtype=torch_dtype,
                 token=HUGGINGFACE_TOKEN,
-                device_map= "auto" if torch.cuda.is_available() else None,
             )
             log(f"Model loaded successfully from {model_source}.", level=logging.INFO)
     except Exception as e:
