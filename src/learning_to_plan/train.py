@@ -110,7 +110,7 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         save_total_limit=config.get_config("save_total_limit", 2),
         logging_strategy=config.get_config("logging_strategy", "steps"),
         logging_steps=config.get_config("logging_steps", 100),
-        evaluation_strategy=config.get_config("eval_strategy", "steps") if tokenized_val else "no", # Evaluate only if val data exists
+        eval_strategy=config.get_config("eval_strategy", "steps") if tokenized_val else "no", # Evaluate only if val data exists
         eval_steps=config.get_config("eval_steps", 500) if tokenized_val else None, # Eval steps only if val data exists
         optim=config.get_config("optimizer", "adamw_torch"), # Default optimizer
         # --- DDP Specific ---
