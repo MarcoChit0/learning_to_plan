@@ -15,6 +15,10 @@ class NaturalLanguagePlan:
         self._is_valid = is_valid
         self._validated = validated
     
+    def validate(self, is_valid:bool):
+        self._is_valid = is_valid
+        self._validated = True
+    
     def to_json(self):
         return {
             "plan": self._plan,
@@ -48,6 +52,18 @@ class Task(abc.ABC):
         self._plan : Optional[str] = None
         self._type : Optional[Task.TaskType] = None # training, validation, test | None
         self._model_generated_plans : Optional[dict[str, list[NaturalLanguagePlan]]] = None # Updated type hint
+
+    def validate_plan(self, model_name : str, plan_idx : int, is_valid: bool):
+        if self._model_generated_plans:
+            if model_name in self._model_generated_plans:
+                if len(self._model_generated_plans[model_name]) > plan_idx:
+                    self._model_generated_plans[model_name][plan_idx].validate(is_valid)
+                else:
+                    raise IndexError(f"Plan index {plan_idx} out of range for model {model_name}.")
+            else:
+                raise KeyError(f"Model {model_name} not found in generated plans.")
+        else:
+            raise ValueError("No generated plans available to validate.")
 
     @abc.abstractmethod
     def convert_instance_into_natural_language(self, plan) -> str:
