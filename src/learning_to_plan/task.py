@@ -231,7 +231,10 @@ class BlocksworldTask(Task):
         goal_text = "goal state:\n" + "\n".join(goal_facts)
         return f"{objects_str}\n\n{init_text}\n\n{goal_text}"
 
-    def convert_plan_into_natural_language(self, plan) -> str:
+    def convert_plan_into_natural_language(self, plan:str) -> str:
+        """
+            plan: str - actions in PDDL format, each action in a new line
+        """
         actions = plan.split(";")[0].strip().split("\n")
         nl_plan = ""
         for action in actions:
@@ -250,6 +253,40 @@ class BlocksworldTask(Task):
                 else:
                     raise ValueError(f"Unknown action: {action}")
         return nl_plan
+    
+    def convert_plan_into_pddl(self, plan:str) -> str:
+        """
+            plan: str - actions in natural language, each action in a new line
+        """
+        nl_actions = plan.split("\n")
+        pddl_plan = ""
+        for nl_a in nl_actions:
+            nl_a.replace(";", "").strip()
+            if nl_a.startswith("pick up"):
+                re_action = re.search(r"pick up (\w+)", nl_a)
+            elif nl_a.startswith("put down"):
+                re_action = re.search(r"put down (\w+)", nl_a)
+            elif nl_a.startswith("stack"):
+                re_action = re.search(r"stack (\w+) on (\w+)", nl_a)
+            elif nl_a.startswith("unstack"):
+                re_action = re.search(r"unstack (\w+) from (\w+)", nl_a)
+            else:
+                raise ValueError(f"Unknown action: {nl_a}")
+            
+            # map the action to the PDDL format
+            
+            if nl_a.startswith("pick up"):
+                action = f"(pick-up {re_action.group(1)})"
+            elif nl_a.startswith("put down"):
+                action = f"(put-down {re_action.group(1)})"
+            elif nl_a.startswith("stack"):
+                action = f"(stack {re_action.group(1)} {re_action.group(2)})"
+            elif nl_a.startswith("unstack"):
+                action = f"(unstack {re_action.group(1)} {re_action.group(2)})"
+            else:
+                raise ValueError(f"Unknown action: {nl_a}")
+
+
 
     def build_prompt(self, **kwargs):
         problem_description = self.convert_instance_into_natural_language(self.read_instance())
@@ -411,3 +448,4 @@ def get_tasks_from_domain_directory(domain: str, number_of_problems_per_domain: 
             tasks = tasks[:number_of_problems_per_domain]
 
     return set(tasks)
+ 
