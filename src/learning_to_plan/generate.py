@@ -89,7 +89,7 @@ from learning_to_plan import task
 def generate_batch(
     checkpoint_model_dir: str, # Renamed from model_dir for clarity
     data_file_path: str,
-    number_of_problems_per_domain: Union[int, str] = None,
+    number_of_problems_per_domain: Union[int, str] = None
 ):
     """
     Loads model, generates plans for instances in a test file, saves results
@@ -153,11 +153,6 @@ def generate_batch(
     config.log("Starting plan generation...")    
     for t in tqdm(instances, total=len(instances), desc="Generating plans"):
         try:
-            # Check if the task already has generated plans (for potential updates, though typically we generate fresh)
-            is_update = hasattr(t, 'generated_plans') and t.generated_plans
-            if is_update:
-                config.log(f"Task {t.task_id} already has plans, will overwrite.") # Log if overwriting
-
             config.log(f"Generating plans for task {t}")
             # Generate plans using the task's prompt
             generated_plans = generate_single(
@@ -165,9 +160,7 @@ def generate_batch(
                 tokenizer=tokenizer,
                 prompt_text=t.add_separator(t.build_prompt())
             )
-            print(generated_plans)
-            # Store the generated plans directly in the Task object
-            t.generated_plans = generated_plans
+            t.add_generated_plans(config.get_config("model_name"), generated_plans, overwrite=overwrite)
             config.log(f"Generated {len(generated_plans)} plans for task {t}.")
             tasks.add(t)
         except Exception as e:

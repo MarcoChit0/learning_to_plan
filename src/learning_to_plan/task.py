@@ -29,7 +29,7 @@ class Task(abc.ABC):
         self._error_message : Optional[str] = None
         self._plan : Optional[str] = None
         self._type : Optional[Task.TaskType] = None # training, validation, test | None
-        self._generated_plans : Optional[list[str]] = None
+        self._model_generated_plans : Optional[dict[str, list[str]]] = None # map model name to list of generated plans
 
     @abc.abstractmethod
     def convert_instance_into_natural_language(self, plan) -> str:
@@ -48,6 +48,22 @@ class Task(abc.ABC):
             return prompt
         else:
             return prompt + "\n## Plan.\n\n"
+    
+    @property
+    def _id(self):
+        return f"{self._domain_file_path} - {self._instance_file_path}"
+
+    def add_generated_plans(self, model_name: str, plans: list[str], overwrite: bool = True):
+        if self._model_generated_plans is None:
+            self._model_generated_plans = {}
+        if model_name not in self._model_generated_plans:
+            self._model_generated_plans[model_name] = []
+        if overwrite:
+            self._model_generated_plans[model_name] = plans
+            config.log(f"Overwriting plans for model {model_name} in task {self._id}.")
+        else:
+            self._model_generated_plans[model_name].extend(plans)
+            config.log(f"Added {len(plans)} plans for model {model_name} in task {self._id}.")
 
     def to_json(self):
         data = {
@@ -56,16 +72,17 @@ class Task(abc.ABC):
             "instance": self._instance,
             "status": self._status.value if self._status else None, # Convert enum to string for JSON
             "plan": self._plan,
-            "error": self._error_message,
+            "error_message": self._error_message, # Corrected key name
             "domain": self._domain,
             "is_longer_plan": self._is_longer_plan,
             "type": self._type.value if self._type else None, # Convert enum to string for JSON
-            "generated_plans": self._generated_plans
+            "model_generated_plans": self._model_generated_plans # This is now dict[str, list[str]] or None
         }
         try:
              data['prompt'] = self.add_separator(self.build_prompt())
         except (NotImplementedError, AssertionError, Exception) as e:
             data['prompt'] = None
+            config.log(f"Could not generate prompt for task {self._id}: {e}", level=config.logging.WARNING) # Optional: log the error
 
         return json.dumps(data, ensure_ascii=False)
 
@@ -87,7 +104,7 @@ class Task(abc.ABC):
     def __str__(self):
         # size = "longer" if self._is_longer_plan else "basic"
         # return f"{self._domain} - {size} - {self._instance} : {self._status}, {self._type}"
-        return f"{self._domain_file_path} - {self._instance_file_path} : {self._status}, {self._type}"
+        return f"{self._id} : {self._status}, {self._type}"
 
     def __hash__(self):
         return hash((self._domain_file_path, self._instance_file_path))
@@ -125,15 +142,17 @@ class Task(abc.ABC):
                  setattr(self, f"_{field_name}", value)
 
 
-        plans = json_obj.get("generated_plans")
-        if plans is not None:
-            if not isinstance(plans, list) or not all(isinstance(plan, str) for plan in plans):
-                raise TypeError("generated_plans must be a list of strings or null")
-            self._generated_plans = plans
-
-        if "is_longer_plan" in json_obj:
-             # Ensure the value is treated as boolean
-             self._is_longer_plan = bool(json_obj["is_longer_plan"])
+        plans_map = json_obj.get("model_generated_plans")
+        if plans_map is not None:
+            if not isinstance(plans_map, dict):
+                raise TypeError(f"model_generated_plans must be a dictionary or null, but got {type(plans_map)}")
+            # Validate the structure of the dictionary
+            for model_name, plans_list in plans_map.items():
+                if not isinstance(model_name, str):
+                    raise TypeError(f"Keys in model_generated_plans must be strings, but got {type(model_name)}")
+                if not isinstance(plans_list, list) or not all(isinstance(plan, str) for plan in plans_list):
+                    raise TypeError(f"Values in model_generated_plans must be lists of strings, but got {type(plans_list)} for key '{model_name}'")
+            self._model_generated_plans = plans_map
 
 
     def update_status(self, response):

@@ -31,7 +31,7 @@ def validate_plans(data_file_path):
     for t in tasks:
         task_validation_results = []
         config.log(f"Validating plans for task {t._id}...", level=config.logging.DEBUG)
-        for i, p in enumerate(t._generated_plans):
+        for i, p in enumerate(t._model_generated_plans):
             temp_plan_file = f".temp_plan_{i}.txt"
             plan_valid = False
             try:
