@@ -1,5 +1,7 @@
+# main.py
 import os
-os.environ["NCCL_P2P_DISABLE"] = "1"
+# Removed: os.environ["NCCL_P2P_DISABLE"] = "1" (Didn't solve the issue)
+# os.environ["NCCL_DEBUG"] = "INFO" # Optional: Uncomment for more detailed NCCL logs
 
 import argparse
 import asyncio
@@ -11,6 +13,14 @@ from learning_to_plan import utils
 from learning_to_plan import task
 from learning_to_plan import config # Import the refactored config
 from learning_to_plan import generate # Import the new generate module
+
+# --- NOTE for Kaggle/Multi-GPU Execution ---
+# If still encountering NCCL/CUDA errors during training,
+# try launching this script using accelerate:
+# Example: accelerate launch main.py --train --domain blocksworld [other_args...]
+# This ensures the environment is correctly set up for DistributedDataParallel (DDP).
+# The Trainer class should automatically detect and use the accelerate environment.
+# ------------------------------------------
 
 def parse_args():
     """Parses command-line arguments."""
@@ -130,6 +140,7 @@ def get_selected_domains(args, base_dir):
         config.log(m, level=logging.ERROR)
         raise FileNotFoundError(m)
     try:
+        # List only directories within the base_dir
         available_domains = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
     except OSError as e:
         config.log(f"Error listing domains in {base_dir}: {e}", level=logging.ERROR, exc_info=True)
@@ -144,20 +155,24 @@ def get_selected_domains(args, base_dir):
         config.log(f"Processing all found domains: {', '.join(available_domains)}")
         return available_domains
     else:
-        selected = args.domain.split(",")
+        selected = [d.strip() for d in args.domain.split(",")] # Strip whitespace
+        valid_selected = []
         for d in selected:
             if d not in available_domains:
                 m = f"Domain '{d}' not found in {base_dir}. Available domains: {', '.join(available_domains)}"
                 config.log(m, level=logging.ERROR)
+                # Optionally raise error immediately or collect all errors
+                # For now, let's raise immediately
                 raise ValueError(m)
-        config.log(f"Processing selected domains: {', '.join(selected)}")
-        return selected
+            valid_selected.append(d) # Add if valid
+        config.log(f"Processing selected domains: {', '.join(valid_selected)}")
+        return valid_selected
 
 # --- Main Execution ---
 if __name__ == "__main__":
     args = parse_args()
 
-    # Initialize configuration after setting environment variables
+    # Initialize configuration
     config.initialize(args, config_path=args.config_path)
 
     # --- Action Blocks ---
@@ -166,14 +181,18 @@ if __name__ == "__main__":
         domains = get_selected_domains(args, config.RAW_DIR)
         for domain in domains:
             config.log(f"Processing PaaS for domain: {domain}")
-            tasks = task.get_tasks_from_domain_directory(domain, args.number_of_problems_per_domain)
-            if not tasks:
-                config.log(f"No tasks found for domain {domain}. Skipping.", level=logging.WARNING)
-                continue
-            data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
-            config.log(f"Outputting PaaS results to: {data_file_path}")
-            asyncio.run(utils.call_paas(tasks, data_file_path, overwrite=args.overwrite_paas_plans))
-            config.log(f"Finished PaaS calls for domain: {domain}")
+            try:
+                tasks = task.get_tasks_from_domain_directory(domain, args.number_of_problems_per_domain)
+                if not tasks:
+                    config.log(f"No tasks found or selected for domain {domain}. Skipping.", level=logging.WARNING)
+                    continue
+                data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
+                config.log(f"Outputting PaaS results to: {data_file_path}")
+                asyncio.run(utils.call_paas(tasks, data_file_path, overwrite=args.overwrite_paas_plans))
+                config.log(f"Finished PaaS calls for domain: {domain}")
+            except Exception as e:
+                 config.log(f"Error processing PaaS for domain {domain}: {e}", level=logging.ERROR, exc_info=True)
+                 continue # Continue to the next domain
         config.log("--- Finished All PaaS Calls ---")
 
     elif args.split_dataset:
@@ -185,9 +204,12 @@ if __name__ == "__main__":
             try:
                 utils.split_dataset(data_file_path)
                 config.log(f"Finished splitting dataset for domain: {domain}")
+            except FileNotFoundError:
+                 config.log(f"Data file not found for splitting: {data_file_path}. Skipping domain {domain}.", level=logging.ERROR)
+                 continue
             except Exception as e:
-                config.log(f"Error splitting dataset for domain {domain}: {e}", level=logging.ERROR)
-                continue
+                config.log(f"Error splitting dataset for domain {domain}: {e}", level=logging.ERROR, exc_info=True)
+                continue # Continue to the next domain
         config.log("--- Finished All Dataset Splitting ---")
 
     elif args.train:
@@ -203,58 +225,85 @@ if __name__ == "__main__":
         for domain in domains:
             config.log(f"Starting training for domain: {domain}")
             data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
-            assert os.path.exists(data_file_path), f"Data file not found: {data_file_path}"
+            if not os.path.exists(data_file_path):
+                 config.log(f"Data file not found for training: {data_file_path}. Skipping domain {domain}.", level=logging.ERROR)
+                 continue
 
             # Construct checkpoint dir using the potentially overridden model name
             current_model_name = config.get_config("model_name") # Get final model name after potential override
+            if not current_model_name:
+                 config.log(f"Model name not configured. Skipping training for domain {domain}.", level=logging.ERROR)
+                 continue
             model_checkpoint_dir = os.path.join(config.CHECKPOINTS_DIR, current_model_name, domain)
             config.create_necessary_dirs(model_checkpoint_dir) # Use helper from config
             config.log(f"Checkpoints will be saved to: {model_checkpoint_dir}")
 
-            train.run_training_procedure(model_checkpoint_dir, data_file_path)
-            config.log(f"Finished training for domain: {domain}")
+            try:
+                train.run_training_procedure(model_checkpoint_dir, data_file_path)
+                config.log(f"Finished training for domain: {domain}")
+            except Exception as e:
+                 config.log(f"Error during training for domain {domain}: {e}", level=logging.ERROR, exc_info=True)
+                 # Decide if you want to stop all training or continue to the next domain
+                 continue # Continue to the next domain
         config.log("--- Finished All Training ---")
 
     elif args.generate:
+        config.log("--- Starting Plan Generation ---")
         model_name_from_config = config.get_config("model_name")
         assert model_name_from_config, "Model name not found in config. Please check your configuration."
 
+        # Determine base directory for finding domains based on model type
         if model_name_from_config.lower().startswith("gemini"):
             config.log(f"Model '{model_name_from_config}' is a Gemini model. Calling API for generation.")
-            # For Gemini, we look for processed data, not checkpoints
-            domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
-            assert domains, f"No valid domains found for Gemini model in the {config.PROCESSED_DATA_DIR} dir. Please check your configuration."
+            # For Gemini, domains are defined by processed data directories
+            domain_base_dir = config.PROCESSED_DATA_DIR
         else:
-            # For HF models, look for checkpoint directories
-            model_checkpoints_base_dir = os.path.join(config.CHECKPOINTS_DIR, model_name_from_config)
-            config.log(f"Looking for checkpoints in base directory: {model_checkpoints_base_dir}")
-            domains = get_selected_domains(args, model_checkpoints_base_dir)
-            assert domains, f"No valid domains found in {model_checkpoints_base_dir}. Please check your checkpoints."
+            # For HF models, domains are defined by checkpoint directories
+            domain_base_dir = os.path.join(config.CHECKPOINTS_DIR, model_name_from_config)
+            config.log(f"Looking for model checkpoints/domains in base directory: {domain_base_dir}")
 
-        for domain in domains:
-            config.log(f"Starting generation for domain: {domain}")
-            data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
-            assert os.path.exists(data_file_path), f"Data file not found: {data_file_path}"
-            config.log(f"Using data: {data_file_path}.")
-
-            if model_name_from_config.lower().startswith("gemini"):
-                model_checkpoint_dir = None # No checkpoint needed for Gemini
-                config.log(f"Calling Gemini API for generation.")
+        try:
+            domains = get_selected_domains(args, domain_base_dir)
+            if not domains:
+                 config.log(f"No valid domains found in '{domain_base_dir}' for model '{model_name_from_config}'. Generation cannot proceed.", level=logging.ERROR)
             else:
-                # Construct the checkpoint path for HF models
-                model_checkpoint_dir = os.path.join(config.CHECKPOINTS_DIR, model_name_from_config, domain)
-                assert os.path.exists(model_checkpoint_dir), f"Checkpoint directory not found: {model_checkpoint_dir}"
-                config.log(f"Using model checkpoint for generation: {model_checkpoint_dir}.")
+                for domain in domains:
+                    config.log(f"Starting generation for domain: {domain}")
+                    data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
+                    if not os.path.exists(data_file_path):
+                        config.log(f"Data file not found for generation: {data_file_path}. Skipping domain {domain}.", level=logging.ERROR)
+                        continue
+                    config.log(f"Using data: {data_file_path}.")
 
-            generate.generate_batch(
-                checkpoint_model_dir=model_checkpoint_dir, # Will be None for Gemini
-                data_file_path=data_file_path,
-                number_of_problems_per_domain=args.number_of_problems_per_domain
-            )
-            config.log(f"Finished generation for domain: {domain}")
+                    model_checkpoint_dir = None # Default to None (for Gemini)
+                    if not model_name_from_config.lower().startswith("gemini"):
+                        # Construct and check checkpoint path for HF models
+                        model_checkpoint_dir = os.path.join(config.CHECKPOINTS_DIR, model_name_from_config, domain)
+                        if not os.path.exists(model_checkpoint_dir):
+                             config.log(f"Checkpoint directory not found: {model_checkpoint_dir}. Skipping generation for domain {domain}.", level=logging.ERROR)
+                             continue
+                        config.log(f"Using model checkpoint for generation: {model_checkpoint_dir}.")
+                    else:
+                        config.log(f"Calling Gemini API for generation (no local checkpoint needed).")
+
+                    try:
+                        generate.generate_batch(
+                            checkpoint_model_dir=model_checkpoint_dir, # Will be None for Gemini
+                            data_file_path=data_file_path,
+                            number_of_problems_per_domain=args.number_of_problems_per_domain
+                        )
+                        config.log(f"Finished generation for domain: {domain}")
+                    except Exception as e:
+                         config.log(f"Error during generation for domain {domain}: {e}", level=logging.ERROR, exc_info=True)
+                         continue # Continue to the next domain
+        except (FileNotFoundError, ValueError) as e:
+             config.log(f"Error selecting domains or base directory issue: {e}", level=logging.ERROR)
+
         config.log("--- Finished All Generation ---")
+
 
     else:
         config.log("No action requested (e.g., --train, --generate). Exiting.", level=logging.WARNING)
 
     config.log("--- Main script execution finished ---")
+
