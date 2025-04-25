@@ -160,7 +160,7 @@ def generate_batch(
                 tokenizer=tokenizer,
                 prompt_text=t.add_separator(t.build_prompt())
             )
-            t.add_generated_plans(config.get_config("model_name"), generated_plans, overwrite=overwrite)
+            t.add_generated_plans(config.get_config("model_name"), generated_plans)
             config.log(f"Generated {len(generated_plans)} plans for task {t}.")
             tasks.add(t)
         except Exception as e:
