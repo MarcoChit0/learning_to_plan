@@ -35,6 +35,9 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
     if len(dataset["train"]) == 0 or len(dataset["validation"]) == 0:
         raise ValueError("Train/validation dataset is empty.")
     model, tokenizer = config.load_model_and_tokenizer(checkpoint_dir=model_checkpoint_dir)
+    
+    assert tokenizer is not None, f"Tokenizer is None. Check the checkpoint directory: {model_checkpoint_dir}"
+    assert model is not None, f"Model is None. Check the checkpoint directory: {model_checkpoint_dir}"
 
     def tokenize_fn(batch):
         # Concatenate prompt and plan for each example in the batch

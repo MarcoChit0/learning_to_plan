@@ -15,6 +15,7 @@ RAW_DIR: Optional[str] = None
 PROCESSED_DATA_DIR: Optional[str] = None
 CHECKPOINTS_DIR: Optional[str] = None
 HUGGINGFACE_TOKEN: Optional[str] = None
+GOOGLE_API_KEY: Optional[str] = None # Added Google API Key variable
 LOGGING_INITIALIZED: bool = False # Flag to prevent duplicate logging setup
 # --- Configure root logger minimally initially ---
 logging.basicConfig(
@@ -78,7 +79,7 @@ def initialize(
         args: Parsed arguments from argparse. Used for overrides and context detection.
         config_path: Path to a specific JSON configuration file to load (optional).
     """
-    global _CONFIG_STORE, HUGGINGFACE_TOKEN
+    global _CONFIG_STORE, HUGGINGFACE_TOKEN, GOOGLE_API_KEY # Added GOOGLE_API_KEY
     global DATA_DIR, RAW_DIR, PROCESSED_DATA_DIR, CHECKPOINTS_DIR
     global LOGGING_INITIALIZED, logger # Use the global logger
 
@@ -151,30 +152,30 @@ def initialize(
             else:
                 error_message = f"Default {context} config file '{default_path}' not found."
                 log(error_message, level=logging.ERROR)
-                raise FileNotFoundError(error_message) # Make missing default fatal
-        else:
-            log("Context is not Train or Generate. Skipping default model config load.")
-            config_source = "None (Context not Train/Generate)"
+                # Only raise FileNotFoundError if it's a train or generate context and default config is missing
+                if context in ["Training", "Generation"]:
+                    raise FileNotFoundError(error_message) # Make missing default fatal
+                else:
+                    log(f"Skipping fatal error for missing default config in '{context}' context.", level=logging.WARNING)
+
 
 
     # --- 2. Apply Overrides from Args ---
     if load_attempted or loaded_config:
         log("Applying command-line argument overrides to configuration...")
-        arg_to_config_map = {
-            "model": "model_name",
-            "epochs": "num_train_epochs",
-            # Add other args here
-        }
+        # Define which command-line arguments can override config values
+        # Added gemini specific overrides
+        override_keys = {"model_name", "num_train_epochs"} # Use a set for efficient lookups
 
-        for arg_name, config_key in arg_to_config_map.items():
-            if hasattr(args, arg_name):
-                arg_value = getattr(args, arg_name)
-                if arg_value is not None:
-                    original_value = loaded_config.get(config_key, "<Not Set>")
-                    if str(original_value) != str(arg_value):
-                        log(f"  Overriding '{config_key}': {original_value} -> {arg_value}")
-                    loaded_config[config_key] = arg_value
+        for arg_name, arg_value in vars(args).items():
+            if arg_name in override_keys and arg_value is not None:
+                original_value = loaded_config.get(arg_name)
+                # Only log if the value is different or being newly set
+                if arg_name not in loaded_config or original_value != arg_value:
+                    log(f"  Overriding '{arg_name}': {original_value if arg_name in loaded_config else '<Not Set>'} -> {arg_value}")
+                    loaded_config[arg_name] = arg_value
 
+        # Handle 4bit/8bit/bf16 overrides
         if hasattr(args, 'load_in_4bit') and args.load_in_4bit:
             if loaded_config.get("load_in_8bit", False):
                 log("  Overriding 'load_in_8bit': True -> False (due to --load_in_4bit)")
@@ -183,10 +184,9 @@ def initialize(
             if loaded_config.get("bf16", False):
                 log("  Overriding 'bf16': True -> False (due to --load_in_4bit)")
                 loaded_config["bf16"] = False
-            # Ensure load_in_4bit is set if arg is true, even if not in JSON
             loaded_config["load_in_4bit"] = True
 
-        
+
         if hasattr(args, 'load_in_8bit') and args.load_in_8bit:
             if loaded_config.get("bf16", False):
                 log("  Overriding 'bf16': True -> False (due to --load_in_8bit)")
@@ -198,35 +198,49 @@ def initialize(
     # --- 3. Store Final Model/Train/Generate Configuration ---
     _CONFIG_STORE = loaded_config
     log(f"Model configuration source: {config_source}")
+    log(f"Final Configuration: {json.dumps(_CONFIG_STORE, indent=2)}", level=logging.DEBUG, do_print=False)
 
 
-    # --- 4. Setup Paths, Logging (File Handler), and Token (Always Run) ---
+    # --- 4. Setup Paths, Logging (File Handler), and Tokens (Always Run) ---
     _setup_paths_and_logging(args)
 
 
 def _setup_paths_and_logging(args: Optional[argparse.Namespace]):
     """Helper function to set up paths and file logging."""
     global DATA_DIR, RAW_DIR, PROCESSED_DATA_DIR, CHECKPOINTS_DIR
-    global HUGGINGFACE_TOKEN, LOGGING_INITIALIZED, logger
+    global HUGGINGFACE_TOKEN, GOOGLE_API_KEY, LOGGING_INITIALIZED, logger # Added GOOGLE_API_KEY
 
     # --- Handle Hugging Face Token ---
-    temp_token = None
+    temp_hf_token = None
     if args is not None and hasattr(args, 'huggingface_token') and args.huggingface_token:
-        temp_token = args.huggingface_token
+        temp_hf_token = args.huggingface_token
     else:
         import dotenv
         dotenv.load_dotenv()
-        temp_token = os.getenv("HUGGINGFACE_TOKEN")
+        temp_hf_token = os.getenv("HUGGINGFACE_TOKEN")
 
-    HUGGINGFACE_TOKEN = temp_token
+    HUGGINGFACE_TOKEN = temp_hf_token
     if not HUGGINGFACE_TOKEN:
-        # Make missing token fatal as per previous version logic
-        msg = "Hugging Face token not provided. Set it via --huggingface_token or HUGGINGFACE_TOKEN environment variable."
-        log(msg, level=logging.ERROR)
-        raise ValueError(msg)
+        # Log warning, but don't make fatal unless a HF model is explicitly requested later
+        log("Hugging Face token not provided. Set it via --huggingface_token or HUGGINGFACE_TOKEN environment variable. HF model loading may fail.", level=logging.WARNING)
+
+    # --- Handle Google API Key ---
+    temp_google_api_key = None
+    if args is not None and hasattr(args, 'google_api_key') and args.google_api_key:
+        temp_google_api_key = args.google_api_key
+    else:
+        import dotenv
+        dotenv.load_dotenv()
+        temp_google_api_key = os.getenv("GOOGLE_API_KEY")
+
+    GOOGLE_API_KEY = temp_google_api_key
+    if not GOOGLE_API_KEY:
+        # Log warning, but don't make fatal unless a Gemini model is explicitly requested later
+        log("Google API key not provided. Set it via --google_api_key or GOOGLE_API_KEY environment variable. Gemini model generation may fail.", level=logging.WARNING)
+
 
     # --- Initialize Directories ---
-   
+
     if args is not None and hasattr(args, 'data_dir_path') and args.data_dir_path:
         DATA_DIR = args.data_dir_path
     log(f"Using DATA_DIR: {DATA_DIR}")
@@ -315,11 +329,6 @@ def load_model_and_tokenizer(checkpoint_dir: str) -> Tuple[PreTrainedModel, PreT
     quantization (8-bit), and data types (bf16/fp16).
 
     Args:
-        model_name_or_path: The name (Hugging Face Hub) or local path of the base model.
-        load_in_8bit: Whether to load the model with 8-bit quantization.
-        bf16: Whether to use bfloat16. If False and not 8-bit, uses float16.
-        hf_token: Hugging Face API token.
-        trust_remote_code: Whether to trust remote code for model loading.
         checkpoint_dir: The directory where checkpoints are saved/looked for.
 
     Returns:
@@ -330,8 +339,16 @@ def load_model_and_tokenizer(checkpoint_dir: str) -> Tuple[PreTrainedModel, PreT
     """
 
     last_checkpoint = get_last_checkpoint(checkpoint_dir)
+    # Use the model name from config as the base if no checkpoint is found
     model_source = last_checkpoint if last_checkpoint else get_config("model_name", None)
     assert model_source, "Model source is None. Check your configuration."
+
+    # Check if the requested model is a Gemini model. If so, we don't load a HF model here.
+    if model_source and model_source.lower().startswith("gemini"):
+        log(f"Requested model '{model_source}' is a Gemini model. Skipping Hugging Face model/tokenizer loading.", level=logging.INFO)
+        # Return None for model and tokenizer as they are not needed for API calls
+        return None, None
+
 
     if get_config("load_in_4bit", False):
         log("Applying 4-bit quantization.", level=logging.INFO, do_print=False)
@@ -342,7 +359,7 @@ def load_model_and_tokenizer(checkpoint_dir: str) -> Tuple[PreTrainedModel, PreT
     else:
         log("Loading model without quantization.", level=logging.INFO, do_print=False)
         quantization_config = None
-        
+
 
     # --- Load Tokenizer ---
     assert HUGGINGFACE_TOKEN, "Hugging Face token is not set. Cannot load tokenizer."
@@ -362,6 +379,7 @@ def load_model_and_tokenizer(checkpoint_dir: str) -> Tuple[PreTrainedModel, PreT
         m = f"Failed to load tokenizer from {model_source}: {e}"
         log(m, level=logging.ERROR, exc_info=True)
         raise ValueError(m) from e
+
 
     # --- Load Model ---
     try:
@@ -406,10 +424,10 @@ def load_model_and_tokenizer(checkpoint_dir: str) -> Tuple[PreTrainedModel, PreT
                 device_map= "auto" if torch.cuda.is_available() else None,
             )
             log(f"Model loaded successfully from {model_source}.", level=logging.INFO)
-
     except Exception as e:
         m = f"Failed to load model from {model_source}: {e}"
         log(m, level=logging.ERROR, exc_info=True)
         raise ValueError(m) from e
+
 
     return model, tokenizer

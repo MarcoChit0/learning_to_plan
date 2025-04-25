@@ -2,7 +2,7 @@
 import os
 import argparse
 import asyncio
-import logging 
+import logging
 
 # Import project modules
 from learning_to_plan import train
@@ -48,13 +48,13 @@ def parse_args():
         help="Path to a custom JSON configuration file (overrides defaults)."
     )
     parser.add_argument(
-        "-m", "--model",
+        "-m", "--model_name",
         type=str,
         default=None,
-        help="Override model name (e.g., 'Qwen/Qwen2.5-7B-Instruct') specified in config."
+        help="Override model name (e.g., 'Qwen/Qwen2.5-7B-Instruct' or 'gemini-pro') specified in config."
     )
     parser.add_argument(
-        "-e", "--epochs",
+        "-e", "--num_train_epochs",
         type=int,
         default=None,
         help="Override number of training epochs specified in config."
@@ -92,7 +92,7 @@ def parse_args():
             return val
         except ValueError:
             raise argparse.ArgumentTypeError("Must be a positive integer or 'all', 'long', or 'basic'")
-    
+
     parser.add_argument(
         "-n", "--number_of_problems_per_domain",
         type=parse_number_of_problems_per_domain_arg,
@@ -105,6 +105,12 @@ def parse_args():
         type=str,
         default=None,
         help="Hugging Face token (overrides HUGGINGFACE_TOKEN env var)."
+    )
+    parser.add_argument(
+        "--google_api_key", # Added argument for Google API Key
+        type=str,
+        default=None,
+        help="Google API Key (overrides GOOGLE_API_KEY env var)."
     )
 
     return parser.parse_args()
@@ -181,45 +187,59 @@ if __name__ == "__main__":
 
     elif args.train:
         config.log("--- Starting Model Training ---")
+
+        model_name_from_config = config.get_config("model_name")
+        if model_name_from_config and model_name_from_config.lower().startswith("gemini"):
+            m = f"Model '{model_name_from_config}' is a Gemini model. Training is not supported for Gemini."
+            config.log(m, level=logging.ERROR)
+            raise ValueError(m) 
+
         domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
         for domain in domains:
             config.log(f"Starting training for domain: {domain}")
             data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
             assert os.path.exists(data_file_path), f"Data file not found: {data_file_path}"
-            
+
             # Construct checkpoint dir using the potentially overridden model name
             current_model_name = config.get_config("model_name") # Get final model name after potential override
             model_checkpoint_dir = os.path.join(config.CHECKPOINTS_DIR, current_model_name, domain)
             config.create_necessary_dirs(model_checkpoint_dir) # Use helper from config
             config.log(f"Checkpoints will be saved to: {model_checkpoint_dir}")
 
-
             train.run_training_procedure(model_checkpoint_dir, data_file_path)
             config.log(f"Finished training for domain: {domain}")
         config.log("--- Finished All Training ---")
 
     elif args.generate:
-        model_name_from_config = config.get_config("model_name") # Get name used/loaded during init
+        model_name_from_config = config.get_config("model_name")
         assert model_name_from_config, "Model name not found in config. Please check your configuration."
 
-        model_checkpoints_base_dir = os.path.join(config.CHECKPOINTS_DIR, model_name_from_config)
-        config.log(f"Looking for checkpoints in base directory: {model_checkpoints_base_dir}")
+        if model_name_from_config.lower().startswith("gemini"):
+            config.log(f"Model '{model_name_from_config}' is a Gemini model. Calling API for generation.")
 
-        domains = get_selected_domains(args, model_checkpoints_base_dir)
-        assert domains, f"No valid domains found in {model_checkpoints_base_dir}. Please check your checkpoints."
+            domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
+            assert domains != [], f"No valid domains found for Gemini model in the {config.PROCESSED_DATA_DIR} dir. Please check your configuration."
+        else:
+            model_checkpoints_base_dir = os.path.join(config.CHECKPOINTS_DIR, model_name_from_config)
+            config.log(f"Looking for checkpoints in base directory: {model_checkpoints_base_dir}")
+
+            domains = get_selected_domains(args, model_checkpoints_base_dir)
+            assert domains, f"No valid domains found in {model_checkpoints_base_dir}. Please check your checkpoints."
 
         for domain in domains:
             config.log(f"Starting generation for domain: {domain}")
             data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
             assert os.path.exists(data_file_path), f"Data file not found: {data_file_path}"
+            config.log(f"Using data: {data_file_path}.")
 
-            model_checkpoint_dir = os.path.join(model_checkpoints_base_dir, domain) 
-            assert os.path.exists(model_checkpoint_dir), f"Checkpoint directory not found: {model_checkpoint_dir}"
+            if model_name_from_config.lower().startswith("gemini"):
+                model_checkpoint_dir = None
+                config.log(f"Calling Gemini API for generation.")
+            else:
+                model_checkpoint_dir = os.path.join(model_checkpoints_base_dir, domain)
+                assert os.path.exists(model_checkpoint_dir), f"Checkpoint directory not found: {model_checkpoint_dir}"
+                config.log(f"Using model checkpoint for generation: {model_checkpoint_dir}.")
 
-            config.log(f"Using model checkpoint: {model_checkpoint_dir}")
-            config.log(f"Using data: {data_file_path}")
-
-            # Call the generation function from generate.py
             generate.generate_batch(
                 checkpoint_model_dir=model_checkpoint_dir,
                 data_file_path=data_file_path,
