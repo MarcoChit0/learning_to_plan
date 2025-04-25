@@ -102,7 +102,7 @@ def split_dataset(
     sorted_basic_tasks = sorted(basic_tasks)
    
     train_tasks, temp_tasks = train_test_split(
-        sorted_basic_tasks, test_size=800, random_state=random_seed
+        sorted_basic_tasks, test_size=1000, random_state=random_seed
     )
     validation_tasks, basic_test_tasks = train_test_split(
         temp_tasks, test_size=200, random_state=random_seed
