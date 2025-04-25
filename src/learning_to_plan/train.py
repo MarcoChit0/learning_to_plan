@@ -1,6 +1,6 @@
 import os
 import datetime
-from datasets import load_dataset
+from datasets import load_dataset, DatasetDict, Dataset # Import DatasetDict and Dataset
 from transformers import (
     TrainingArguments,
     Trainer,
@@ -23,70 +23,67 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
 
     os.makedirs(model_checkpoint_dir, exist_ok=True)
 
-    # --- Load and Prepare Dataset ---
-    config.log(f"Loading dataset from: {data_file_path}", level=config.logging.INFO)
-    dataset = load_dataset("json", data_files=data_file_path)
-
-    # Filter into train and validation sets based on the "type" field
-    train_dataset = dataset["train"].filter(lambda example: example["type"] == "train")
-    validation_dataset = dataset["train"].filter(lambda example: example["type"] == "validation")
-
-    # Check if datasets are empty after filtering
-    if len(train_dataset) == 0:
-        raise ValueError(f"Training dataset is empty after filtering for 'type' == 'train' in {data_file_path}")
-    if len(validation_dataset) == 0:
-        config.log(f"Validation dataset is empty after filtering for 'type' == 'validation' in {data_file_path}. Proceeding without validation.", level=config.logging.WARNING)
-        # Handle case with no validation data if necessary (e.g., set eval_dataset=None later)
-        tokenized_val = None
-    else:
-        tokenized_val = validation_dataset.map(
-            tokenize_fn,
-            batched=True,
-            remove_columns=validation_dataset.column_names # Remove all original columns
-        )
-
-    config.log(f"Train dataset size: {len(train_dataset)}", level=config.logging.INFO)
-    config.log(f"Validation dataset size: {len(validation_dataset) if validation_dataset else 0}", level=config.logging.INFO)
-
-
-    # --- Load Model and Tokenizer ---
+    # --- Load Model and Tokenizer (Load first to define tokenizer for the function below) ---
     model, tokenizer = config.load_model_and_tokenizer(checkpoint_dir=model_checkpoint_dir)
 
     assert tokenizer is not None, f"Tokenizer is None. Check the checkpoint directory: {model_checkpoint_dir}"
     assert model is not None, f"Model is None. Check the checkpoint directory: {model_checkpoint_dir}"
 
-    # --- Tokenize Datasets ---
+    # --- Define Tokenization Function (Define BEFORE using it) ---
     def tokenize_fn(batch):
         """Tokenizes prompts and plans, combining them for causal LM training."""
         # Combine prompt and plan. Ensure plan exists and is not None. Add EOS token.
+        # Handle potential None values gracefully
         full_texts = [
             (p if p else "") + (pl if pl else "") + tokenizer.eos_token
-            for p, pl in zip(batch["prompt"], batch["plan"])
+            for p, pl in zip(batch.get("prompt", []), batch.get("plan", [])) # Use .get for safety
         ]
-        return tokenizer(
+        tokenized = tokenizer(
             full_texts,
             max_length=config.get_config("max_seq_length", 2048), # Use default if not set
             truncation=True,
             # Padding handled by DataCollator
         )
+        return tokenized
 
-    config.log("Tokenizing datasets...", level=config.logging.INFO)
-    tokenized_train = train_dataset.map(
-        tokenize_fn,
-        batched=True,
-        remove_columns=train_dataset.column_names # Remove all original columns
+    # --- Load and Prepare Dataset ---
+    config.log(f"Loading dataset from: {data_file_path}", level=config.logging.INFO)
+    try:
+        # Load the full dataset first
+        full_dataset = load_dataset("json", data_files=data_file_path)["train"] # load_dataset returns a DatasetDict
+
+        # Filter into train and validation sets based on the "type" field
+        train_dataset = full_dataset.filter(lambda example: example.get("type") == "train")
+        validation_dataset = full_dataset.filter(lambda example: example.get("type") == "validation")
+
+        # Check if datasets are empty after filtering
+        if len(train_dataset) == 0:
+            raise ValueError(f"Training dataset is empty after filtering for 'type' == 'train' in {data_file_path}")
+
+        config.log(f"Train dataset size: {len(train_dataset)}", level=config.logging.INFO)
+        config.log(f"Validation dataset size: {len(validation_dataset)}", level=config.logging.INFO)
+
+        # Tokenize datasets
+        config.log("Tokenizing datasets...", level=config.logging.INFO)
+        tokenized_train = train_dataset.map(
+            tokenize_fn,
+            batched=True,
+            remove_columns=train_dataset.column_names # Remove all original columns
         )
 
-    # Tokenize validation set only if it exists
-    tokenized_val = None
-    if validation_dataset and len(validation_dataset) > 0:
-         tokenized_val = validation_dataset.map(
-             tokenize_fn,
-             batched=True,
-             remove_columns=validation_dataset.column_names # Remove all original columns
-         )
-    else:
-         config.log("Skipping validation dataset tokenization as it's empty or None.", level=config.logging.WARNING)
+        tokenized_val = None
+        if len(validation_dataset) > 0:
+            tokenized_val = validation_dataset.map(
+                tokenize_fn,
+                batched=True,
+                remove_columns=validation_dataset.column_names # Remove all original columns
+            )
+        else:
+            config.log("Validation dataset is empty. Proceeding without validation.", level=config.logging.WARNING)
+
+    except Exception as e:
+        config.log(f"Error loading or processing dataset from {data_file_path}: {e}", level=config.logging.ERROR, exc_info=True)
+        raise e
 
 
     # --- Setup Trainer ---
@@ -130,7 +127,7 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         train_dataset=tokenized_train,
         eval_dataset=tokenized_val, # Pass None if validation set is empty
         data_collator=collator,
-        # tokenizer=tokenizer, # Pass tokenizer for auto-padding/saving
+        tokenizer=tokenizer, # Pass tokenizer for auto-padding/saving and collator checks
     )
 
     # --- Start Training ---
@@ -140,13 +137,14 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
     else:
         config.log("No checkpoint found. Starting training from scratch.", level=config.logging.INFO)
 
-    config.log(f"Training started at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M%S')}", level=config.logging.INFO)
+    config.log(f"Training started at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", level=config.logging.INFO)
 
     try:
         trainer.train(resume_from_checkpoint=last_checkpoint)
         config.log(f"Training finished successfully. Saving final model to {model_checkpoint_dir}", level=config.logging.INFO)
         trainer.save_model(model_checkpoint_dir) # Explicitly save final model
-        tokenizer.save_pretrained(model_checkpoint_dir) # Save tokenizer too
+        # Tokenizer is often saved automatically by Trainer when passed, but saving explicitly doesn't hurt
+        tokenizer.save_pretrained(model_checkpoint_dir)
     except Exception as e:
         config.log(f"Training failed with error: {e}", level=config.logging.ERROR, exc_info=True)
         # Optionally re-raise the exception if you want the script to exit with an error code
@@ -157,4 +155,3 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
         config.log(f"Training procedure for {model_name} finished at {end_time_str}", level=config.logging.INFO)
         config.log(f"Total training time: {end_time - start_time}", level=config.logging.INFO)
-
