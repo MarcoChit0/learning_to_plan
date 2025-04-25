@@ -391,6 +391,7 @@ def load_model_and_tokenizer(checkpoint_dir: str) -> Tuple[PreTrainedModel, PreT
                 trust_remote_code=get_config("trust_remote_code", True),
                 token=HUGGINGFACE_TOKEN,
                 quantization_config=quantization_config,
+                device_map= "auto" if torch.cuda.is_available() else None,
             )
             from peft import LoraConfig, get_peft_model
             r = get_config("lora_r", 8)
@@ -420,6 +421,7 @@ def load_model_and_tokenizer(checkpoint_dir: str) -> Tuple[PreTrainedModel, PreT
                 trust_remote_code=get_config("trust_remote_code", True),
                 torch_dtype=torch_dtype,
                 token=HUGGINGFACE_TOKEN,
+                device_map= "auto" if torch.cuda.is_available() else None,
             )
             log(f"Model loaded successfully from {model_source}.", level=logging.INFO)
     except Exception as e:
