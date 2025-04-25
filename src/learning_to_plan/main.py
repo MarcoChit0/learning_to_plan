@@ -1,5 +1,6 @@
-# main.py
 import os
+os.environ["NCCL_P2P_DISABLE"] = "1"
+
 import argparse
 import asyncio
 import logging
@@ -12,6 +13,7 @@ from learning_to_plan import config # Import the refactored config
 from learning_to_plan import generate # Import the new generate module
 
 def parse_args():
+    """Parses command-line arguments."""
     parser = argparse.ArgumentParser(description="Learning to Plan")
     parser.add_argument(
         "-d", "--domain",
@@ -83,6 +85,7 @@ def parse_args():
     )
     # Custom type function to accept positive integers or specific strings
     def parse_number_of_problems_per_domain_arg(arg):
+        """Validates the number_of_problems_per_domain argument."""
         if arg in ["all", "long", "basic"]:
             return arg
         try:
@@ -116,6 +119,7 @@ def parse_args():
     return parser.parse_args()
 
 def get_selected_domains(args, base_dir):
+    """Determines the list of domains to process based on args and available directories."""
     if not args.domain:
         # Use config's logger/printer
         config.log("Please specify a domain with --domain <domain_name> or 'all'.", level=logging.ERROR)
@@ -153,6 +157,7 @@ def get_selected_domains(args, base_dir):
 if __name__ == "__main__":
     args = parse_args()
 
+    # Initialize configuration after setting environment variables
     config.initialize(args, config_path=args.config_path)
 
     # --- Action Blocks ---
@@ -192,7 +197,7 @@ if __name__ == "__main__":
         if model_name_from_config and model_name_from_config.lower().startswith("gemini"):
             m = f"Model '{model_name_from_config}' is a Gemini model. Training is not supported for Gemini."
             config.log(m, level=logging.ERROR)
-            raise ValueError(m) 
+            raise ValueError(m)
 
         domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
         for domain in domains:
@@ -216,13 +221,13 @@ if __name__ == "__main__":
 
         if model_name_from_config.lower().startswith("gemini"):
             config.log(f"Model '{model_name_from_config}' is a Gemini model. Calling API for generation.")
-
+            # For Gemini, we look for processed data, not checkpoints
             domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
-            assert domains != [], f"No valid domains found for Gemini model in the {config.PROCESSED_DATA_DIR} dir. Please check your configuration."
+            assert domains, f"No valid domains found for Gemini model in the {config.PROCESSED_DATA_DIR} dir. Please check your configuration."
         else:
+            # For HF models, look for checkpoint directories
             model_checkpoints_base_dir = os.path.join(config.CHECKPOINTS_DIR, model_name_from_config)
             config.log(f"Looking for checkpoints in base directory: {model_checkpoints_base_dir}")
-
             domains = get_selected_domains(args, model_checkpoints_base_dir)
             assert domains, f"No valid domains found in {model_checkpoints_base_dir}. Please check your checkpoints."
 
@@ -233,15 +238,16 @@ if __name__ == "__main__":
             config.log(f"Using data: {data_file_path}.")
 
             if model_name_from_config.lower().startswith("gemini"):
-                model_checkpoint_dir = None
+                model_checkpoint_dir = None # No checkpoint needed for Gemini
                 config.log(f"Calling Gemini API for generation.")
             else:
-                model_checkpoint_dir = os.path.join(model_checkpoints_base_dir, domain)
+                # Construct the checkpoint path for HF models
+                model_checkpoint_dir = os.path.join(config.CHECKPOINTS_DIR, model_name_from_config, domain)
                 assert os.path.exists(model_checkpoint_dir), f"Checkpoint directory not found: {model_checkpoint_dir}"
                 config.log(f"Using model checkpoint for generation: {model_checkpoint_dir}.")
 
             generate.generate_batch(
-                checkpoint_model_dir=model_checkpoint_dir,
+                checkpoint_model_dir=model_checkpoint_dir, # Will be None for Gemini
                 data_file_path=data_file_path,
                 number_of_problems_per_domain=args.number_of_problems_per_domain
             )

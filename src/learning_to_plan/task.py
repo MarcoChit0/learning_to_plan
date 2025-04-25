@@ -9,6 +9,24 @@ from enum import Enum
 instance_pattern = re.compile(r"instance-(\d+)\.pddl$")
 lock = threading.Lock()
 
+class NaturalLanguagePlan:
+    def __init__(self, plan:str, is_valid:bool=False, validated:bool=False):
+        self._plan = plan
+        self._is_valid = is_valid
+        self._validated = validated
+    
+    def to_json(self):
+        return {
+            "plan": self._plan,
+            "is_valid": self._is_valid,
+            "validated": self._validated
+        }
+
+    def from_json(self, json_obj):
+        self._plan = json_obj.get("plan", None)
+        self._is_valid = json_obj.get("is_valid", False)
+        self._validated = json_obj.get("validated", False)
+
 class Task(abc.ABC):
     class TaskType(Enum):
         TRAIN = "train"
@@ -29,7 +47,7 @@ class Task(abc.ABC):
         self._error_message : Optional[str] = None
         self._plan : Optional[str] = None
         self._type : Optional[Task.TaskType] = None # training, validation, test | None
-        self._model_generated_plans : Optional[dict[str, list[str]]] = None # map model name to list of generated plans
+        self._model_generated_plans : Optional[dict[str, list[NaturalLanguagePlan]]] = None # Updated type hint
 
     @abc.abstractmethod
     def convert_instance_into_natural_language(self, plan) -> str:
@@ -48,7 +66,7 @@ class Task(abc.ABC):
             return prompt
         else:
             return prompt + "\n## Plan.\n\n"
-    
+
     @property
     def _id(self):
         return f"{self._domain_file_path} - {self._instance_file_path}"
@@ -56,33 +74,42 @@ class Task(abc.ABC):
     def add_generated_plans(self, model_name: str, plans: list[str], overwrite: bool = True):
         if self._model_generated_plans is None:
             self._model_generated_plans = {}
-        if model_name not in self._model_generated_plans:
-            self._model_generated_plans[model_name] = []
-        if overwrite:
-            self._model_generated_plans[model_name] = plans
-            config.log(f"Overwriting plans for model {model_name} in task {self._id}.")
-        else:
-            self._model_generated_plans[model_name].extend(plans)
-            config.log(f"Added {len(plans)} plans for model {model_name} in task {self._id}.")
+        if model_name not in self._model_generated_plans or overwrite:
+            self._model_generated_plans[model_name] = [] # Initialize/clear the list for the model
+            if overwrite:
+                config.log(f"Overwriting plans for model {model_name} in task {self._id}.")
+
+        # Create NaturalLanguagePlan objects for the new plans
+        new_nl_plans = [NaturalLanguagePlan(plan) for plan in plans]
+        self._model_generated_plans[model_name].extend(new_nl_plans)
+        config.log(f"Added {len(plans)} plans for model {model_name} in task {self._id}.")
+
 
     def to_json(self):
+        # Serialize model_generated_plans
+        serialized_plans = None
+        if self._model_generated_plans:
+            serialized_plans = {}
+            for model_name, nl_plans_list in self._model_generated_plans.items():
+                serialized_plans[model_name] = [nl_plan.to_json() for nl_plan in nl_plans_list]
+
         data = {
             "domain_file_path": self._domain_file_path,
             "instance_file_path": self._instance_file_path,
             "instance": self._instance,
-            "status": self._status.value if self._status else None, # Convert enum to string for JSON
+            "status": self._status.value if self._status else None,
             "plan": self._plan,
-            "error_message": self._error_message, # Corrected key name
+            "error_message": self._error_message,
             "domain": self._domain,
             "is_longer_plan": self._is_longer_plan,
-            "type": self._type.value if self._type else None, # Convert enum to string for JSON
-            "model_generated_plans": self._model_generated_plans # This is now dict[str, list[str]] or None
+            "type": self._type.value if self._type else None,
+            "model_generated_plans": serialized_plans # Use the serialized version
         }
         try:
              data['prompt'] = self.add_separator(self.build_prompt())
         except (NotImplementedError, AssertionError, Exception) as e:
             data['prompt'] = None
-            config.log(f"Could not generate prompt for task {self._id}: {e}", level=config.logging.WARNING) # Optional: log the error
+            config.log(f"Could not generate prompt for task {self._id}: {e}", level=config.logging.WARNING)
 
         return json.dumps(data, ensure_ascii=False)
 
@@ -102,8 +129,6 @@ class Task(abc.ABC):
 
 
     def __str__(self):
-        # size = "longer" if self._is_longer_plan else "basic"
-        # return f"{self._domain} - {size} - {self._instance} : {self._status}, {self._type}"
         return f"{self._id} : {self._status}, {self._type}"
 
     def __hash__(self):
@@ -115,25 +140,22 @@ class Task(abc.ABC):
         return self._instance_file_path == other._instance_file_path and self._domain_file_path == other._domain_file_path
 
     def from_json(self, json_obj):
+        # Deserialize enums
         for field_name, enum_type in [("status", Task.TaskStatus), ("type", Task.TaskType)]:
             json_value = json_obj.get(field_name)
             if json_value is not None:
-                # Ensure the value is a string before stripping
                 if not isinstance(json_value, str):
                      msg = f"Expected string for {field_name}, but got {type(json_value)}"
                      config.log(msg, level=config.logging.ERROR)
-                     # Depending on desired behavior, could raise error or skip
-                     continue # Skip this field if not a string
-
+                     continue
                 try:
-                    # Strip whitespace and convert to enum
                     setattr(self, f"_{field_name}", enum_type(json_value.strip()))
-
                 except (ValueError, KeyError):
-                    msg = f"Invalid {field_name} value in JSON: '{json_value}'" # Added quotes to show value
+                    msg = f"Invalid {field_name} value in JSON: '{json_value}'"
                     config.log(msg, level=config.logging.ERROR)
                     raise ValueError(msg)
 
+        # Deserialize simple string fields
         for field_name in ["plan", "error_message"]:
             value = json_obj.get(field_name)
             if value is not None:
@@ -141,18 +163,28 @@ class Task(abc.ABC):
                     raise TypeError(f"{field_name} must be a string or null, but got {type(value)}")
                  setattr(self, f"_{field_name}", value)
 
+        # Deserialize model_generated_plans
+        plans_map_json = json_obj.get("model_generated_plans")
+        if plans_map_json is not None:
+            if not isinstance(plans_map_json, dict):
+                raise TypeError(f"model_generated_plans must be a dictionary or null, but got {type(plans_map_json)}")
 
-        plans_map = json_obj.get("model_generated_plans")
-        if plans_map is not None:
-            if not isinstance(plans_map, dict):
-                raise TypeError(f"model_generated_plans must be a dictionary or null, but got {type(plans_map)}")
-            # Validate the structure of the dictionary
-            for model_name, plans_list in plans_map.items():
+            self._model_generated_plans = {}
+            for model_name, plans_list_json in plans_map_json.items():
                 if not isinstance(model_name, str):
                     raise TypeError(f"Keys in model_generated_plans must be strings, but got {type(model_name)}")
-                if not isinstance(plans_list, list) or not all(isinstance(plan, str) for plan in plans_list):
-                    raise TypeError(f"Values in model_generated_plans must be lists of strings, but got {type(plans_list)} for key '{model_name}'")
-            self._model_generated_plans = plans_map
+                if not isinstance(plans_list_json, list):
+                     raise TypeError(f"Values in model_generated_plans must be lists, but got {type(plans_list_json)} for key '{model_name}'")
+
+                nl_plans_list = []
+                for plan_json in plans_list_json:
+                    if not isinstance(plan_json, dict):
+                        raise TypeError(f"Elements in the plan list for model '{model_name}' must be dictionaries, but got {type(plan_json)}")
+                    nl_plan = NaturalLanguagePlan(plan="") # Create an empty instance
+                    nl_plan.from_json(plan_json) # Populate from JSON dict
+                    nl_plans_list.append(nl_plan)
+
+                self._model_generated_plans[model_name] = nl_plans_list
 
 
     def update_status(self, response):
@@ -256,37 +288,53 @@ class BlocksworldTask(Task):
     
     def convert_plan_into_pddl(self, plan:str) -> str:
         """
-            plan: str - actions in natural language, each action in a new line
+        Converts a natural language plan into PDDL format.
+
+        Args:
+            plan: A string containing actions in natural language, separated by newlines or semicolons.
+
+        Returns:
+            A string representing the plan in PDDL format.
+
+        Raises:
+            ValueError: If an unknown or malformed action is encountered.
         """
-        nl_actions = plan.split("\n")
-        pddl_plan = ""
-        for nl_a in nl_actions:
-            nl_a.replace(";", "").strip()
-            if nl_a.startswith("pick up"):
-                re_action = re.search(r"pick up (\w+)", nl_a)
-            elif nl_a.startswith("put down"):
-                re_action = re.search(r"put down (\w+)", nl_a)
-            elif nl_a.startswith("stack"):
-                re_action = re.search(r"stack (\w+) on (\w+)", nl_a)
-            elif nl_a.startswith("unstack"):
-                re_action = re.search(r"unstack (\w+) from (\w+)", nl_a)
-            else:
-                raise ValueError(f"Unknown action: {nl_a}")
-            
-            # map the action to the PDDL format
-            
-            if nl_a.startswith("pick up"):
-                action = f"(pick-up {re_action.group(1)})"
-            elif nl_a.startswith("put down"):
-                action = f"(put-down {re_action.group(1)})"
-            elif nl_a.startswith("stack"):
-                action = f"(stack {re_action.group(1)} {re_action.group(2)})"
-            elif nl_a.startswith("unstack"):
-                action = f"(unstack {re_action.group(1)} {re_action.group(2)})"
-            else:
-                raise ValueError(f"Unknown action: {nl_a}")
+        pddl_actions = []
+        # Normalize line endings and split, handling potential semicolons
+        lines = plan.replace(";", "\n").strip().split("\n")
 
+        for line in lines:
+            nl_a = line.strip()
+            if not nl_a: # Skip empty lines
+                continue
 
+            action_found = False
+            if nl_a.startswith("unstack"):
+                match = re.search(r"unstack\s+(\w+)\s+from\s+(\w+)", nl_a)
+                if match:
+                    pddl_actions.append(f"(unstack {match.group(1)} {match.group(2)})")
+                    action_found = True
+            elif nl_a.startswith("pick up"):
+                match = re.search(r"pick up\s+(\w+)", nl_a)
+                if match:
+                    pddl_actions.append(f"(pick-up {match.group(1)})")
+                    action_found = True
+            elif nl_a.startswith("stack"):
+                match = re.search(r"stack\s+(\w+)\s+on\s+(\w+)", nl_a)
+                if match:
+                    pddl_actions.append(f"(stack {match.group(1)} {match.group(2)})")
+                    action_found = True
+            elif nl_a.startswith("put down"):
+                match = re.search(r"put down\s+(\w+)", nl_a)
+                if match:
+                    pddl_actions.append(f"(put-down {match.group(1)})")
+                    action_found = True
+
+            if not action_found:
+                # Raise error only if the line was not empty and didn't match any known pattern
+                raise ValueError(f"Unknown or malformed action: '{nl_a}'")
+
+        return "\n".join(pddl_actions)
 
     def build_prompt(self, **kwargs):
         problem_description = self.convert_instance_into_natural_language(self.read_instance())
