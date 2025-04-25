@@ -104,17 +104,15 @@ def generate_single_gemini(
     """
     config.log(f"Generating with Gemini model: {model_name}", level=logging.INFO, do_print=False)
 
-    if not google_api_key:
+    if not config.GOOGLE_API_KEY:
         config.log("GOOGLE_API_KEY is not set. Cannot use Gemini API.", level=logging.ERROR)
         return []
 
     try:
         # Use configuration from config.py, with defaults if not set
         generation_config = {
-            "temperature": config.get_config("temperature", 0.0),
+            "temperature": config.get_config("temperature", 0.7),
             "top_p": config.get_config("top_p", 0.1),
-            # Gemini typically returns text/plain by default, but can specify
-            # "response_mime_type": "text/plain",
         }
 
         # Use the specified model name
