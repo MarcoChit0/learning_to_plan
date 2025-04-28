@@ -26,6 +26,7 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
     # --- Load Model and Tokenizer ---
     config.log(f"Loading model and tokenizer (checkpoint dir: {model_checkpoint_dir})...", level=config.logging.INFO)
     try:
+        # Pass checkpoint_dir to potentially load PEFT adapter later if resuming
         model, tokenizer = config.load_model_and_tokenizer(checkpoint_dir=model_checkpoint_dir)
         assert tokenizer is not None, "Tokenizer loading failed."
         assert model is not None, "Model loading failed."
@@ -46,7 +47,7 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         df_val = df[df['type'] == 'validation']
 
         del df # Free up memory
-        
+
         eos_token = tokenizer.eos_token if tokenizer.eos_token else ""
         df_train['text'] = df_train['prompt'] + eos_token + df_train['plan']
         df_val['text'] = df_val['prompt'] + eos_token + df_val['plan']
@@ -57,10 +58,10 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         # Convert DataFrame to Dataset
         train_dataset = datasets.Dataset.from_pandas(df_train, preserve_index=False)
         validation_dataset = datasets.Dataset.from_pandas(df_val, preserve_index=False)
-        
+
         # Free up memory
-        del df_train, df_val 
-        
+        del df_train, df_val
+
         # Create DatasetDict
         dataset = datasets.DatasetDict({
             'train': train_dataset,
@@ -117,37 +118,50 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
     config.log("Data collator initialized.", level=config.logging.INFO)
 
     # --- Training Arguments ---
+    # Determine the correct optimizer based on quantization
+    load_in_4bit = config.get_config("load_in_4bit", False)
+    load_in_8bit = config.get_config("load_in_8bit", False)
+    if load_in_8bit:
+        optimizer_name = "adamw_8bit" # Use 8-bit optimizer
+    elif load_in_4bit:
+        optimizer_name = "paged_adamw_8bit" # Recommended for 4-bit QLoRA
+    else:
+        optimizer_name = config.get_config("optimizer", "adamw_torch") # Default non-quantized
+    config.log(f"Using optimizer: {optimizer_name}", level=config.logging.INFO)
+
+
     training_args = TrainingArguments(
         output_dir=model_checkpoint_dir,
         run_name=f"{config.get_config('model_name')}-{os.path.basename(model_checkpoint_dir)}-{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}",
-        report_to=config.get_config("report_to", "none"), # Default to none
-        num_train_epochs=config.get_config("num_train_epochs", 3), # Default epochs
-        per_device_train_batch_size=config.get_config("batch_size", 1), # Default batch size
-        per_device_eval_batch_size=config.get_config("eval_batch_size", 1), # Default eval batch size
-        gradient_accumulation_steps=config.get_config("gradient_accumulation_steps", 1), # Default grad accum
+        report_to=config.get_config("report_to", "none"),
+        num_train_epochs=config.get_config("num_train_epochs", 3),
+        per_device_train_batch_size=config.get_config("batch_size", 1),
+        per_device_eval_batch_size=config.get_config("eval_batch_size", 1),
+        gradient_accumulation_steps=config.get_config("gradient_accumulation_steps", 1),
         # --- Precision ---
-        fp16=not config.get_config("bf16", False) and torch.cuda.is_available(), # Use fp16 if not bf16 and cuda available
-        bf16=config.get_config("bf16", False) and torch.cuda.is_available() and torch.cuda.is_bf16_supported(), # Use bf16 if configured and supported
+        fp16=not config.get_config("bf16", False) and torch.cuda.is_available() and not (load_in_4bit or load_in_8bit), 
+        bf16=config.get_config("bf16", False) and torch.cuda.is_available() and torch.cuda.is_bf16_supported() and not (load_in_4bit or load_in_8bit)
         # --- Optimizer ---
-        learning_rate=config.get_config("learning_rate", 5e-5), # Default LR
-        lr_scheduler_type=config.get_config("lr_scheduler_type", "cosine"), # Default scheduler
-        weight_decay=config.get_config("weight_decay", 0.01), # Default weight decay
-        optim=config.get_config("optimizer", "adamw_torch"), # Default optimizer (adamw_torch is often good)
-         # Use adamw_bnb_8bit if 8bit loading is enabled
-        # optim="adamw_bnb_8bit" if config.get_config("load_in_8bit") else config.get_config("optimizer", "adamw_torch"),
-        # --- Saving & Logging ---
+        learning_rate=config.get_config("learning_rate", 5e-5),
+        lr_scheduler_type=config.get_config("lr_scheduler_type", "cosine"),
+        weight_decay=config.get_config("weight_decay", 0.01),
+        optim=optimizer_name,
+         # --- Saving & Logging ---
         save_strategy=config.get_config("save_strategy", "steps"),
-        save_steps=config.get_config("save_steps", 500), # Default save steps
-        save_total_limit=config.get_config("save_total_limit", 1), # Default save limit
+        save_steps=config.get_config("save_steps", 500),
+        save_total_limit=config.get_config("save_total_limit", 1),
         logging_strategy=config.get_config("logging_strategy", "steps"),
-        logging_steps=config.get_config("logging_steps", 100), # Default log steps
+        logging_steps=config.get_config("logging_steps", 100),
         # --- Evaluation ---
-        eval_strategy=config.get_config("eval_strategy", "steps"), # Evaluate periodically by steps
-        eval_steps=config.get_config("eval_steps", 500), # Default eval steps (match save_steps?)
+        eval_strategy=config.get_config("eval_strategy", "steps"),
+        eval_steps=config.get_config("eval_steps", 500),
         # --- Other ---
-        gradient_checkpointing=config.get_config("gradient_checkpointing", True), # Enable gradient checkpointing to save memory
-        # deepspeed=config.get_config("deepspeed_config", None), # Add deepspeed if configured
+        gradient_checkpointing=config.get_config("gradient_checkpointing", True), 
     )
+    # Required for gradient checkpointing with PEFT+quantization
+    if load_in_4bit or load_in_8bit:
+        training_args.gradient_checkpointing_kwargs = {"use_reentrant": False}
+
     config.log(f"Training Arguments: {training_args.to_dict()}", level=config.logging.DEBUG, do_print=False)
 
 
@@ -186,8 +200,9 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
 
     # --- Save Final Model ---
     try:
+        # Save the PEFT adapter (and potentially the base model if configured)
         trainer.save_model(model_checkpoint_dir)
-        config.log(f"Final model saved to {model_checkpoint_dir}", level=config.logging.INFO)
+        config.log(f"Final model/adapter saved to {model_checkpoint_dir}", level=config.logging.INFO)
         # trainer.save_state() # Save final trainer state
         # config.log(f"Final trainer state saved to {model_checkpoint_dir}", level=config.logging.INFO)
     except Exception as e:
@@ -201,6 +216,7 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
 
     # --- Clean up GPU memory ---
     del model
+    del tokenizer
     del trainer
     if torch.cuda.is_available():
         torch.cuda.empty_cache()

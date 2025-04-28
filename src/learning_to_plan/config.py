@@ -16,7 +16,8 @@ from transformers import (
     PreTrainedTokenizer,
 )
 from transformers.trainer_utils import get_last_checkpoint
-from peft import LoraConfig, get_peft_model # Import PEFT components
+# Import PEFT components
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
 # --- Global Store for Configuration ---
 _CONFIG_STORE: Dict[str, Any] = {} # Holds model/training/generation parameters
@@ -350,12 +351,26 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
     load_in_4bit = get_config("load_in_4bit", False)
     load_in_8bit = get_config("load_in_8bit", False)
     quantization_config = None
+    # Use float32 compute dtype for 4-bit as recommended for stability
+    # For 8-bit, try float16 for P100 compatibility, but float32 is safer default
+    bnb_4bit_compute_dtype = torch.float32
+    # Note: P100 might still struggle with 8-bit. float32 might be necessary if float16 fails.
+    bnb_8bit_compute_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
     if load_in_4bit:
         log("Applying 4-bit quantization.", level=logging.INFO)
-        quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4", # Use nf4 as it's often more robust
+            bnb_4bit_use_double_quant=False, # Double quant often not needed for nf4
+            bnb_4bit_compute_dtype=bnb_4bit_compute_dtype
+        )
     elif load_in_8bit:
         log("Applying 8-bit quantization.", level=logging.INFO)
-        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+        quantization_config = BitsAndBytesConfig(
+            load_in_8bit=True,
+            # llm_int8_compute_dtype=bnb_8bit_compute_dtype # This param doesn't exist, compute happens in fp16/32 based on input
+        )
     else:
         log("Loading model without quantization.", level=logging.INFO)
 
@@ -380,9 +395,10 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
     # --- Load Model ---
     model = None
     try:
-        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
         log(f"Loading model from: {model_source}", level=logging.INFO)
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        torch_dtype = torch.bfloat16 if get_config("bf16", False) and torch.cuda.is_bf16_supported() else torch.float16
+        log(f"Target torch_dtype (for non-quantized load or compute): {torch_dtype}", level=logging.INFO)
+
         if quantization_config:
             log(f"Loading model with quantization: {quantization_config}", level=logging.INFO)
             model = AutoModelForCausalLM.from_pretrained(
@@ -394,8 +410,13 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
             )
             log("Model loaded with quantization and device_map='auto'.", level=logging.INFO)
 
+            # --- Prepare for k-bit training (IMPORTANT) ---
+            log("Preparing model for k-bit training (casting layernorms/head to float32)...", level=logging.INFO)
+            model = prepare_model_for_kbit_training(model)
+            log("Model prepared for k-bit training.", level=logging.INFO)
+
+
             # --- Apply LoRA for Quantized Models ---
-            # LoRA is typically required to make quantized models trainable
             log("Applying LoRA adapter to quantized model...", level=logging.INFO)
             r = get_config("lora_r", 8)
             alpha = get_config("lora_alpha", r * 4) # Default alpha based on r
@@ -418,20 +439,13 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
         else:
             # --- Load Non-Quantized Model ---
             log("Loading model without quantization.", level=logging.INFO)
-            torch_dtype = torch.bfloat16 if get_config("bf16", False) else torch.float16
-            log(f"Using torch_dtype: {torch_dtype}", level=logging.INFO)
-
             model = AutoModelForCausalLM.from_pretrained(
                 model_source,
                 trust_remote_code=get_config("trust_remote_code", True),
-                torch_dtype=torch_dtype,
+                torch_dtype=torch_dtype, # Use determined dtype
                 token=HUGGINGFACE_TOKEN,
-                # Do NOT use device_map here, move manually
+                device_map="auto" # Use device_map for non-quantized too
             )
-            log("Model loaded, moving to target device...", level=logging.INFO)
-            model.to(device) # Explicitly move the model to the target device
-            log(f"Model moved to {device}.", level=logging.INFO)
-
         log(f"Model loaded successfully from {model_source}.", level=logging.INFO)
 
     except FileNotFoundError as e:
@@ -444,4 +458,3 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
         raise ValueError(m) from e # Re-raise as ValueError for consistent handling upstream
 
     return model, tokenizer
-
