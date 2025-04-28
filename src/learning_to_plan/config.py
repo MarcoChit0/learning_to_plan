@@ -382,8 +382,6 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
     try:
         os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
         log(f"Loading model from: {model_source}", level=logging.INFO)
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        log(f"Target device for model: {device}", level=logging.INFO)
 
         if quantization_config:
             log(f"Loading model with quantization: {quantization_config}", level=logging.INFO)
@@ -392,7 +390,7 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
                 trust_remote_code=get_config("trust_remote_code", True),
                 token=HUGGINGFACE_TOKEN,
                 quantization_config=quantization_config,
-                device_map="auto", # Use device_map for quantized models
+                device_map="auto",
             )
             log("Model loaded with quantization and device_map='auto'.", level=logging.INFO)
 
@@ -420,13 +418,7 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
         else:
             # --- Load Non-Quantized Model ---
             log("Loading model without quantization.", level=logging.INFO)
-            # Prefer FP16 for P100 compatibility if BF16 is not explicitly required/supported well
-            use_bf16 = get_config("bf16", False)
-            if use_bf16 and torch.cuda.is_available() and not torch.cuda.is_bf16_supported():
-                 log("BF16 requested but not supported by CUDA device. Falling back to FP16.", level=logging.WARNING)
-                 use_bf16 = False
-
-            torch_dtype = torch.bfloat16 if use_bf16 else torch.float16
+            torch_dtype = torch.bfloat16 if get_config("bf16", False) else torch.float16
             log(f"Using torch_dtype: {torch_dtype}", level=logging.INFO)
 
             model = AutoModelForCausalLM.from_pretrained(
@@ -452,3 +444,4 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
         raise ValueError(m) from e # Re-raise as ValueError for consistent handling upstream
 
     return model, tokenizer
+

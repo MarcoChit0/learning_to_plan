@@ -82,6 +82,21 @@ class Task(abc.ABC):
             return prompt
         else:
             return prompt + "\n## Plan.\n\n"
+        
+    def get_prompt(self, tokenizer_eos: str = "", with_plan: bool = True) -> str:
+        try:
+            prompt = self.build_prompt()
+            prompt = self.add_separator(prompt)
+            prompt += tokenizer_eos
+            if with_plan and self._plan:
+                prompt += self._plan
+            return prompt
+        except NotImplementedError as e:
+            raise NotImplementedError(f"Method not implemented: {e}")
+        except Exception as e:
+            raise Exception(f"An error occurred while building the prompt: {e}")
+        
+
 
     @property
     def _id(self):
@@ -467,6 +482,7 @@ def save_tasks_to_jsonl(tasks:set[Task], jsonl_file_path:str):
                 raise e
 
 from typing import Union, Set
+from datasets import Dataset
 def get_tasks_from_domain_directory(domain: str, number_of_problems_per_domain: Union[str, int] = "all") -> Set[Task]:
     """
     Get tasks from a domain directory.
@@ -513,3 +529,33 @@ def get_tasks_from_domain_directory(domain: str, number_of_problems_per_domain: 
 
     return set(tasks)
  
+
+def convert_tasks_into_dataset(tasks:set[Task], tokenizer_eos:str="", with_plan:bool=True) -> Dataset:
+    """
+    Converts a set of Task objects into a datasets.Dataset object.
+
+    Args:
+        tasks: A set of Task objects.
+        tokenizer_eos: End-of-sequence token to append to the prompt.
+        with_plan: Whether to include the plan in the prompt.
+
+    Returns:
+        A datasets.Dataset object containing the prompts.
+    """
+    dataset_list = []
+    for t in tasks:
+        try:
+            p = t.get_prompt(tokenizer_eos=tokenizer_eos, with_plan=with_plan)
+            if p is not None:
+                dataset_list.append({
+                    "task": p,
+                })
+            else:
+                 config.log(f"Skipping task {t._id} due to None prompt.", level=config.logging.WARNING)
+        except Exception as e:
+            m = f"Error converting task {t._id} into dataset format: {e}"
+            config.log(m, level=config.logging.ERROR)
+            # Depending on requirements, you might want to skip the task or raise the exception
+            # raise e
+    # Create a Dataset object from the list of dictionaries
+    return Dataset.from_list(dataset_list)

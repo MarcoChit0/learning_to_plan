@@ -1,6 +1,7 @@
 import os
 import datetime
-from datasets import load_dataset, DatasetDict # Import DatasetDict
+from learning_to_plan import task
+from datasets import DatasetDict
 from transformers import (
     TrainingArguments,
     Trainer,
@@ -22,26 +23,6 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
 
     os.makedirs(model_checkpoint_dir, exist_ok=True)
 
-    # --- Load and Prepare Dataset ---
-    config.log(f"Loading dataset from: {data_file_path}", level=config.logging.INFO)
-    try:
-        # Load the dataset from the single JSON file
-        full_dataset = load_dataset("json", data_files={"train": data_file_path})["train"] # Load into 'train' split initially
-
-        # Filter into train and validation sets based on the "type" field
-        train_dataset = full_dataset.filter(lambda example: example["type"] == "train")
-        validation_dataset = full_dataset.filter(lambda example: example["type"] == "validation")
-
-        # Combine into a DatasetDict
-        dataset = DatasetDict({
-            "train": train_dataset,
-            "validation": validation_dataset
-        })
-        config.log(f"Dataset loaded and split: {len(dataset['train'])} train, {len(dataset['validation'])} validation.", level=config.logging.INFO)
-
-    except Exception as e:
-        config.log(f"Error loading or splitting dataset from {data_file_path}: {e}", level=config.logging.ERROR, exc_info=True)
-        raise e
 
     if len(dataset["train"]) == 0 or len(dataset["validation"]) == 0:
         raise ValueError("Train/validation dataset split resulted in zero examples.")
@@ -57,41 +38,46 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         config.log(f"Fatal error loading model/tokenizer: {e}", level=config.logging.ERROR, exc_info=True)
         raise e # Stop execution if model/tokenizer fails
 
-    # --- Tokenization ---
-    def tokenize_fn(batch):
-        # Concatenate prompt and plan for language modeling objective
-        # Ensure both prompt and plan exist and are strings
-        texts_to_tokenize = []
-        for p, pl in zip(batch.get("prompt", []), batch.get("plan", [])):
-             if isinstance(p, str) and isinstance(pl, str):
-                 # Add EOS token between prompt and plan for better separation during training?
-                 # Or just concatenate directly depending on model's pre-training.
-                 # Adding EOS is often beneficial.
-                 texts_to_tokenize.append(p + tokenizer.eos_token + pl)
-             else:
-                 # Handle cases where prompt or plan might be missing or not strings
-                 config.log(f"Skipping example due to missing/invalid prompt or plan.", level=config.logging.WARNING)
-                 texts_to_tokenize.append("") # Add empty string to maintain batch structure, or handle differently
-
-        tokenized = tokenizer(
-            texts_to_tokenize,
-            max_length=config.get_config("max_seq_length"),
-            truncation=True,
-            # CHANGE: Remove padding="max_length". Let DataCollator handle dynamic padding.
-            padding=False, # IMPORTANT: Disable padding here
-        )
-        return tokenized
-
-    config.log("Tokenizing datasets...", level=config.logging.INFO)
+    # --- Load and Prepare Dataset ---
+    config.log(f"Loading dataset from: {data_file_path}", level=config.logging.INFO)
     try:
-        # Define columns to remove *after* tokenization
-        columns_to_remove = ["prompt", "plan", "domain_file_path", "instance_file_path", "instance", "status", "error_message", "domain", "is_longer_plan", "type", "model_generated_plans"]
-        # Filter out columns that might not exist in all examples before removing
-        existing_columns_train = [col for col in columns_to_remove if col in dataset["train"].column_names]
-        existing_columns_val = [col for col in columns_to_remove if col in dataset["validation"].column_names]
+        assert os.path.exists(data_file_path), f"Data file {data_file_path} does not exist."
+        tasks = config.load_tasks(data_file_path)
+        assert len(tasks) > 0, f"Dataset {data_file_path} is empty."
 
-        tokenized_train = dataset["train"].map(tokenize_fn, batched=True, remove_columns=existing_columns_train)
-        tokenized_val = dataset["validation"].map(tokenize_fn, batched=True, remove_columns=existing_columns_val)
+        training_tasks = {t for t in tasks if t.type == config.TaskType.TRAIN}
+        assert len(training_tasks) > 0, f"No training tasks found in {data_file_path}."
+        validation_tasks = {t for t in tasks if t.type == config.TaskType.VALIDATION}
+        assert len(validation_tasks) > 0, f"No validation tasks found in {data_file_path}."
+        config.log(f"Loaded {len(tasks)} tasks from {data_file_path}.", level=config.logging.INFO)
+        config.log(f"Found {len(training_tasks)} training tasks and {len(validation_tasks)} validation tasks.", level=config.logging.INFO)
+        
+        # Convert tasks to DatasetDict format
+        train_dataset = task.convert_tasks_into_dataset(training_tasks, tokenizer_eos=tokenizer.eos_token, with_plan=True)
+        validation_dataset = task.convert_tasks_into_dataset(validation_tasks, tokenizer_eos=tokenizer.eos_token, with_plan=True)
+        dataset = DatasetDict({
+            "train": train_dataset,
+            "validation": validation_dataset
+        })
+        config.log(f"Dataset loaded and converted successfully.", level=config.logging.INFO)
+
+    except Exception as e:
+        config.log(f"Error loading or splitting dataset from {data_file_path}: {e}", level=config.logging.ERROR, exc_info=True)
+        raise e
+
+    # --- Tokenization ---
+    config.log("Starting tokenization...", level=config.logging.INFO)
+    def tokenize_fn(examples):
+        return tokenizer(
+            examples["task"],
+            max_length=config.get_config("max_length", 512), # Default max length
+            truncation=True
+        )
+
+    try:
+        config.log("Tokenizing datasets...", level=config.logging.INFO)
+        tokenized_train = dataset["train"].map(tokenize_fn, batched=True, remove_columns=dataset["train"].column_names)
+        tokenized_val = dataset["validation"].map(tokenize_fn, batched=True, remove_columns=dataset["validation"].column_names)
         config.log("Tokenization complete.", level=config.logging.INFO)
     except Exception as e:
         config.log(f"Error during tokenization: {e}", level=config.logging.ERROR, exc_info=True)
@@ -119,9 +105,9 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         learning_rate=config.get_config("learning_rate", 5e-5), # Default LR
         lr_scheduler_type=config.get_config("lr_scheduler_type", "cosine"), # Default scheduler
         weight_decay=config.get_config("weight_decay", 0.01), # Default weight decay
-        optim=config.get_config("optimizer", "adamw_torch"), # Default optimizer (adamw_torch is often good)
+        # optim=config.get_config("optimizer", "adamw_torch"), # Default optimizer (adamw_torch is often good)
          # Use adamw_bnb_8bit if 8bit loading is enabled
-        # optim="adamw_bnb_8bit" if config.get_config("load_in_8bit") else config.get_config("optimizer", "adamw_torch"),
+        optim="adamw_bnb_8bit" if config.get_config("load_in_8bit") else config.get_config("optimizer", "adamw_torch"),
         # --- Saving & Logging ---
         save_strategy=config.get_config("save_strategy", "steps"),
         save_steps=config.get_config("save_steps", 500), # Default save steps
