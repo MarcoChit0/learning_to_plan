@@ -62,6 +62,8 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
 
         del df_train
         del df_val
+        del train_dataset
+        del val_dataset
 
     except Exception as e:
         config.log(f"Error loading dataset: {e}", level=config.logging.ERROR, exc_info=True)
@@ -84,13 +86,13 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         tokenized_train = dataset["train"].map(
             tokenize_fn,
             batched=True,
-            remove_columns=["text"],
+            remove_columns=datasets.DatasetDict["train"].column_names,
             desc="Tokenizing training set"
         )
         tokenized_val = dataset["validation"].map(
             tokenize_fn,
             batched=True,
-            remove_columns=["text"],
+            remove_columns=datasets.DatasetDict["validation"].column_names,
             desc="Tokenizing validation set"
         )
         config.log("Tokenization complete.", level=config.logging.INFO)
