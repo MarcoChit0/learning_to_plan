@@ -83,7 +83,7 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
             examples["text"],
             max_length=config.get_config("max_seq_length", 2048), # Use max_seq_length from config
             truncation=True,
-            padding="max_length", # Pad to max length
+            padding=False, # Pad to max length
         )
 
     try:
