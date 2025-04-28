@@ -42,9 +42,9 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         assert tasks, f"No tasks found in {data_file_path}."
         config.log(f"Loaded {len(tasks)} total tasks from {data_file_path}.", level=config.logging.INFO)
 
-        training_tasks = {t for t in tasks if t._type == config.TaskType.TRAIN}
+        training_tasks = {t for t in tasks if t._type == task.Task.TaskType.TRAIN}
         assert len(training_tasks) > 0, "No training tasks found in the dataset."
-        validation_tasks = {t for t in tasks if t._type == config.TaskType.VALIDATION}
+        validation_tasks = {t for t in tasks if t._type == task.Task.TaskType.VALIDATION}
         assert len(validation_tasks) > 0, "No validation tasks found in the dataset."
         config.log(f"Found {len(training_tasks)} training tasks and {len(validation_tasks)} validation tasks.", level=config.logging.INFO)
 
