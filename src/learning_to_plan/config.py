@@ -380,6 +380,7 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
     # --- Load Model ---
     model = None
     try:
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
         log(f"Loading model from: {model_source}", level=logging.INFO)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         log(f"Target device for model: {device}", level=logging.INFO)
