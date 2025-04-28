@@ -382,7 +382,7 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
     try:
         os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
         log(f"Loading model from: {model_source}", level=logging.INFO)
-
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         if quantization_config:
             log(f"Loading model with quantization: {quantization_config}", level=logging.INFO)
             model = AutoModelForCausalLM.from_pretrained(
@@ -429,7 +429,7 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
                 # Do NOT use device_map here, move manually
             )
             log("Model loaded, moving to target device...", level=logging.INFO)
-            model.to(device) # Explicitly move the model to the target device
+            model.to("device") # Explicitly move the model to the target device
             log(f"Model moved to {device}.", level=logging.INFO)
 
         log(f"Model loaded successfully from {model_source}.", level=logging.INFO)
