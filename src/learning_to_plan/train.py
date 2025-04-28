@@ -40,67 +40,32 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
     try:
         assert os.path.exists(data_file_path), f"Data file {data_file_path} does not exist."
 
-        # Load the entire dataset from the JSONL file
-        # The 'datasets' library automatically handles the JSONL format.
-        # We load all splits initially and then filter.
-        raw_dataset = load_dataset('json', data_files=data_file_path, split='train') # Load the default 'train' split from the jsonl
+        import pandas as pd
+        df = pd.read_json(data_file_path, lines=True)
 
+        df_train = df[df['type'] == 'train']
+        df_val = df[df['type'] == 'validation']
+
+        del df # Free up memory
+        
         eos_token = tokenizer.eos_token if tokenizer.eos_token else ""
+        df_train['text'] = df_train['prompt'] + eos_token + df_train['plan']
+        df_val['text'] = df_val['prompt'] + eos_token + df_val['plan']
 
-        # Define a function to combine prompt and plan into a single 'text' field
-        # Also ensures 'type' column exists for filtering later
-        def combine_prompt_plan(example):
-            # Handle potential missing 'plan' (though should exist for train/val)
-            plan_text = example.get('plan', '') if example.get('plan') is not None else ''
-            # Handle potential missing 'prompt'
-            prompt_text = example.get('prompt', '') if example.get('prompt') is not None else ''
+        df_train = df_train[['text']]
+        df_val = df_val[['text']]
 
-            # Ensure 'type' exists, default to None if missing (though it should be present based on context)
-            example_type = example.get('type')
+        # Convert DataFrames to Datasets
+        train_dataset = DatasetDict.from_dict({"train": df_train})
+        val_dataset = DatasetDict.from_dict({"validation": df_val})
+        dataset = DatasetDict({"train": train_dataset, "validation": val_dataset})
+        config.log("Dataset loaded and prepared successfully.", level=config.logging.INFO)
 
-            return {
-                "type": example_type, # Keep type for filtering
-                "text": f"{prompt_text}{eos_token}{plan_text}" # Combine prompt and plan
-            }
+        del df_train
+        del df_val
 
-        # Apply the mapping function
-        # Keep only 'type' and 'text' columns needed for the next steps
-        processed_dataset = raw_dataset.map(
-            combine_prompt_plan,
-            remove_columns=[col for col in raw_dataset.column_names if col not in ['type', 'prompt', 'plan']], # Remove original cols except type, prompt, plan
-            desc="Combining prompt and plan"
-        )
-
-        # Filter the dataset based on the 'type' field
-        train_dataset = processed_dataset.filter(lambda example: example['type'] == 'train')
-        validation_dataset = processed_dataset.filter(lambda example: example['type'] == 'validation')
-
-        # Remove the 'type' column as it's no longer needed for the Trainer
-        train_dataset = train_dataset.remove_columns(['type'])
-        validation_dataset = validation_dataset.remove_columns(['type'])
-
-        # Create the final DatasetDict
-        dataset = DatasetDict({
-            'train': train_dataset,
-            'validation': validation_dataset
-        })
-
-        config.log(f"Dataset loaded and split successfully: {dataset}", level=config.logging.INFO)
-        config.log(f"Number of training examples: {len(dataset['train'])}", level=config.logging.INFO)
-        config.log(f"Number of validation examples: {len(dataset['validation'])}", level=config.logging.INFO)
-
-
-    except ValueError as ve:
-         # Catch potential ValueError during filtering/column removal if 'type' is missing unexpectedly
-         config.log(f"ValueError during dataset processing: {ve}. Check if 'type' column exists and has expected values in {data_file_path}", level=config.logging.ERROR, exc_info=True)
-         raise ve
     except Exception as e:
-        config.log(f"Error loading or splitting dataset from {data_file_path}: {e}", level=config.logging.ERROR, exc_info=True)
-        # Potentially print a sample row if debugging is needed
-        try:
-            config.log(f"Sample row from raw_dataset: {raw_dataset[0]}", level=config.logging.DEBUG)
-        except:
-            pass # Ignore errors getting sample row
+        config.log(f"Error loading dataset: {e}", level=config.logging.ERROR, exc_info=True)
         raise e
 
     # --- Tokenization ---
@@ -111,7 +76,7 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
             examples["text"],
             max_length=config.get_config("max_seq_length", 2048), # Use max_seq_length from config
             truncation=True,
-            padding=False # Trainer handles padding with DataCollator
+            padding="max_length", # Pad to max length
         )
 
     try:
@@ -120,13 +85,13 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         tokenized_train = dataset["train"].map(
             tokenize_fn,
             batched=True,
-            remove_columns=dataset["train"].column_names, # Remove the 'text' column after tokenization
+            remove_columns=["text"],
             desc="Tokenizing training set"
         )
         tokenized_val = dataset["validation"].map(
             tokenize_fn,
             batched=True,
-            remove_columns=dataset["validation"].column_names, # Remove the 'text' column
+            remove_columns=["text"],
             desc="Tokenizing validation set"
         )
         config.log("Tokenization complete.", level=config.logging.INFO)
