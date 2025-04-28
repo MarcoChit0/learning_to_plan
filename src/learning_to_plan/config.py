@@ -394,12 +394,9 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
         log(f"Loading model from: {model_source}", level=logging.INFO)
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # Determine torch_dtype based on config OR quantization mode
-        # Default to float16 for non-quantized or 8-bit on CUDA
-        # Default to float32 for 4-bit compute or non-quantized on CPU
+        # Determine torch_dtype based on config and quantization
         if load_in_8bit:
-            # For 8-bit, explicitly load in fp16 first to address the warning/error
-            torch_dtype = torch.float16
+            torch_dtype = torch.float16 # Load base in float16 for 8-bit
             log("Using torch_dtype: torch.float16 (for 8-bit quantization base)", level=logging.INFO)
         elif load_in_4bit:
             # For 4-bit, compute dtype is handled by BitsAndBytesConfig, base can be auto/fp16
@@ -418,29 +415,28 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
 
         if quantization_config:
             log(f"Loading model with quantization: {quantization_config}", level=logging.INFO)
+            # Remove device_map="auto" to let Trainer handle multi-GPU
             model = AutoModelForCausalLM.from_pretrained(
                 model_source,
                 trust_remote_code=get_config("trust_remote_code", True),
                 token=HUGGINGFACE_TOKEN,
                 quantization_config=quantization_config,
-                # Explicitly set torch_dtype for 8-bit base load, otherwise let it infer
-                torch_dtype=torch_dtype if load_in_8bit else None,
-                device_map="auto", # Let accelerate handle device placement
+                torch_dtype=torch_dtype if load_in_8bit else None, # Specify dtype only if loading 8-bit base this way
+                # device_map="auto", # REMOVED for multi-GPU Trainer compatibility
             )
-            log("Model loaded with quantization and device_map='auto'.", level=logging.INFO)
+            log("Model loaded with quantization (device_map removed).", level=logging.INFO)
+
+            # Explicitly move to CUDA if available, before PEFT preparation
+            if torch.cuda.is_available():
+                 log(f"Moving base quantized model to {device} before PEFT preparation...", level=logging.INFO)
+                 model.to(device)
+                 log(f"Model moved to {device}.", level=logging.INFO)
 
             # --- Prepare for k-bit training (IMPORTANT) ---
-            # Run this *after* loading the quantized model
             if load_in_4bit or load_in_8bit:
                 log("Preparing model for k-bit training (casting layernorms/head to float32)...", level=logging.INFO)
                 model = prepare_model_for_kbit_training(model)
                 log("Model prepared for k-bit training.", level=logging.INFO)
-
-                # Explicitly cast to float16 *after* prepare_model_for_kbit_training
-                # This might help ensure consistency before LoRA is applied
-                # if torch.cuda.is_available():
-                #     log("Explicitly casting model to float16 after prepare_model...", level=logging.INFO)
-                #     model = model.half() # Use .half() for float16
 
             # --- Apply LoRA for Quantized Models ---
             log("Applying LoRA adapter to quantized model...", level=logging.INFO)
@@ -470,9 +466,15 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
                 trust_remote_code=get_config("trust_remote_code", True),
                 torch_dtype=torch_dtype, # Use determined dtype
                 token=HUGGINGFACE_TOKEN,
-                device_map="auto" # Use device_map for non-quantized too
+                # device_map="auto" # REMOVED for multi-GPU Trainer compatibility
             )
-            log("Model loaded with device_map='auto'.", level=logging.INFO)
+            log("Model loaded (device_map removed).", level=logging.INFO)
+            # Explicitly move to CUDA if available
+            if torch.cuda.is_available():
+                log(f"Moving non-quantized model to {device}...", level=logging.INFO)
+                model.to(device)
+                log(f"Model moved to {device}.", level=logging.INFO)
+
 
         log(f"Model loaded successfully from {model_source}.", level=logging.INFO)
 
