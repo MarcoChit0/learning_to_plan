@@ -18,12 +18,12 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
     start_time = datetime.datetime.now()
     model_name = config.get_config('model_name')
     start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
-    config.log(f"Starting training for {model_name} -- started {start_time_str}", level=config.config.logging.INFO)
+    config.log(f"Starting training for {model_name} -- started {start_time_str}", level=config.logging.INFO)
 
     os.makedirs(model_checkpoint_dir, exist_ok=True)
 
     # --- Load and Prepare Dataset ---
-    config.log(f"Loading dataset from: {data_file_path}", level=config.config.logging.INFO)
+    config.log(f"Loading dataset from: {data_file_path}", level=config.logging.INFO)
     try:
         # Load the dataset from the single JSON file
         full_dataset = load_dataset("json", data_files={"train": data_file_path})["train"] # Load into 'train' split initially
@@ -37,24 +37,24 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
             "train": train_dataset,
             "validation": validation_dataset
         })
-        config.log(f"Dataset loaded and split: {len(dataset['train'])} train, {len(dataset['validation'])} validation.", level=config.config.logging.INFO)
+        config.log(f"Dataset loaded and split: {len(dataset['train'])} train, {len(dataset['validation'])} validation.", level=config.logging.INFO)
 
     except Exception as e:
-        config.log(f"Error loading or splitting dataset from {data_file_path}: {e}", level=config.config.logging.ERROR, exc_info=True)
+        config.log(f"Error loading or splitting dataset from {data_file_path}: {e}", level=config.logging.ERROR, exc_info=True)
         raise e
 
     if len(dataset["train"]) == 0 or len(dataset["validation"]) == 0:
         raise ValueError("Train/validation dataset split resulted in zero examples.")
 
     # --- Load Model and Tokenizer ---
-    config.log(f"Loading model and tokenizer (checkpoint dir: {model_checkpoint_dir})...", level=config.config.logging.INFO)
+    config.log(f"Loading model and tokenizer (checkpoint dir: {model_checkpoint_dir})...", level=config.logging.INFO)
     try:
         model, tokenizer = config.load_model_and_tokenizer(checkpoint_dir=model_checkpoint_dir)
         assert tokenizer is not None, "Tokenizer loading failed."
         assert model is not None, "Model loading failed."
-        config.log("Model and tokenizer loaded successfully.", level=config.config.logging.INFO)
+        config.log("Model and tokenizer loaded successfully.", level=config.logging.INFO)
     except Exception as e:
-        config.log(f"Fatal error loading model/tokenizer: {e}", level=config.config.logging.ERROR, exc_info=True)
+        config.log(f"Fatal error loading model/tokenizer: {e}", level=config.logging.ERROR, exc_info=True)
         raise e # Stop execution if model/tokenizer fails
 
     # --- Tokenization ---
@@ -174,17 +174,17 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
     # --- Save Final Model ---
     try:
         trainer.save_model(model_checkpoint_dir)
-        config.log(f"Final model saved to {model_checkpoint_dir}", level=config.config.logging.INFO)
+        config.log(f"Final model saved to {model_checkpoint_dir}", level=config.logging.INFO)
         # trainer.save_state() # Save final trainer state
-        # config.log(f"Final trainer state saved to {model_checkpoint_dir}", level=config.config.logging.INFO)
+        # config.log(f"Final trainer state saved to {model_checkpoint_dir}", level=config.logging.INFO)
     except Exception as e:
-        config.log(f"Error saving final model/state: {e}", level=config.config.logging.ERROR, exc_info=True)
+        config.log(f"Error saving final model/state: {e}", level=config.logging.ERROR, exc_info=True)
 
 
     end_time = datetime.datetime.now()
     end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
-    config.log(f"Training {model_name} -- finished {end_time_str}", level=config.config.logging.INFO)
-    config.log(f"Total training time: {end_time - start_time}", level=config.config.logging.INFO)
+    config.log(f"Training {model_name} -- finished {end_time_str}", level=config.logging.INFO)
+    config.log(f"Total training time: {end_time - start_time}", level=config.logging.INFO)
 
     # --- Clean up GPU memory ---
     del model
