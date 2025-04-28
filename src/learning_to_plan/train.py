@@ -35,77 +35,111 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         config.log(f"Fatal error loading model/tokenizer: {e}", level=config.logging.ERROR, exc_info=True)
         raise e # Stop execution if model/tokenizer fails
 
-    # --- Load and Prepare Dataset ---
+# --- Load and Prepare Dataset ---
     config.log(f"Loading dataset from: {data_file_path}", level=config.logging.INFO)
     try:
         assert os.path.exists(data_file_path), f"Data file {data_file_path} does not exist."
 
-        raw_dataset = load_dataset('json', data_files=data_file_path, features=None) # Load all first, then filter
+        # Load the entire dataset from the JSONL file
+        # The 'datasets' library automatically handles the JSONL format.
+        # We load all splits initially and then filter.
+        raw_dataset = load_dataset('json', data_files=data_file_path, split='train') # Load the default 'train' split from the jsonl
 
         eos_token = tokenizer.eos_token if tokenizer.eos_token else ""
 
+        # Define a function to combine prompt and plan into a single 'text' field
+        # Also ensures 'type' column exists for filtering later
         def combine_prompt_plan(example):
+            # Handle potential missing 'plan' (though should exist for train/val)
+            plan_text = example.get('plan', '') if example.get('plan') is not None else ''
+            # Handle potential missing 'prompt'
+            prompt_text = example.get('prompt', '') if example.get('prompt') is not None else ''
+
+            # Ensure 'type' exists, default to None if missing (though it should be present based on context)
+            example_type = example.get('type')
+
             return {
-            "type": example["type"],
-            "text": f"{example['prompt']}{eos_token}{example['plan']}"
+                "type": example_type, # Keep type for filtering
+                "text": f"{prompt_text}{eos_token}{plan_text}" # Combine prompt and plan
             }
 
+        # Apply the mapping function
+        # Keep only 'type' and 'text' columns needed for the next steps
         processed_dataset = raw_dataset.map(
             combine_prompt_plan,
-            remove_columns=[col for col in raw_dataset.column_names if col not in ["type", "text"]], # Keep type for filtering, text for training
+            remove_columns=[col for col in raw_dataset.column_names if col not in ['type', 'prompt', 'plan']], # Remove original cols except type, prompt, plan
             desc="Combining prompt and plan"
         )
 
+        # Filter the dataset based on the 'type' field
         train_dataset = processed_dataset.filter(lambda example: example['type'] == 'train')
         validation_dataset = processed_dataset.filter(lambda example: example['type'] == 'validation')
 
+        # Remove the 'type' column as it's no longer needed for the Trainer
         train_dataset = train_dataset.remove_columns(['type'])
         validation_dataset = validation_dataset.remove_columns(['type'])
 
-
+        # Create the final DatasetDict
         dataset = DatasetDict({
             'train': train_dataset,
             'validation': validation_dataset
         })
-        
-        config.log(f"Dataset loaded and converted successfully: {dataset}", level=config.logging.INFO)
 
+        config.log(f"Dataset loaded and split successfully: {dataset}", level=config.logging.INFO)
+        config.log(f"Number of training examples: {len(dataset['train'])}", level=config.logging.INFO)
+        config.log(f"Number of validation examples: {len(dataset['validation'])}", level=config.logging.INFO)
+
+
+    except ValueError as ve:
+         # Catch potential ValueError during filtering/column removal if 'type' is missing unexpectedly
+         config.log(f"ValueError during dataset processing: {ve}. Check if 'type' column exists and has expected values in {data_file_path}", level=config.logging.ERROR, exc_info=True)
+         raise ve
     except Exception as e:
         config.log(f"Error loading or splitting dataset from {data_file_path}: {e}", level=config.logging.ERROR, exc_info=True)
+        # Potentially print a sample row if debugging is needed
+        try:
+            config.log(f"Sample row from raw_dataset: {raw_dataset[0]}", level=config.logging.DEBUG)
+        except:
+            pass # Ignore errors getting sample row
         raise e
 
     # --- Tokenization ---
     config.log("Starting tokenization...", level=config.logging.INFO)
     def tokenize_fn(examples):
+        # Tokenize the 'text' field which now contains the combined prompt and plan
         return tokenizer(
             examples["text"],
-            max_length=config.get_config("max_length", 512), # Default max length
+            max_length=config.get_config("max_seq_length", 2048), # Use max_seq_length from config
             truncation=True,
-            padding=False
+            padding=False # Trainer handles padding with DataCollator
         )
 
     try:
         config.log("Tokenizing datasets...", level=config.logging.INFO)
+        # Tokenize the filtered train and validation sets
         tokenized_train = dataset["train"].map(
             tokenize_fn,
             batched=True,
-            remove_columns=dataset["train"].column_names,
-            desc="Tokenizing training set" 
+            remove_columns=dataset["train"].column_names, # Remove the 'text' column after tokenization
+            desc="Tokenizing training set"
         )
         tokenized_val = dataset["validation"].map(
             tokenize_fn,
             batched=True,
-            remove_columns=dataset["validation"].column_names,
+            remove_columns=dataset["validation"].column_names, # Remove the 'text' column
             desc="Tokenizing validation set"
         )
         config.log("Tokenization complete.", level=config.logging.INFO)
+        config.log(f"Tokenized train dataset features: {tokenized_train.features}", level=config.logging.DEBUG)
+        config.log(f"Tokenized validation dataset features: {tokenized_val.features}", level=config.logging.DEBUG)
+
     except Exception as e:
         config.log(f"Error during tokenization: {e}", level=config.logging.ERROR, exc_info=True)
         raise e
 
 
     # --- Data Collator ---
-    # DataCollatorForLanguageModeling handles dynamic padding by default if tokenizer wasn't called with padding=True/max_length
+    # DataCollatorForLanguageModeling handles dynamic padding and prepares batches for causal LM training
     collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
     config.log("Data collator initialized.", level=config.logging.INFO)
 
