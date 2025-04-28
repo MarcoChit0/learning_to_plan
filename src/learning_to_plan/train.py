@@ -54,17 +54,6 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         df_train = df_train[['text']]
         df_val = df_val[['text']]
 
-        # Convert DataFrames to Datasets
-        train_dataset = datasets.Dataset.from_dict({"train": df_train})
-        val_dataset = datasets.Dataset.from_dict({"validation": df_val})
-        dataset = datasets.DatasetDict({"train": train_dataset, "validation": val_dataset})
-        config.log("Dataset loaded and prepared successfully.", level=config.logging.INFO)
-
-        del df_train
-        del df_val
-        del train_dataset
-        del val_dataset
-
     except Exception as e:
         config.log(f"Error loading dataset: {e}", level=config.logging.ERROR, exc_info=True)
         raise e
@@ -83,18 +72,17 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
     try:
         config.log("Tokenizing datasets...", level=config.logging.INFO)
         # Tokenize the filtered train and validation sets
-        tokenized_train = dataset["train"].map(
+        tokenized_train = df_train.map(
             tokenize_fn,
             batched=True,
-            remove_columns=datasets.DatasetDict["train"].column_names,
-            desc="Tokenizing training set"
-        )
-        tokenized_val = dataset["validation"].map(
+            remove_columns=["text"], # Remove the original text column
+            desc="Tokenizing train dataset")
+        tokenized_val = df_val.map(
             tokenize_fn,
             batched=True,
-            remove_columns=datasets.DatasetDict["validation"].column_names,
-            desc="Tokenizing validation set"
-        )
+            remove_columns=["text"], # Remove the original text column
+            desc="Tokenizing validation dataset")
+        del df_train, df_val # Free up memory
         config.log("Tokenization complete.", level=config.logging.INFO)
         config.log(f"Tokenized train dataset features: {tokenized_train.features}", level=config.logging.DEBUG)
         config.log(f"Tokenized validation dataset features: {tokenized_val.features}", level=config.logging.DEBUG)
