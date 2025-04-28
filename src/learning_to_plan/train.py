@@ -140,7 +140,7 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         gradient_accumulation_steps=config.get_config("gradient_accumulation_steps", 1),
         # --- Precision ---
         fp16=not config.get_config("bf16", False) and torch.cuda.is_available() and not (load_in_4bit or load_in_8bit), 
-        bf16=config.get_config("bf16", False) and torch.cuda.is_available() and torch.cuda.is_bf16_supported() and not (load_in_4bit or load_in_8bit)
+        bf16=config.get_config("bf16", False) and torch.cuda.is_available() and torch.cuda.is_bf16_supported() and not (load_in_4bit or load_in_8bit),
         # --- Optimizer ---
         learning_rate=config.get_config("learning_rate", 5e-5),
         lr_scheduler_type=config.get_config("lr_scheduler_type", "cosine"),
