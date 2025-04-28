@@ -129,38 +129,53 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         optimizer_name = config.get_config("optimizer", "adamw_torch") # Default non-quantized
     config.log(f"Using optimizer: {optimizer_name}", level=config.logging.INFO)
 
+    # Determine precision settings
+    use_bf16 = config.get_config("bf16", False) and torch.cuda.is_available() and torch.cuda.is_bf16_supported() and not (load_in_4bit or load_in_8bit)
+    # Use fp16 if not bf16, cuda is available, AND (not quantized OR 8-bit quantized)
+    # 4-bit doesn't typically use fp16/bf16 training args directly
+    use_fp16 = not use_bf16 and torch.cuda.is_available() and not load_in_4bit
+
+    config.log(f"Training precision: bf16={use_bf16}, fp16={use_fp16}", level=config.logging.INFO)
+
 
     training_args = TrainingArguments(
         output_dir=model_checkpoint_dir,
         run_name=f"{config.get_config('model_name')}-{os.path.basename(model_checkpoint_dir)}-{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}",
-        report_to=config.get_config("report_to", "none"),
-        num_train_epochs=config.get_config("num_train_epochs", 3),
-        per_device_train_batch_size=config.get_config("batch_size", 1),
-        per_device_eval_batch_size=config.get_config("eval_batch_size", 1),
-        gradient_accumulation_steps=config.get_config("gradient_accumulation_steps", 1),
+        report_to=config.get_config("report_to", "none"), # Default to none
+        num_train_epochs=config.get_config("num_train_epochs", 3), # Default epochs
+        per_device_train_batch_size=config.get_config("batch_size", 1), # Default batch size
+        per_device_eval_batch_size=config.get_config("eval_batch_size", 1), # Default eval batch size
+        gradient_accumulation_steps=config.get_config("gradient_accumulation_steps", 1), # Default grad accum
         # --- Precision ---
-        fp16=not config.get_config("bf16", False) and torch.cuda.is_available() and not (load_in_4bit or load_in_8bit), 
-        bf16=config.get_config("bf16", False) and torch.cuda.is_available() and torch.cuda.is_bf16_supported() and not (load_in_4bit or load_in_8bit),
+        fp16=use_fp16,
+        bf16=use_bf16,
         # --- Optimizer ---
-        learning_rate=config.get_config("learning_rate", 5e-5),
-        lr_scheduler_type=config.get_config("lr_scheduler_type", "cosine"),
-        weight_decay=config.get_config("weight_decay", 0.01),
-        optim=optimizer_name,
+        learning_rate=config.get_config("learning_rate", 5e-5), # Default LR
+        lr_scheduler_type=config.get_config("lr_scheduler_type", "cosine"), # Default scheduler
+        weight_decay=config.get_config("weight_decay", 0.01), # Default weight decay
+        optim=optimizer_name, # Use the determined optimizer
          # --- Saving & Logging ---
         save_strategy=config.get_config("save_strategy", "steps"),
-        save_steps=config.get_config("save_steps", 500),
-        save_total_limit=config.get_config("save_total_limit", 1),
+        save_steps=config.get_config("save_steps", 500), # Default save steps
+        save_total_limit=config.get_config("save_total_limit", 1), # Default save limit
         logging_strategy=config.get_config("logging_strategy", "steps"),
-        logging_steps=config.get_config("logging_steps", 100),
+        logging_steps=config.get_config("logging_steps", 100), # Default log steps
         # --- Evaluation ---
-        eval_strategy=config.get_config("eval_strategy", "steps"),
-        eval_steps=config.get_config("eval_steps", 500),
+        eval_strategy=config.get_config("eval_strategy", "steps"), # Evaluate periodically by steps
+        eval_steps=config.get_config("eval_steps", 500), # Default eval steps (match save_steps?)
         # --- Other ---
-        gradient_checkpointing=config.get_config("gradient_checkpointing", True), 
+        gradient_checkpointing=config.get_config("gradient_checkpointing", True), # Enable gradient checkpointing to save memory
+        # deepspeed=config.get_config("deepspeed_config", None), # Add deepspeed if configured
     )
     # Required for gradient checkpointing with PEFT+quantization
     if load_in_4bit or load_in_8bit:
-        training_args.gradient_checkpointing_kwargs = {"use_reentrant": False}
+        # Check if gradient_checkpointing is actually enabled before setting kwargs
+        if training_args.gradient_checkpointing:
+            training_args.gradient_checkpointing_kwargs = {"use_reentrant": False}
+            config.log("Setting gradient_checkpointing_kwargs={'use_reentrant': False} for quantized model.", level=config.logging.INFO)
+        else:
+            config.log("Gradient checkpointing is disabled, not setting gradient_checkpointing_kwargs.", level=config.logging.INFO)
+
 
     config.log(f"Training Arguments: {training_args.to_dict()}", level=config.logging.DEBUG, do_print=False)
 
