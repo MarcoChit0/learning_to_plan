@@ -1,7 +1,6 @@
 import os
 import datetime
-from learning_to_plan import task
-from datasets import DatasetDict
+import datasets
 from transformers import (
     TrainingArguments,
     Trainer,
@@ -56,9 +55,9 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         df_val = df_val[['text']]
 
         # Convert DataFrames to Datasets
-        train_dataset = DatasetDict.from_dict({"train": df_train})
-        val_dataset = DatasetDict.from_dict({"validation": df_val})
-        dataset = DatasetDict({"train": train_dataset, "validation": val_dataset})
+        train_dataset = datasets.Dataset.from_dict({"train": df_train})
+        val_dataset = datasets.Dataset.from_dict({"validation": df_val})
+        dataset = datasets.DatasetDict({"train": train_dataset, "validation": val_dataset})
         config.log("Dataset loaded and prepared successfully.", level=config.logging.INFO)
 
         del df_train
