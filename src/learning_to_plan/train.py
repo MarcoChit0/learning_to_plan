@@ -8,6 +8,7 @@ from transformers import (
     DataCollatorForLanguageModeling,
 )
 from transformers.trainer_utils import get_last_checkpoint
+from datasets import load_dataset, DatasetDict
 import torch # Import torch
 
 import learning_to_plan.config as config
@@ -38,29 +39,35 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
     config.log(f"Loading dataset from: {data_file_path}", level=config.logging.INFO)
     try:
         assert os.path.exists(data_file_path), f"Data file {data_file_path} does not exist."
-        tasks = task.get_tasks_from_jsonl(data_file_path) # Use the function from tasks.py
-        assert tasks, f"No tasks found in {data_file_path}."
-        config.log(f"Loaded {len(tasks)} total tasks from {data_file_path}.", level=config.logging.INFO)
 
-        training_tasks = {t for t in tasks if t._type == task.Task.TaskType.TRAIN}
-        assert len(training_tasks) > 0, "No training tasks found in the dataset."
-        validation_tasks = {t for t in tasks if t._type == task.Task.TaskType.VALIDATION}
-        assert len(validation_tasks) > 0, "No validation tasks found in the dataset."
-        config.log(f"Found {len(training_tasks)} training tasks and {len(validation_tasks)} validation tasks.", level=config.logging.INFO)
+        raw_dataset = load_dataset('json', data_files=data_file_path, features=None) # Load all first, then filter
 
-        train_dataset = task.convert_tasks_into_dataset(
-            training_tasks,
-            tokenizer_eos=tokenizer.eos_token,
-            with_plan=True
-        )
-        validation_dataset = task.convert_tasks_into_dataset(
-            validation_tasks,
-            tokenizer_eos=tokenizer.eos_token,
-            with_plan=True
+        eos_token = tokenizer.eos_token if tokenizer.eos_token else ""
+
+        def combine_prompt_plan(example):
+            return {
+            "type": example["type"],
+            "text": f"{example['prompt']}{eos_token}{example['plan']}"
+            }
+
+        processed_dataset = raw_dataset.map(
+            combine_prompt_plan,
+            remove_columns=[col for col in raw_dataset.column_names if col not in ["type", "text"]], # Keep type for filtering, text for training
+            desc="Combining prompt and plan"
         )
 
-        dataset = DatasetDict({"train": train_dataset, "validation": validation_dataset})
+        train_dataset = processed_dataset.filter(lambda example: example['type'] == 'train')
+        validation_dataset = processed_dataset.filter(lambda example: example['type'] == 'validation')
 
+        train_dataset = train_dataset.remove_columns(['type'])
+        validation_dataset = validation_dataset.remove_columns(['type'])
+
+
+        dataset = DatasetDict({
+            'train': train_dataset,
+            'validation': validation_dataset
+        })
+        
         config.log(f"Dataset loaded and converted successfully: {dataset}", level=config.logging.INFO)
 
     except Exception as e:
