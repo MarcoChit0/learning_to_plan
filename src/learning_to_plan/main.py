@@ -99,6 +99,12 @@ def parse_args():
         default="all",
         help="Number of problems per domain: positive integer or 'all', 'long', 'basic'"
     )
+    # --- Generate Specific ---
+    parser.add_argument(
+        "--load_with_finetuned_checkpoints",
+        action="store_true",
+        help="Load the model with fine-tuned checkpoints."
+    )
     # --- Credentials ---
     parser.add_argument(
         "--huggingface_token",
@@ -219,29 +225,67 @@ if __name__ == "__main__":
 
             domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
             assert domains != [], f"No valid domains found for Gemini model in the {config.PROCESSED_DATA_DIR} dir. Please check your configuration."
+
         else:
             model_checkpoints_base_dir = os.path.join(config.CHECKPOINTS_DIR, model_name_from_config)
-            config.log(f"Looking for checkpoints in base directory: {model_checkpoints_base_dir}")
-
-            domains = get_selected_domains(args, model_checkpoints_base_dir)
-            assert domains, f"No valid domains found in {model_checkpoints_base_dir}. Please check your checkpoints."
+            using_finetuning_checkpoint =  True if not args.load_with_finetuned_checkpoint else False
+            if using_finetuning_checkpoint:
+                config.log(f"Using fine-tuning checkpoints for model '{model_name_from_config}'.")
+                domains = get_selected_domains(args, model_checkpoints_base_dir)
+                if not domains:
+                    config.log(f"Could not find or use fine-tuned checkpoints for model checkpoint dir '{model_checkpoints_base_dir}'"
+                            f"Attempting fallback to base model '{model_name_from_config}' using processed data.",
+                            level=logging.WARNING)
+                    try:
+                        domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
+                        if not domains:
+                            # If no domains are found even in the processed data directory, cannot proceed.
+                            m = (f"Fallback failed: No domains found in processed data dir '{config.PROCESSED_DATA_DIR}' "
+                                f"matching --domain '{args.domain}'. Cannot proceed with generation.")
+                            config.log(m, level=logging.ERROR)
+                            raise ValueError(m)
+                        else:
+                            config.log(f"Found domains in processed data: {', '.join(domains)}. Proceeding with base model.")
+                            using_finetuning_checkpoint = True
+                    except Exception as fallback_e:
+                        # Catch errors during fallback domain search or model loading
+                        config.log(f"Error during fallback attempt: {fallback_e}", level=logging.ERROR)
+                        raise fallback_e # Re-raise the error encountered during fallback
+            else:
+                config.log(f"Not using fine-tuning checkpoints. Attempting to load from base model '{model_name_from_config}'.")
+                domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
+                if not domains:
+                    m = f"No valid domains found in {config.PROCESSED_DATA_DIR} for generation. Please check your configuration."
+                    config.log(m, level=logging.ERROR)
+                    raise ValueError(m)
 
         for domain in domains:
+            hf_model, hf_tokenizer = None, None
+            
             config.log(f"Starting generation for domain: {domain}")
             data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
             assert os.path.exists(data_file_path), f"Data file not found: {data_file_path}"
             config.log(f"Using data: {data_file_path}.")
 
+
             if model_name_from_config.lower().startswith("gemini"):
-                model_checkpoint_dir = None
                 config.log(f"Calling Gemini API for generation.")
             else:
-                model_checkpoint_dir = os.path.join(model_checkpoints_base_dir, domain)
-                assert os.path.exists(model_checkpoint_dir), f"Checkpoint directory not found: {model_checkpoint_dir}"
+                if using_finetuning_checkpoint:
+                    model_checkpoint_dir = os.path.join(model_checkpoints_base_dir, domain)
+                    assert os.path.exists(model_checkpoint_dir), f"Model checkpoint directory not found: {model_checkpoint_dir}"
+                    config.log(f"Loading model from fine-tuning checkpoint: {model_checkpoint_dir}.")
+                else:
+                    model_checkpoint_dir = None
+                    config.log(f"Loading model from base model directory: {model_checkpoints_base_dir}.")
+                hf_model, hf_tokenizer = config.load_model_and_tokenizer(model_checkpoint_dir)
+                assert hf_model is not None, f"Failed to load model from {model_checkpoint_dir}."
+                assert hf_tokenizer is not None, f"Failed to load tokenizer from {model_checkpoint_dir}."
                 config.log(f"Using model checkpoint for generation: {model_checkpoint_dir}.")
 
             generate.generate_batch(
-                checkpoint_model_dir=model_checkpoint_dir,
+                hf_model=hf_model,
+                hf_tokenizer=hf_tokenizer,
                 data_file_path=data_file_path,
                 number_of_problems_per_domain=args.number_of_problems_per_domain
             )
