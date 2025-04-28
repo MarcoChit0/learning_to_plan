@@ -54,6 +54,23 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         df_train = df_train[['text']]
         df_val = df_val[['text']]
 
+        # Convert DataFrame to Dataset
+        train_dataset = datasets.Dataset.from_pandas(df_train, preserve_index=False)
+        validation_dataset = datasets.Dataset.from_pandas(df_val, preserve_index=False)
+        
+        # Free up memory
+        del df_train, df_val 
+        
+        # Create DatasetDict
+        dataset = datasets.DatasetDict({
+            'train': train_dataset,
+            'validation': validation_dataset
+        })
+        config.log(f"Dataset converted to DatasetDict successfully: {dataset}", level=config.logging.INFO)
+        config.log(f"Number of training examples: {len(dataset['train'])}", level=config.logging.INFO)
+        config.log(f"Number of validation examples: {len(dataset['validation'])}", level=config.logging.INFO)
+
+
     except Exception as e:
         config.log(f"Error loading dataset: {e}", level=config.logging.ERROR, exc_info=True)
         raise e
@@ -71,21 +88,23 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
 
     try:
         config.log("Tokenizing datasets...", level=config.logging.INFO)
-        # Tokenize the filtered train and validation sets
-        tokenized_train = df_train.map(
+        # Tokenize the datasets.Dataset objects using .map()
+        tokenized_train = dataset["train"].map(
+            tokenize_fn,
+            batched=True,
+            remove_columns=["text"], # Remove the original text column after tokenization
+            desc="Tokenizing train dataset"
+        )
+        tokenized_val = dataset["validation"].map(
             tokenize_fn,
             batched=True,
             remove_columns=["text"], # Remove the original text column
-            desc="Tokenizing train dataset")
-        tokenized_val = df_val.map(
-            tokenize_fn,
-            batched=True,
-            remove_columns=["text"], # Remove the original text column
-            desc="Tokenizing validation dataset")
-        del df_train, df_val # Free up memory
+            desc="Tokenizing validation dataset"
+        )
         config.log("Tokenization complete.", level=config.logging.INFO)
         config.log(f"Tokenized train dataset features: {tokenized_train.features}", level=config.logging.DEBUG)
         config.log(f"Tokenized validation dataset features: {tokenized_val.features}", level=config.logging.DEBUG)
+
 
     except Exception as e:
         config.log(f"Error during tokenization: {e}", level=config.logging.ERROR, exc_info=True)
