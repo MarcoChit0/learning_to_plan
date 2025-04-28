@@ -42,24 +42,30 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
     config.log(f"Loading dataset from: {data_file_path}", level=config.logging.INFO)
     try:
         assert os.path.exists(data_file_path), f"Data file {data_file_path} does not exist."
-        tasks = config.load_tasks(data_file_path)
-        assert len(tasks) > 0, f"Dataset {data_file_path} is empty."
+        tasks = task.get_tasks_from_jsonl(data_file_path) # Use the function from tasks.py
+        assert tasks, f"No tasks found in {data_file_path}."
+        config.log(f"Loaded {len(tasks)} total tasks from {data_file_path}.", level=config.logging.INFO)
 
-        training_tasks = {t for t in tasks if t.type == config.TaskType.TRAIN}
-        assert len(training_tasks) > 0, f"No training tasks found in {data_file_path}."
-        validation_tasks = {t for t in tasks if t.type == config.TaskType.VALIDATION}
-        assert len(validation_tasks) > 0, f"No validation tasks found in {data_file_path}."
-        config.log(f"Loaded {len(tasks)} tasks from {data_file_path}.", level=config.logging.INFO)
+        training_tasks = {t for t in tasks if t._type == config.TaskType.TRAIN}
+        assert len(training_tasks) > 0, "No training tasks found in the dataset."
+        validation_tasks = {t for t in tasks if t._type == config.TaskType.VALIDATION}
+        assert len(validation_tasks) > 0, "No validation tasks found in the dataset."
         config.log(f"Found {len(training_tasks)} training tasks and {len(validation_tasks)} validation tasks.", level=config.logging.INFO)
-        
-        # Convert tasks to DatasetDict format
-        train_dataset = task.convert_tasks_into_dataset(training_tasks, tokenizer_eos=tokenizer.eos_token, with_plan=True)
-        validation_dataset = task.convert_tasks_into_dataset(validation_tasks, tokenizer_eos=tokenizer.eos_token, with_plan=True)
-        dataset = DatasetDict({
-            "train": train_dataset,
-            "validation": validation_dataset
-        })
-        config.log(f"Dataset loaded and converted successfully.", level=config.logging.INFO)
+
+        train_dataset = task.convert_tasks_into_dataset(
+            training_tasks,
+            tokenizer_eos=tokenizer.eos_token,
+            with_plan=True
+        )
+        validation_dataset = task.convert_tasks_into_dataset(
+            validation_tasks,
+            tokenizer_eos=tokenizer.eos_token,
+            with_plan=True
+        )
+
+        dataset = DatasetDict({"train": train_dataset, "validation": validation_dataset})
+
+        config.log(f"Dataset loaded and converted successfully: {dataset}", level=config.logging.INFO)
 
     except Exception as e:
         config.log(f"Error loading or splitting dataset from {data_file_path}: {e}", level=config.logging.ERROR, exc_info=True)
@@ -69,15 +75,26 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
     config.log("Starting tokenization...", level=config.logging.INFO)
     def tokenize_fn(examples):
         return tokenizer(
-            examples["task"],
+            examples["text"],
             max_length=config.get_config("max_length", 512), # Default max length
-            truncation=True
+            truncation=True,
+            padding=False
         )
 
     try:
         config.log("Tokenizing datasets...", level=config.logging.INFO)
-        tokenized_train = dataset["train"].map(tokenize_fn, batched=True, remove_columns=dataset["train"].column_names)
-        tokenized_val = dataset["validation"].map(tokenize_fn, batched=True, remove_columns=dataset["validation"].column_names)
+        tokenized_train = dataset["train"].map(
+            tokenize_fn,
+            batched=True,
+            remove_columns=dataset["train"].column_names,
+            desc="Tokenizing training set" 
+        )
+        tokenized_val = dataset["validation"].map(
+            tokenize_fn,
+            batched=True,
+            remove_columns=dataset["validation"].column_names,
+            desc="Tokenizing validation set"
+        )
         config.log("Tokenization complete.", level=config.logging.INFO)
     except Exception as e:
         config.log(f"Error during tokenization: {e}", level=config.logging.ERROR, exc_info=True)

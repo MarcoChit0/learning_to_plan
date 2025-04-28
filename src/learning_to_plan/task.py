@@ -546,16 +546,13 @@ def convert_tasks_into_dataset(tasks:set[Task], tokenizer_eos:str="", with_plan:
     for t in tasks:
         try:
             p = t.get_prompt(tokenizer_eos=tokenizer_eos, with_plan=with_plan)
-            if p is not None:
-                dataset_list.append({
-                    "task": p,
+            dataset_list.append({
+                    "text": p,
                 })
-            else:
-                 config.log(f"Skipping task {t._id} due to None prompt.", level=config.logging.WARNING)
         except Exception as e:
             m = f"Error converting task {t._id} into dataset format: {e}"
             config.log(m, level=config.logging.ERROR)
             # Depending on requirements, you might want to skip the task or raise the exception
-            # raise e
+            raise e
     # Create a Dataset object from the list of dictionaries
     return Dataset.from_list(dataset_list)
