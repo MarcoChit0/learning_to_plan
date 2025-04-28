@@ -23,10 +23,6 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
 
     os.makedirs(model_checkpoint_dir, exist_ok=True)
 
-
-    if len(dataset["train"]) == 0 or len(dataset["validation"]) == 0:
-        raise ValueError("Train/validation dataset split resulted in zero examples.")
-
     # --- Load Model and Tokenizer ---
     config.log(f"Loading model and tokenizer (checkpoint dir: {model_checkpoint_dir})...", level=config.logging.INFO)
     try:
