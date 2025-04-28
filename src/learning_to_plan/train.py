@@ -172,9 +172,9 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         # Check if gradient_checkpointing is actually enabled before setting kwargs
         if training_args.gradient_checkpointing:
             training_args.gradient_checkpointing_kwargs = {"use_reentrant": False}
-            log("Setting gradient_checkpointing_kwargs={'use_reentrant': False} for quantized model.", level=config.logging.INFO)
+            config.log("Setting gradient_checkpointing_kwargs={'use_reentrant': False} for quantized model.", level=config.logging.INFO)
         else:
-            log("Gradient checkpointing is disabled, not setting gradient_checkpointing_kwargs.", level=config.logging.INFO)
+            config.log("Gradient checkpointing is disabled, not setting gradient_checkpointing_kwargs.", level=config.logging.INFO)
 
 
     config.log(f"Training Arguments: {training_args.to_dict()}", level=config.logging.DEBUG, do_print=False)
