@@ -17,7 +17,7 @@
     "save_steps": 800,
     "save_strategy": "steps",
     "save_total_limit": 1,
-    "bf16": false,
+    "bf16": true,
     "load_in_8bit": false,
     "load_in_4bit": false,
     "lora_r": 8
