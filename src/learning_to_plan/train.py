@@ -132,9 +132,9 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         learning_rate=config.get_config("learning_rate", 5e-5), # Default LR
         lr_scheduler_type=config.get_config("lr_scheduler_type", "cosine"), # Default scheduler
         weight_decay=config.get_config("weight_decay", 0.01), # Default weight decay
-        # optim=config.get_config("optimizer", "adamw_torch"), # Default optimizer (adamw_torch is often good)
+        optim=config.get_config("optimizer", "adamw_torch"), # Default optimizer (adamw_torch is often good)
          # Use adamw_bnb_8bit if 8bit loading is enabled
-        optim="adamw_bnb_8bit" if config.get_config("load_in_8bit") else config.get_config("optimizer", "adamw_torch"),
+        # optim="adamw_bnb_8bit" if config.get_config("load_in_8bit") else config.get_config("optimizer", "adamw_torch"),
         # --- Saving & Logging ---
         save_strategy=config.get_config("save_strategy", "steps"),
         save_steps=config.get_config("save_steps", 500), # Default save steps
