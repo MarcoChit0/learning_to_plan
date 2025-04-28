@@ -429,7 +429,7 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
                 # Do NOT use device_map here, move manually
             )
             log("Model loaded, moving to target device...", level=logging.INFO)
-            model.to("device") # Explicitly move the model to the target device
+            model.to(device) # Explicitly move the model to the target device
             log(f"Model moved to {device}.", level=logging.INFO)
 
         log(f"Model loaded successfully from {model_source}.", level=logging.INFO)
