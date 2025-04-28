@@ -353,7 +353,6 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
     quantization_config = None
     # Use float32 compute dtype for 4-bit as recommended for stability
     bnb_4bit_compute_dtype = torch.float32
-    # For 8-bit, we will load the base model in float16 first
 
     if load_in_4bit:
         log("Applying 4-bit quantization.", level=logging.INFO)
@@ -365,7 +364,7 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
         )
     elif load_in_8bit:
         log("Applying 8-bit quantization.", level=logging.INFO)
-        # We will load in float16 first, then apply 8-bit config
+        # Load base model in fp16 first, then apply 8-bit config during load
         quantization_config = BitsAndBytesConfig(load_in_8bit=True)
     else:
         log("Loading model without quantization.", level=logging.INFO)
@@ -395,21 +394,26 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
         log(f"Loading model from: {model_source}", level=logging.INFO)
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # Determine torch_dtype based on config and quantization
+        # Determine torch_dtype based on config OR quantization mode
         # Default to float16 for non-quantized or 8-bit on CUDA
         # Default to float32 for 4-bit compute or non-quantized on CPU
-        if load_in_4bit:
-            torch_dtype = bnb_4bit_compute_dtype # Compute dtype for 4-bit
-        elif load_in_8bit:
-            torch_dtype = torch.float16 # Load base in float16 for 8-bit
+        if load_in_8bit:
+            # For 8-bit, explicitly load in fp16 first to address the warning/error
+            torch_dtype = torch.float16
+            log("Using torch_dtype: torch.float16 (for 8-bit quantization base)", level=logging.INFO)
+        elif load_in_4bit:
+            # For 4-bit, compute dtype is handled by BitsAndBytesConfig, base can be auto/fp16
+            torch_dtype = torch.float16 # Default to float16 for 4-bit base as well
+            log("Using torch_dtype: torch.float16 (for 4-bit quantization base)", level=logging.INFO)
         elif get_config("bf16", False) and torch.cuda.is_available() and torch.cuda.is_bf16_supported():
             torch_dtype = torch.bfloat16
+            log(f"Using torch_dtype: {torch_dtype} (bf16)", level=logging.INFO)
         elif torch.cuda.is_available():
              torch_dtype = torch.float16
+             log(f"Using torch_dtype: {torch_dtype} (fp16 default)", level=logging.INFO)
         else:
              torch_dtype = torch.float32 # CPU default
-
-        log(f"Target torch_dtype for base load/compute: {torch_dtype}", level=logging.INFO)
+             log(f"Using torch_dtype: {torch_dtype} (CPU default)", level=logging.INFO)
 
 
         if quantization_config:
@@ -419,8 +423,9 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
                 trust_remote_code=get_config("trust_remote_code", True),
                 token=HUGGINGFACE_TOKEN,
                 quantization_config=quantization_config,
-                torch_dtype=torch_dtype if load_in_8bit else None, # Specify dtype only if loading 8-bit base this way
-                device_map="auto", # Let accelerate handle device placement for quantized
+                # Explicitly set torch_dtype for 8-bit base load, otherwise let it infer
+                torch_dtype=torch_dtype if load_in_8bit else None,
+                device_map="auto", # Let accelerate handle device placement
             )
             log("Model loaded with quantization and device_map='auto'.", level=logging.INFO)
 
@@ -428,12 +433,16 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
             # Run this *after* loading the quantized model
             if load_in_4bit or load_in_8bit:
                 log("Preparing model for k-bit training (casting layernorms/head to float32)...", level=logging.INFO)
-                # use_gradient_checkpointing = get_config("gradient_checkpointing", True) # Get from config if needed
-                model = prepare_model_for_kbit_training(model) # Use default grad checkpointing behavior
+                model = prepare_model_for_kbit_training(model)
                 log("Model prepared for k-bit training.", level=logging.INFO)
 
+                # Explicitly cast to float16 *after* prepare_model_for_kbit_training
+                # This might help ensure consistency before LoRA is applied
+                # if torch.cuda.is_available():
+                #     log("Explicitly casting model to float16 after prepare_model...", level=logging.INFO)
+                #     model = model.half() # Use .half() for float16
+
             # --- Apply LoRA for Quantized Models ---
-            # Run this *after* preparing the model
             log("Applying LoRA adapter to quantized model...", level=logging.INFO)
             r = get_config("lora_r", 8)
             alpha = get_config("lora_alpha", r * 4) # Default alpha based on r

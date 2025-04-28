@@ -131,8 +131,8 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
 
     # Determine precision settings
     use_bf16 = config.get_config("bf16", False) and torch.cuda.is_available() and torch.cuda.is_bf16_supported() and not (load_in_4bit or load_in_8bit)
-    # Use fp16 if not bf16, cuda is available, AND (not quantized OR 8-bit quantized)
-    # 4-bit doesn't typically use fp16/bf16 training args directly
+    # Use fp16 if not bf16, cuda is available, AND (not 4-bit quantized)
+    # 8-bit training *requires* fp16=True in TrainingArguments
     use_fp16 = not use_bf16 and torch.cuda.is_available() and not load_in_4bit
 
     config.log(f"Training precision: bf16={use_bf16}, fp16={use_fp16}", level=config.logging.INFO)
@@ -147,7 +147,7 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         per_device_eval_batch_size=config.get_config("eval_batch_size", 1), # Default eval batch size
         gradient_accumulation_steps=config.get_config("gradient_accumulation_steps", 1), # Default grad accum
         # --- Precision ---
-        fp16=use_fp16,
+        fp16=use_fp16, # Enable fp16 for 8-bit or standard fp16 training
         bf16=use_bf16,
         # --- Optimizer ---
         learning_rate=config.get_config("learning_rate", 5e-5), # Default LR
@@ -172,9 +172,9 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
         # Check if gradient_checkpointing is actually enabled before setting kwargs
         if training_args.gradient_checkpointing:
             training_args.gradient_checkpointing_kwargs = {"use_reentrant": False}
-            config.log("Setting gradient_checkpointing_kwargs={'use_reentrant': False} for quantized model.", level=config.logging.INFO)
+            log("Setting gradient_checkpointing_kwargs={'use_reentrant': False} for quantized model.", level=config.logging.INFO)
         else:
-            config.log("Gradient checkpointing is disabled, not setting gradient_checkpointing_kwargs.", level=config.logging.INFO)
+            log("Gradient checkpointing is disabled, not setting gradient_checkpointing_kwargs.", level=config.logging.INFO)
 
 
     config.log(f"Training Arguments: {training_args.to_dict()}", level=config.logging.DEBUG, do_print=False)
