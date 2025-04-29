@@ -109,10 +109,10 @@ def initialize(
     config_file_path = None
 
     if hasattr(args, 'train') and args.train:
-        config_file_path = DEFAULT_TRAIN_CONFIG
+        config_file_path = os.path.join(config_file_path, DEFAULT_TRAIN_CONFIG)
         context = "Training"
     elif hasattr(args, 'generate') and args.generate:
-        config_file_path = DEFAULT_GENERATE_CONFIG
+        config_file_path = os.path.join(config_file_path, DEFAULT_GENERATE_CONFIG)
         context = "Generation"
     
     if context in ["Training", "Generation"]:
