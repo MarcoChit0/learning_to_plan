@@ -192,7 +192,7 @@ def generate_batch(
     config.log(f"Loading tasks from {data_file_path}")
     try:
         tasks: set[task.Task] = task.get_tasks_from_jsonl(data_file_path)
-        test_tasks = {t for t in tasks if t._type == task.TaskType.TEST} # Use set comprehension
+        test_tasks = {t for t in tasks if t._type == task.Task.TaskType.TEST} # Use set comprehension
         config.log(f"Found {len(test_tasks)} test tasks out of {len(tasks)} total.")
 
         tasks_to_process: set[task.Task] = set()

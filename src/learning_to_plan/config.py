@@ -265,6 +265,7 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
         return None, None
 
     # --- Determine Model Source (Checkpoint or Base) ---
+    print(f"Checkpoint dir: {checkpoint_dir}")
     last_checkpoint = None
     model_source = model_name_from_config
     if checkpoint_dir:

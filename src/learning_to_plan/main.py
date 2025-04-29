@@ -220,7 +220,7 @@ if __name__ == "__main__":
             domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
             config.log(f"Using Gemini API for generation. Gemini model: {model_name}")
         else:
-            if hasattr(args, "load_without_finetuned_checkpoints") and args.load_with_finetuned_checkpoints:
+            if hasattr(args, "load_without_finetuned_checkpoints") and args.load_without_finetuned_checkpoints:
                 model_checkpoints_base_dir = os.path.join(config.CHECKPOINTS_DIR, model_name)
                 domains = get_selected_domains(args, model_checkpoints_base_dir)
                 config.log(f"Using fine-tuning checkpoints at {model_checkpoints_base_dir} for generation.")
