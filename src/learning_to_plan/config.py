@@ -6,6 +6,7 @@ import logging
 import argparse
 import torch # Added torch import
 from typing import Optional, Dict, Any, Tuple # Added Tuple
+import dotenv
 
 # Import necessary HF classes
 from transformers import (
@@ -75,8 +76,7 @@ def log(
 
 
 def initialize(
-    args: Optional[argparse.Namespace] = None,
-    config_path: Optional[str] = None, # User can specify a config file path
+    args: argparse.Namespace,
 ) -> None:
     """
     Initializes configuration by loading from JSON (explicit path or default based on context),
@@ -94,9 +94,8 @@ def initialize(
     """
     global _CONFIG_STORE, HUGGINGFACE_TOKEN, GOOGLE_API_KEY
     global DATA_DIR, RAW_DIR, PROCESSED_DATA_DIR, CHECKPOINTS_DIR
-    global LOGGING_INITIALIZED, logger # Use the global logger
+    global LOGGING_INITIALIZED, logger
 
-    # Initial message uses the basic setup
     log("Basic console logging initialized.", level=logging.INFO)
 
     if args is None:
@@ -104,148 +103,78 @@ def initialize(
         log(e, level=logging.ERROR)
         raise ValueError(e) # Raise error as it's critical
 
-    # --- 1. Load Base Model/Train/Generate Configuration ---
+    # --- 1. Determine and Load Base Configuration ---
     loaded_config = {}
-    config_source = "None (Context not Train/Generate or no path/default found)"
-    load_attempted = False
+    context = "Unknown"
+    config_file_path = None
 
-    if config_path:
-        log(f"Attempting to load configuration from specified path: {config_path}")
-        load_attempted = True
+    if hasattr(args, 'train') and args.train:
+        config_file_path = DEFAULT_TRAIN_CONFIG
+        context = "Training"
+    elif hasattr(args, 'generate') and args.generate:
+        config_file_path = DEFAULT_GENERATE_CONFIG
+        context = "Generation"
+    
+    if context in ["Training", "Generation"]:
+        if hasattr(args, 'config_path') and args.config_path:
+            config_file_path = args.config_path
+            log(f"Explicit config path provided.", level=logging.INFO)
+        else:
+            log("No explicit config path provided and context is not Train or Generate. No config file will be loaded by default.", level=logging.INFO)
+        log(f"Using config file: {config_file_path}", level=logging.INFO)
+
+        if not os.path.exists(config_file_path):
+            log(f"Config file '{config_file_path}' does not exist. Cannot load configuration.", level=logging.ERROR)
+            raise FileNotFoundError(f"Config file '{config_file_path}' not found.")
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_file_path, 'r', encoding='utf-8') as f:
                 loaded_config = json.load(f)
-            config_source = f"Explicit File: {config_path}"
-        except FileNotFoundError:
-            msg = f"Specified configuration file not found: {config_path}. Proceeding without model config."
-            log(msg, level=logging.ERROR)
-            config_source = f"Error (File not found: {config_path})"
-        except json.JSONDecodeError as e:
-            msg = f"Error decoding JSON from {config_path}: {e}. Proceeding without model config."
-            log(msg, level=logging.ERROR)
-            config_source = f"Error (Invalid JSON: {config_path})"
+            log(f"{context} Configuration File: {config_file_path}", level=logging.INFO)
+            log(f"Successfully loaded configuration from {config_file_path}.", level=logging.INFO)
         except Exception as e:
-            msg = f"Unexpected error loading {config_path}: {e}. Proceeding without model config."
-            log(msg, level=logging.ERROR, exc_info=True)
-            config_source = f"Error (Load error: {config_path})"
-    else:
-        # No explicit path, check context from args to load default
-        default_config_to_load = None
-        context = "Unknown"
-        if hasattr(args, 'train') and args.train:
-            default_config_to_load = DEFAULT_TRAIN_CONFIG
-            context = "Training"
-        elif hasattr(args, 'generate') and args.generate:
-             default_config_to_load = DEFAULT_GENERATE_CONFIG
-             context = "Generation"
-
-        if default_config_to_load:
-            log(f"No explicit config path. Attempting to load default '{context}' config: {default_config_to_load}")
-            load_attempted = True
-            default_path = os.path.join(CONFIGS_DIR, default_config_to_load)
-            if os.path.exists(default_path):
-                try:
-                    with open(default_path, 'r', encoding='utf-8') as f:
-                        loaded_config = json.load(f)
-                    config_source = f"Default {context} File: {default_path}"
-                except Exception as e:
-                    msg = f"Error loading default {context} config {default_path}: {e}."
-                    log(msg, level=logging.ERROR, exc_info=True)
-                    config_source = f"Error (Load error: {default_path})"
-            else:
-                error_message = f"Default {context} config file '{default_path}' not found."
-                log(error_message, level=logging.ERROR)
-                # Only raise FileNotFoundError if it's a train or generate context and default config is missing
-                if context in ["Training", "Generation"]:
-                    raise FileNotFoundError(error_message) # Make missing default fatal
-                else:
-                    log(f"Skipping fatal error for missing default config in '{context}' context.", level=logging.WARNING)
-
+            m = f"Error loading config file {config_file_path}: {e}"
+            log(m, level=logging.ERROR, exc_info=True)
+            raise ValueError(m) from e
 
     # --- 2. Apply Overrides from Args ---
-    if load_attempted or loaded_config:
+    if loaded_config:
         log("Applying command-line argument overrides to configuration...")
-        # Define which command-line arguments can override config values
-        override_keys = {"model_name", "num_train_epochs"} # Use a set for efficient lookups
-
+        override_keys = {"model_name", "num_train_epochs"}
         for arg_name, arg_value in vars(args).items():
             if arg_name in override_keys and arg_value is not None:
                 original_value = loaded_config.get(arg_name)
-                # Only log if the value is different or being newly set
                 if arg_name not in loaded_config or original_value != arg_value:
-                    log(f"  Overriding '{arg_name}': {original_value if arg_name in loaded_config else '<Not Set>'} -> {arg_value}")
+                    log(f"\tOverriding '{arg_name}': {original_value if arg_name in loaded_config else '<Not Set>'} -> {arg_value}")
                     loaded_config[arg_name] = arg_value
 
         # Handle 4bit/8bit/bf16 overrides
-        # Priority: 4bit > 8bit > bf16/fp16
-        bf16_enabled = loaded_config.get("bf16", False) # Check initial bf16 status
-
-        if hasattr(args, 'load_in_4bit') and args.load_in_4bit:
-            log("  Override: Enabling 4-bit loading via command line.")
-            if loaded_config.get("load_in_8bit", False):
-                log("  Overriding 'load_in_8bit': True -> False (due to --load_in_4bit)")
-            if bf16_enabled:
-                 log("  Overriding 'bf16': True -> False (due to --load_in_4bit)")
-            loaded_config["load_in_4bit"] = True
-            loaded_config["load_in_8bit"] = False
-            loaded_config["bf16"] = False # Quantization overrides float types
-
-        elif hasattr(args, 'load_in_8bit') and args.load_in_8bit:
-            log("  Override: Enabling 8-bit loading via command line.")
-            if loaded_config.get("load_in_4bit", False):
-                 log("  Overriding 'load_in_4bit': True -> False (due to --load_in_8bit)")
-            if bf16_enabled:
-                log("  Overriding 'bf16': True -> False (due to --load_in_8bit)")
-            loaded_config["load_in_4bit"] = False
-            loaded_config["load_in_8bit"] = True
-            loaded_config["bf16"] = False # Quantization overrides float types
-
+        # Priority: 8bit > bf16 > fp16
+        if (hasattr(args, 'load_in_8bit') and args.load_in_8bit) or loaded_config.get("load_in_8bit", False):
+            loaded_config["load_in_8bit"] = True 
+            loaded_config["bf16"] = False
+            log("Set bf16 to False due to 8bit override.", level=logging.INFO)
 
     # --- 3. Store Final Model/Train/Generate Configuration ---
-    _CONFIG_STORE = loaded_config
-    log(f"Model configuration source: {config_source}")
+    _CONFIG_STORE = loaded_config 
     log(f"Final Configuration: {json.dumps(_CONFIG_STORE, indent=2)}", level=logging.DEBUG, do_print=False)
 
 
-    # --- 4. Setup Paths, Logging (File Handler), and Tokens (Always Run) ---
-    _setup_paths_and_logging(args)
-
-
-def _setup_paths_and_logging(args: Optional[argparse.Namespace]):
-    """Helper function to set up paths and file logging."""
-    global DATA_DIR, RAW_DIR, PROCESSED_DATA_DIR, CHECKPOINTS_DIR
-    global HUGGINGFACE_TOKEN, GOOGLE_API_KEY, LOGGING_INITIALIZED, logger
+    # --- 4. Setup Tokens and API Keys ---
+    dotenv.load_dotenv()  
 
     # --- Handle Hugging Face Token ---
-    temp_hf_token = None
-    if args is not None and hasattr(args, 'huggingface_token') and args.huggingface_token:
-        temp_hf_token = args.huggingface_token
-    else:
-        import dotenv
-        dotenv.load_dotenv()
-        temp_hf_token = os.getenv("HUGGINGFACE_TOKEN")
-
-    HUGGINGFACE_TOKEN = temp_hf_token
+    HUGGINGFACE_TOKEN = args.huggingface_token if hasattr(args, 'huggingface_token') and args.huggingface_token else os.getenv("HUGGINGFACE_TOKEN")
     if not HUGGINGFACE_TOKEN:
         log("Hugging Face token not provided. Set it via --huggingface_token or HUGGINGFACE_TOKEN environment variable. HF model loading may fail.", level=logging.WARNING)
 
     # --- Handle Google API Key ---
-    temp_google_api_key = None
-    if args is not None and hasattr(args, 'google_api_key') and args.google_api_key:
-        temp_google_api_key = args.google_api_key
-    else:
-        import dotenv
-        dotenv.load_dotenv()
-        temp_google_api_key = os.getenv("GOOGLE_API_KEY")
-
-    GOOGLE_API_KEY = temp_google_api_key
+    GOOGLE_API_KEY = args.google_api_key if hasattr(args, 'google_api_key') and args.google_api_key else os.getenv("GOOGLE_API_KEY")
     if not GOOGLE_API_KEY:
         log("Google API key not provided. Set it via --google_api_key or GOOGLE_API_KEY environment variable. Gemini model generation may fail.", level=logging.WARNING)
 
 
-    # --- Initialize Directories ---
-
-    if args is not None and hasattr(args, 'data_dir_path') and args.data_dir_path:
+    # --- 5. Setup Data Directories ---
+    if hasattr(args, 'data_dir_path') and args.data_dir_path:
         DATA_DIR = args.data_dir_path
     log(f"Using DATA_DIR: {DATA_DIR}")
     RAW_DIR = os.path.join(DATA_DIR, "raw")
@@ -259,7 +188,7 @@ def _setup_paths_and_logging(args: Optional[argparse.Namespace]):
             log(f"Failed to create directory {dir_path}: {e}", level=logging.ERROR, exc_info=True)
     log("Data directories ensured/created.")
 
-    # --- Initialize File Logging (Add Handler Once) ---
+    # --- 6. Initialize File Logging (Add Handler Once) ---
     root_logger = logging.getLogger()
     has_file_handler = any(isinstance(h, logging.FileHandler) for h in root_logger.handlers)
 
@@ -306,8 +235,6 @@ def create_necessary_dirs(file_path: str) -> None:
         dirs = os.path.dirname(file_path)
         if dirs:
             os.makedirs(dirs, exist_ok=True)
-    except OSError as e:
-        log(f"Error creating directories for {file_path}: {e}", level=logging.ERROR, exc_info=True)
     except Exception as e:
         log(f"Unexpected error in create_necessary_dirs for {file_path}: {e}", level=logging.ERROR, exc_info=True)
 
@@ -345,146 +272,36 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
         if last_checkpoint:
             model_source = last_checkpoint
 
-    log(f"Determined model source: {model_source} ({'-- Checkpoint' if last_checkpoint else '-- Base Model'})", level=logging.INFO)
+    log(f"Determined model source: {model_source} ({'Checkpoint' if last_checkpoint else 'Base Model'})", level=logging.INFO)
 
-    # --- Quantization Configuration ---
-    load_in_4bit = get_config("load_in_4bit", False)
-    load_in_8bit = get_config("load_in_8bit", False)
-    quantization_config = None
-    # Use float32 compute dtype for 4-bit as recommended for stability
-    bnb_4bit_compute_dtype = torch.float32
-
-    if load_in_4bit:
-        log("Applying 4-bit quantization.", level=logging.INFO)
-        quantization_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4", # Use nf4 as it's often more robust
-            bnb_4bit_use_double_quant=False, # Double quant often not needed for nf4
-            bnb_4bit_compute_dtype=bnb_4bit_compute_dtype
-        )
-    elif load_in_8bit:
-        log("Applying 8-bit quantization.", level=logging.INFO)
-        # Load base model in fp16 first, then apply 8-bit config during load
-        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
-    else:
-        log("Loading model without quantization.", level=logging.INFO)
-
-    # --- Load Tokenizer ---
-    assert HUGGINGFACE_TOKEN, "Hugging Face token is not set. Cannot load tokenizer."
-    try:
-        log(f"Loading tokenizer from: {model_source}", level=logging.INFO)
-        tokenizer = AutoTokenizer.from_pretrained(
+    assert HUGGINGFACE_TOKEN, "Hugging Face token is required for model loading."
+    tokenizer = AutoTokenizer.from_pretrained(model_source, trust_remote_code=True, token=HUGGINGFACE_TOKEN)
+    if get_config("load_in_8bit"):
+        model = AutoModelForCausalLM.from_pretrained(
             model_source,
-            trust_remote_code=get_config("trust_remote_code", True),
+            trust_remote_code=True,
+            device_map="auto",
+            quantization_config=BitsAndBytesConfig(load_in_8bit=True),
             token=HUGGINGFACE_TOKEN,
         )
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-            log("Tokenizer pad token set to EOS token.", level=logging.INFO)
-        log(f"Tokenizer loaded successfully from {model_source}.", level=logging.INFO)
-    except Exception as e:
-        m = f"Failed to load tokenizer from {model_source}: {e}"
-        log(m, level=logging.ERROR, exc_info=True)
-        raise ValueError(m) from e
-
-    # --- Load Model ---
-    model = None
-    try:
-        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-        log(f"Loading model from: {model_source}", level=logging.INFO)
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        # Determine torch_dtype based on config and quantization
-        if load_in_8bit:
-            torch_dtype = torch.float16 # Load base in float16 for 8-bit
-            log("Using torch_dtype: torch.float16 (for 8-bit quantization base)", level=logging.INFO)
-        elif load_in_4bit:
-            # For 4-bit, compute dtype is handled by BitsAndBytesConfig, base can be auto/fp16
-            torch_dtype = torch.float16 # Default to float16 for 4-bit base as well
-            log("Using torch_dtype: torch.float16 (for 4-bit quantization base)", level=logging.INFO)
-        elif get_config("bf16", False) and torch.cuda.is_available() and torch.cuda.is_bf16_supported():
-            torch_dtype = torch.bfloat16
-            log(f"Using torch_dtype: {torch_dtype} (bf16)", level=logging.INFO)
-        elif torch.cuda.is_available():
-             torch_dtype = torch.float16
-             log(f"Using torch_dtype: {torch_dtype} (fp16 default)", level=logging.INFO)
-        else:
-             torch_dtype = torch.float32 # CPU default
-             log(f"Using torch_dtype: {torch_dtype} (CPU default)", level=logging.INFO)
-
-
-        if quantization_config:
-            log(f"Loading model with quantization: {quantization_config}", level=logging.INFO)
-            # Remove device_map="auto" to let Trainer handle multi-GPU
-            model = AutoModelForCausalLM.from_pretrained(
-                model_source,
-                trust_remote_code=get_config("trust_remote_code", True),
-                token=HUGGINGFACE_TOKEN,
-                quantization_config=quantization_config,
-                torch_dtype=torch_dtype if load_in_8bit else None, # Specify dtype only if loading 8-bit base this way
-                # device_map="auto", # REMOVED for multi-GPU Trainer compatibility
-            )
-            log("Model loaded with quantization (device_map removed).", level=logging.INFO)
-
-            # Explicitly move to CUDA if available, before PEFT preparation
-            if torch.cuda.is_available():
-                 log(f"Moving base quantized model to {device} before PEFT preparation...", level=logging.INFO)
-                 model.to(device)
-                 log(f"Model moved to {device}.", level=logging.INFO)
-
-            # --- Prepare for k-bit training (IMPORTANT) ---
-            if load_in_4bit or load_in_8bit:
-                log("Preparing model for k-bit training (casting layernorms/head to float32)...", level=logging.INFO)
-                model = prepare_model_for_kbit_training(model)
-                log("Model prepared for k-bit training.", level=logging.INFO)
-
-            # --- Apply LoRA for Quantized Models ---
-            log("Applying LoRA adapter to quantized model...", level=logging.INFO)
-            r = get_config("lora_r", 8)
-            alpha = get_config("lora_alpha", r * 4) # Default alpha based on r
-            target_modules = get_config("lora_target_modules", ["q_proj", "k_proj", "v_proj", "o_proj", "up_proj", "down_proj", "gate_proj"]) # Get from config or use default
-            lora_cfg = LoraConfig(
-                r=r,
-                lora_alpha=alpha,
-                target_modules=target_modules,
-                lora_dropout=get_config("lora_dropout", 0.05),
-                bias=get_config("lora_bias", "none"),
-                task_type="CAUSAL_LM",
-            )
-            model = get_peft_model(model, lora_cfg)
-            log("LoRA adapter applied.", level=logging.INFO)
-            try:
-                 model.print_trainable_parameters()
-            except Exception as pe:
-                 log(f"Could not print trainable parameters: {pe}", level=logging.WARNING)
-
-        else:
-            # --- Load Non-Quantized Model ---
-            log("Loading model without quantization.", level=logging.INFO)
-            model = AutoModelForCausalLM.from_pretrained(
-                model_source,
-                trust_remote_code=get_config("trust_remote_code", True),
-                torch_dtype=torch_dtype, # Use determined dtype
-                token=HUGGINGFACE_TOKEN,
-                # device_map="auto" # REMOVED for multi-GPU Trainer compatibility
-            )
-            log("Model loaded (device_map removed).", level=logging.INFO)
-            # Explicitly move to CUDA if available
-            if torch.cuda.is_available():
-                log(f"Moving non-quantized model to {device}...", level=logging.INFO)
-                model.to(device)
-                log(f"Model moved to {device}.", level=logging.INFO)
-
-
-        log(f"Model loaded successfully from {model_source}.", level=logging.INFO)
-
-    except FileNotFoundError as e:
-         m = f"Model source not found: {model_source}. Check path or model name. Error: {e}"
-         log(m, level=logging.ERROR, exc_info=True)
-         raise FileNotFoundError(m) from e
-    except Exception as e:
-        m = f"Failed to load model from {model_source}: {e}"
-        log(m, level=logging.ERROR, exc_info=True)
-        raise ValueError(m) from e # Re-raise as ValueError for consistent handling upstream
-
+        lora_r = get_config("lora_r", 8)
+        # attach LoRA adapter so the model becomes trainable
+        lora_cfg = LoraConfig(
+            r=lora_r,
+            lora_alpha=get_config("lora_alpha", lora_r*4),
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                            "up_proj", "down_proj", "gate_proj"],
+            lora_dropout=get_config("lora_dropout", 0.05),
+            bias=get_config("lora_bias", "none"),
+            task_type="CAUSAL_LM",
+        )
+        model = get_peft_model(model, lora_cfg)
+        model.print_trainable_parameters()
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_source,
+            trust_remote_code=True,
+            torch_dtype=torch.bfloat16 if get_config("bf16") else torch.float16,
+            token=HUGGINGFACE_TOKEN,
+        )
     return model, tokenizer

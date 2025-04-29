@@ -60,11 +60,6 @@ def parse_args():
         help="Override number of training epochs specified in config."
     )
     parser.add_argument(
-        "--load_in_4bit",
-        action="store_true",
-        help="Override config to load the base model in 4bit (for training/generation)."
-    )
-    parser.add_argument(
         "--load_in_8bit",
         action="store_true",
         help="Override config to load the base model in 8bit (for training/generation)."
@@ -159,7 +154,7 @@ def get_selected_domains(args, base_dir):
 if __name__ == "__main__":
     args = parse_args()
 
-    config.initialize(args, config_path=args.config_path)
+    config.initialize(args)
 
     # --- Action Blocks ---
     if args.call_paas:
