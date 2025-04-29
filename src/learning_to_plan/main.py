@@ -221,12 +221,12 @@ if __name__ == "__main__":
             config.log(f"Using Gemini API for generation. Gemini model: {model_name}")
         else:
             if hasattr(args, "load_without_finetuned_checkpoints") and args.load_without_finetuned_checkpoints:
+                domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
+                config.log(f"Using base model {model_name} for generation.")
+            else:
                 model_checkpoints_base_dir = os.path.join(config.CHECKPOINTS_DIR, model_name)
                 domains = get_selected_domains(args, model_checkpoints_base_dir)
                 config.log(f"Using fine-tuning checkpoints at {model_checkpoints_base_dir} for generation.")
-            else:
-                domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
-                config.log(f"Using base model {model_name} for generation.")
         assert domains != [], f"No valid domains found for generation. Please check your configuration."
         config.log(f"Domains selected for generation: {', '.join(domains)}")
 
