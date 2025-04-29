@@ -245,12 +245,35 @@ class Task(abc.ABC):
 class BlocksworldTask(Task):
     def __init__(self, domain_file_path, instance_file_path):
         super().__init__("blocksworld", domain_file_path, instance_file_path)
-
+    
+    def fact_to_natural_language(self, fact:str) -> str:
+        """
+            fact : str - a line of PDDL representing a fact
+        """
+        fact = fact.strip()
+        if not fact: return ""
+        fact = fact.strip("()")
+        tokens = fact.split()
+        if tokens[0] == "handempty":
+            return "your hand is empty."
+        elif tokens[0] == "holding":
+            return f"you are holding {tokens[1]}."
+        elif tokens[0] == "clear":
+            return f"{tokens[1]} is clear."
+        elif tokens[0] == "ontable":
+            return f"{tokens[1]} is on the table."
+        elif tokens[0] == "on":
+            return f"{tokens[1]} is on {tokens[2]}."
+        else:
+            raise ValueError(f"Unknown fact: {fact}")
+        
+        
+    # TODO: review this function
     def convert_instance_into_natural_language(self, pddl_text:str) -> str:
         obj_match = re.search(r"\(:objects\s+(.*?)\)", pddl_text, re.DOTALL)
         objects = obj_match.group(1).split() if obj_match else []
         objects_str = "blocks: " + ", ".join(objects) + "."
-        init_match = re.search(r"\(:init\s+(.*?)\)", pddl_text, re.DOTALL)
+        init_match = re.search(r"\(:init\s+(.*?)\)", pddl_text, flags=re.DOTALL)
         init_lines = init_match.group(1).split("\n") if init_match else []
         init_facts = []
         for line in init_lines:
