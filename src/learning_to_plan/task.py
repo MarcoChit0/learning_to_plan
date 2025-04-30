@@ -10,26 +10,23 @@ instance_pattern = re.compile(r"instance-(\d+)\.pddl$")
 lock = threading.Lock()
 
 class NaturalLanguagePlan:
-    def __init__(self, plan:str, is_valid:bool=False, validated:bool=False):
-        self._plan = plan
-        self._is_valid = is_valid
-        self._validated = validated
+    def __init__(self, plan:str, is_valid:Optional[bool]=None):
+        self._plan:str = plan
+        self._is_valid:Optional[bool] = is_valid
     
     def validate(self, is_valid:bool):
         self._is_valid = is_valid
-        self._validated = True
     
     def to_json(self):
         return {
             "plan": self._plan,
             "is_valid": self._is_valid,
-            "validated": self._validated
         }
 
     def from_json(self, json_obj):
         self._plan = json_obj.get("plan", None)
-        self._is_valid = json_obj.get("is_valid", False)
-        self._validated = json_obj.get("validated", False)
+        self._is_valid = json_obj.get("is_valid", None)
+        assert self._plan is not None, "NaturalLanguagePlan must have a plan."
 
 class Task(abc.ABC):
     class TaskType(Enum):
@@ -384,7 +381,7 @@ class BlocksworldTask(Task):
         lines = plan.replace(";", "\n").strip().split("\n")
 
         for line in lines:
-            nl_a = line.strip().lower()
+            nl_a = line.lower().replace("block", "").strip()
             if not nl_a: # Skip empty lines
                 continue
 

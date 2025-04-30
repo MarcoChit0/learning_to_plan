@@ -10,6 +10,8 @@ from learning_to_plan import utils
 from learning_to_plan import task
 from learning_to_plan import config # Import the refactored config
 from learning_to_plan import generate # Import the new generate module
+from learning_to_plan import validate
+from learning_to_plan import metrics
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Learning to Plan")
@@ -39,6 +41,16 @@ def parse_args():
         "--generate",
         action="store_true",
         help="Use a trained model to generate plans for test instances."
+    )
+    parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="Validate model generated plans using VAL"
+    )
+    parser.add_argument(
+        "--compute_metrics",
+        action="store_true",
+        help="Compute metrics for the generated plans."
     )
     # --- Configuration & Overrides ---
     parser.add_argument(
@@ -260,6 +272,20 @@ if __name__ == "__main__":
             )
             config.log(f"Finished generation for domain: {domain}")
         config.log("--- Finished All Generation ---")
+
+    elif args.validate:
+        config.log("--- Starting Validation ---")
+        domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
+        for domain in domains:
+            config.log(f"Validating plans for domain: {domain}")
+            data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
+            assert os.path.exists(data_file_path), f"Data file not found: {data_file_path}"
+            validate.validate_plans(data_file_path)
+            config.log(f"Finished validation for domain: {domain}")
+        config.log("--- Finished All Validation ---")
+
+    elif args.compute_metrics:
+        pass
 
     else:
         config.log("No action requested (e.g., --train, --generate). Exiting.", level=logging.WARNING)
