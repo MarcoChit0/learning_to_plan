@@ -43,8 +43,7 @@ def generate_single_hf(
     with torch.no_grad():
         # Use autocast only if on CUDA and model is not 4/8 bit
         # Quantized models handle types internally via bitsandbytes
-        is_quantized = hasattr(model, 'is_loaded_in_8bit') and model.is_loaded_in_8bit or \
-                       hasattr(model, 'is_loaded_in_4bit') and model.is_loaded_in_4bit
+        is_quantized = hasattr(model, 'is_loaded_in_8bit') and model.is_loaded_in_8bit
         use_autocast = (device_type == 'cuda') and not is_quantized
 
         with torch.autocast(
@@ -62,13 +61,14 @@ def generate_single_hf(
 
             outputs = model.generate(
                 **inputs,
-                max_new_tokens=config.get_config("max_new_tokens", 2048),
+                max_new_tokens=config.get_config("max_new_tokens", 2048), 
                 do_sample=config.get_config("do_sample", True),
                 temperature=config.get_config("temperature", 0.7),
-                top_p=config.get_config("top_p", 1.0), # Added top_p
+                top_p=config.get_config("top_p", 0.93), # Added top_p
+                top_k=config.get_config("top_k", 50),
                 eos_token_id=tokenizer.eos_token_id,
                 pad_token_id=tokenizer.eos_token_id,
-                num_return_sequences=config.get_config("num_return_sequences", 1),
+                num_return_sequences=config.get_config("num_return_sequences", 1), # On the paper 1, 3 and 5
             )
 
         # Decode all the sequences, removing the prompt part
