@@ -204,11 +204,11 @@ def generate_batch(
             tasks_to_process = test_tasks
             config.log(f"Selecting all {len(tasks_to_process)} test tasks.")
         elif isinstance(selection_criteria, str):
-            mode = selection_criteria.lower()
-            if mode == "basic":
+            size = selection_criteria.lower()
+            if size == "basic":
                 tasks_to_process = {t for t in test_tasks if not t._is_longer_plan}
                 config.log(f"Selecting {len(tasks_to_process)} basic test tasks.")
-            elif mode == "long":
+            elif size == "long":
                 tasks_to_process = {t for t in test_tasks if t._is_longer_plan}
                 config.log(f"Selecting {len(tasks_to_process)} long test tasks.")
             else:
@@ -225,8 +225,6 @@ def generate_batch(
             raise TypeError(f"Unsupported type for selection criteria: {type(selection_criteria)}. Expected int, str, or None.")
 
         config.log(f"Selected {len(tasks_to_process)} final instances for generation.")
-
-        # Keep track of tasks not processed to save them back later
         tasks = tasks - tasks_to_process
 
     except Exception as e:
@@ -235,7 +233,6 @@ def generate_batch(
 
     # --- Generate Plans ---
     config.log("Starting plan generation loop...")
-    processed_tasks_with_results = set() # Store tasks after generation attempt
     for t in tqdm(tasks_to_process, total=len(tasks_to_process), desc="Generating plans"):
         try:
             # config.log(f"Generating plans for task {t._id} with model {model_name}", level=config.logging.DEBUG) # DEBUG level
@@ -253,16 +250,13 @@ def generate_batch(
                     prompt_text=prompt_text
                 )
 
-            # Add generated plans (or error message) to the task object
-            t.add_generated_plans(model_name, generated_plans, overwrite=True) 
-            tasks.add(t) # Add task to the set of processed tasks
-
         except Exception as e:
             config.log(f"Error generating plan for task {t._id} with model {model_name}: {e}", level=config.logging.ERROR, exc_info=True)
-            # Add error message as a generated plan
-            t.add_generated_plans(model_name, [f"Generation Error: {e}"], overwrite=True)
-            processed_tasks_with_results.add(t) # Add task even if generation failed
-            continue
+            generated_plans = [f"Generation Error: {e}"]
+        
+        # Add generated plans (or error message) to the task object
+        t.add_generated_plans(model_name, generated_plans, overwrite=True)
+        tasks.add(t) 
 
     config.log(f"Plan generation loop completed for {len(tasks_to_process)} instances.")
 

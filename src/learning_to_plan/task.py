@@ -384,7 +384,7 @@ class BlocksworldTask(Task):
         lines = plan.replace(";", "\n").strip().split("\n")
 
         for line in lines:
-            nl_a = line.strip()
+            nl_a = line.strip().lower()
             if not nl_a: # Skip empty lines
                 continue
 

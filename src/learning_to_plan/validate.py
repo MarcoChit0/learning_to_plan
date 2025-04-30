@@ -30,9 +30,17 @@ def validate_plans(data_file_path):
     assert len(test_tasks) > 0, f"No test tasks found in {data_file_path}."
     config.log(f"Found {len(test_tasks)} test tasks.", level=config.logging.INFO)
     tasks = tasks - test_tasks
-
+    val_executable = "/utils/VAL/bin/Validate" # Adjust if necessary
+    cmd_list = [
+        val_executable,
+        "-v",  # Verbose output
+        "-t", "0.001", # Tolerance for numeric effects (if any)
+        t._domain_file_path,
+        t._instance_file_path,
+        temp_plan_file
+    ]
+    
     for t in test_tasks:
-        task_validation_results = []
         config.log(f"Validating generated plans for task {t._id}...", level=config.logging.DEBUG)
         for model in t._model_generated_plans.keys():
             for i, p in enumerate(t._model_generated_plans[model]):
@@ -44,15 +52,7 @@ def validate_plans(data_file_path):
                         f.write(p)
                     config.log(f"Created temporary plan file: {temp_plan_file}", level=config.logging.DEBUG)
                     # Construct the validation command list for subprocess
-                    val_executable = "/utils/VAL/bin/Validate" # Adjust if necessary
-                    cmd_list = [
-                        val_executable,
-                        "-v",  # Verbose output
-                        "-t", "0.001", # Tolerance for numeric effects (if any)
-                        t._domain_file_path,
-                        t._instance_file_path,
-                        temp_plan_file
-                    ]
+                    
                     # Ensure the path to VAL executable is correct for your environment
                     config.log(f"Executing VAL command: {' '.join(cmd_list)}", level=config.logging.DEBUG)
                     # Execute the command using subprocess.run to capture output
@@ -85,7 +85,6 @@ def validate_plans(data_file_path):
                             config.log(f"Removed temporary plan file: {temp_plan_file}", level=config.logging.DEBUG)
                         except OSError as e:
                             config.log(f"Error removing temporary file {temp_plan_file}: {e}", level=config.logging.ERROR)
-            config.log(f"Finished validation for task {t._id}. Results: {task_validation_results}", level=config.logging.INFO)
         
     try:
         config.create_necessary_dirs(data_file_path)
