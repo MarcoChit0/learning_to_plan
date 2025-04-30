@@ -52,6 +52,7 @@ class Task(abc.ABC):
         self._plan : Optional[str] = None
         self._type : Optional[Task.TaskType] = None # training, validation, test | None
         self._model_generated_plans : Optional[dict[str, list[NaturalLanguagePlan]]] = None # Updated type hint
+        self._prompt : Optional[str] = None
 
     def validate_plan(self, model_name : str, plan_idx : int, is_valid: bool):
         if self._model_generated_plans:
@@ -66,28 +67,23 @@ class Task(abc.ABC):
             raise ValueError("No generated plans available to validate.")
 
     @abc.abstractmethod
-    def convert_instance_into_natural_language(self, plan) -> str:
+    def convert_pddl_instance_to_natural_language(self, plan) -> str:
         raise NotImplementedError("Subclasses must implement this method.")
 
     @abc.abstractmethod
-    def convert_plan_into_natural_language(self, plan) -> str:
+    def convert_pddl_plan_to_natural_language(self, plan) -> str:
         raise NotImplementedError("Subclasses must implement this method.")
 
     @abc.abstractmethod
     def build_prompt(self, **kwargs) -> str:
         raise NotImplementedError("Subclasses must implement this method.")
-
-    def add_separator(self, prompt: str) -> str:
-        if "## Plan." in prompt:
-            return prompt
-        else:
-            return prompt + "\n## Plan.\n\n"
         
-    def get_prompt(self, tokenizer_eos: str = "", with_plan: bool = True) -> str:
+    def get_prompt(self, eos_token: str = "", with_plan: bool = True) -> str:
         try:
             prompt = self.build_prompt()
-            prompt = self.add_separator(prompt)
-            prompt += tokenizer_eos
+            if "## Plan." not in prompt:
+                prompt += "\n\n# Plan.\n\n"
+            prompt += eos_token
             if with_plan and self._plan:
                 prompt += self._plan
             return prompt
@@ -124,23 +120,23 @@ class Task(abc.ABC):
             for model_name, nl_plans_list in self._model_generated_plans.items():
                 serialized_plans[model_name] = [nl_plan.to_json() for nl_plan in nl_plans_list]
 
-        data = {
-            "domain_file_path": self._domain_file_path,
-            "instance_file_path": self._instance_file_path,
-            "instance": self._instance,
-            "status": self._status.value if self._status else None,
-            "plan": self._plan,
-            "error_message": self._error_message,
-            "domain": self._domain,
-            "is_longer_plan": self._is_longer_plan,
-            "type": self._type.value if self._type else None,
-            "model_generated_plans": serialized_plans # Use the serialized version
-        }
         try:
-             data['prompt'] = self.add_separator(self.build_prompt())
+            data = {
+                "domain_file_path": self._domain_file_path,
+                "instance_file_path": self._instance_file_path,
+                "instance": self._instance,
+                "status": self._status.value if self._status else None,
+                "plan": self._plan,
+                "error_message": self._error_message,
+                "domain": self._domain,
+                "is_longer_plan": self._is_longer_plan,
+                "type": self._type.value if self._type else None,
+                "model_generated_plans": serialized_plans,
+                "prompt": self.get_prompt(with_plan=False)
+            }
         except (NotImplementedError, AssertionError, Exception) as e:
-            data['prompt'] = None
-            config.log(f"Could not generate prompt for task {self._id}: {e}", level=config.logging.WARNING)
+            config.log(f"Error generating prompt for task {self._id}: {e}", level=config.logging.ERROR)
+            raise e
 
         return json.dumps(data, ensure_ascii=False)
 
@@ -187,12 +183,12 @@ class Task(abc.ABC):
                     raise ValueError(msg)
 
         # Deserialize simple string fields
-        for field_name in ["plan", "error_message"]:
+        for field_name in ["plan", "error_message", "prompt"]:
             value = json_obj.get(field_name)
             if value is not None:
-                 if not isinstance(value, str):
-                    raise TypeError(f"{field_name} must be a string or null, but got {type(value)}")
-                 setattr(self, f"_{field_name}", value)
+                if not isinstance(value, str):
+                   raise TypeError(f"{field_name} must be a string or null, but got {type(value)}")
+                setattr(self, f"_{field_name}", value)
 
         # Deserialize model_generated_plans
         plans_map_json = json_obj.get("model_generated_plans")
@@ -222,7 +218,7 @@ class Task(abc.ABC):
         status = response.get("status", "error")
         if status == "ok":
             plan_text = response["result"]["output"]["sas_plan"]
-            plain_text_plan = self.convert_plan_into_natural_language(plan_text) if plan_text else ""
+            plain_text_plan = self.convert_pddl_plan_to_natural_language(plan_text) if plan_text else ""
             err_msg = ""
         else:
             plain_text_plan = ""
@@ -240,7 +236,7 @@ class Task(abc.ABC):
         with lock and open(self._domain_file_path, "r", encoding='utf-8') as f:
             domain_content = f.read()
         return domain_content
-
+    
 
 class BlocksworldTask(Task):
     def __init__(self, domain_file_path, instance_file_path):
@@ -268,56 +264,86 @@ class BlocksworldTask(Task):
             raise ValueError(f"Unknown fact: {fact}")
         
         
-    # TODO: review this function
-    def convert_instance_into_natural_language(self, pddl_text:str) -> str:
-        obj_match = re.search(r"\(:objects\s+(.*?)\)", pddl_text, re.DOTALL)
-        objects = obj_match.group(1).split() if obj_match else []
-        objects_str = "blocks: " + ", ".join(objects) + "."
-        init_match = re.search(r"\(:init\s+(.*?)\)", pddl_text, flags=re.DOTALL)
-        init_lines = init_match.group(1).split("\n") if init_match else []
-        init_facts = []
-        for line in init_lines:
-            line = line.strip()
-            if not line: continue
-            fact = line.strip("()")
-            tokens = fact.split()
-            if tokens[0] == "handempty":
-                init_facts.append("your hand is empty.")
-            elif tokens[0] == "holding":
-                init_facts.append(f"you are holding {tokens[1]}.")
-            elif tokens[0] == "clear":
-                init_facts.append(f"{tokens[1]} is clear.")
-            elif tokens[0] == "ontable":
-                init_facts.append(f"{tokens[1]} is on the table.")
-            elif tokens[0] == "on":
-                init_facts.append(f"{tokens[1]} is on {tokens[2]}.")
-            else:
-                init_facts.append(fact + ".")
-        init_text = "initial state:\n" + "\n".join(init_facts)
-        goal_match = re.search(r"\(:goal\s+\(and\s+(.*?)\)\s*\)", pddl_text, re.DOTALL)
-        goal_lines = goal_match.group(1).split("\n") if goal_match else []
-        goal_facts = []
-        for line in goal_lines:
-            line = line.strip()
-            if not line: continue
-            fact = line.strip("()")
-            tokens = fact.split()
-            if tokens[0] == "handempty":
-                goal_facts.append("your hand is empty.")
-            elif tokens[0] == "holding":
-                goal_facts.append(f"you are holding {tokens[1]}.")
-            elif tokens[0] == "clear":
-                goal_facts.append(f"{tokens[1]} is clear.")
-            elif tokens[0] == "ontable":
-                goal_facts.append(f"{tokens[1]} is on the table.")
-            elif tokens[0] == "on":
-                goal_facts.append(f"{tokens[1]} is on {tokens[2]}.")
-            else:
-                goal_facts.append(fact + ".")
-        goal_text = "goal state:\n" + "\n".join(goal_facts)
-        return f"{objects_str}\n\n{init_text}\n\n{goal_text}"
+    def convert_pddl_instance_to_natural_language(self, instance:str):
+        """
+            Example:     
+            instance: str - PDDL instance
 
-    def convert_plan_into_natural_language(self, plan:str) -> str:
+            (define (problem BW-rand-6)
+            (:domain blocksworld-4ops)
+            (:objects a b c d e f )
+            (:init
+            (handempty)
+            (ontable a)
+            (on b d)
+            (on c a)
+            (on d c)
+            (on e f)
+            (on f b)
+            (clear e)
+            )
+            (:goal
+            (and
+            (on a b)
+            (on d f)
+            (on e d)
+            (on f c))
+            )
+            )
+
+            should be converted to:
+
+            blocks: a, b, c, d, e, f.
+
+            initial state:
+            your hand is empty.
+            a is on the table.
+            b is on d.
+            c is on a.
+            d is on c.
+            e is on f.
+            f is on b.
+            e is clear.
+
+            goal state:
+            a is on b.
+            d is on f.
+            e is on d.
+            f is on c.
+        """
+        # Use regex to extract the relevant parts of the PDDL instance
+
+        objects_match = re.search(r"\(:objects\s+(.+?)\s+\)", instance, re.DOTALL)
+        init_match = re.search(r"\(:init\s+(.+?)\s+\)", instance, re.DOTALL)
+        goal_match = re.search(r"\(:goal\s+\(and\s+(.*?)\)\s*\)", instance, re.DOTALL)
+
+        if not (objects_match and init_match and goal_match):
+            raise ValueError("Invalid PDDL instance format.")
+        
+        objects = objects_match.group(1).strip().split()
+        init_facts = init_match.group(1).strip().split("\n")
+        goal_facts = goal_match.group(1).strip().split("\n")
+
+        if objects == [] or init_facts == [] or goal_facts == []:
+            raise ValueError("Empty objects, init, or goal in PDDL instance.")
+        
+        # Process objects
+        objects = [obj.strip() for obj in objects if obj.strip()]
+        objects_str = "blocks: " + ", ".join(objects) + "."
+
+        # Process initial state
+        init_facts = [self.fact_to_natural_language(fact) for fact in init_facts if fact.strip()]
+        init_facts_str = "initial state:\n" + "\n".join(init_facts)
+
+        # Process goal state
+        goal_facts = [self.fact_to_natural_language(fact) for fact in goal_facts if fact.strip()]
+        goal_facts_str = "goal state:\n" + "\n".join(goal_facts)
+
+        return f"{objects_str}\n\n{init_facts_str}\n\n{goal_facts_str}"
+        
+
+
+    def convert_pddl_plan_to_natural_language(self, plan:str) -> str:
         """
             plan: str - actions in PDDL format, each action in a new line
         """
@@ -340,7 +366,7 @@ class BlocksworldTask(Task):
                     raise ValueError(f"Unknown action: {action}")
         return nl_plan
     
-    def convert_plan_into_pddl(self, plan:str) -> str:
+    def convert_natural_language_plan_to_pddl(self, plan:str) -> str:
         """
         Converts a natural language plan into PDDL format.
 
@@ -391,65 +417,67 @@ class BlocksworldTask(Task):
         return "\n".join(pddl_actions)
 
     def build_prompt(self, **kwargs):
-        problem_description = self.convert_instance_into_natural_language(self.read_instance())
-        prompt = (
-                "# Goal.\n\n"
-                "Use the available actions to transform the initial state into the goal state.\n\n"
-                "# Output Format.\n\n"
-                "Return a sequence of actions, one per line, in the order they should be applied.\n\n"
-                "# Warnings.\n\n"
-                "An action can only be applied if all its preconditions are true in the current state.\n"
-                "When an action is applied, its effects update the current state by adding and removing facts.\n"
-                "The goal is reached when all facts in the goal state are present in the current state.\n"
-                "A valid plan must transform the initial state into the goal state using only applicable actions.\n"
-                "Starting from the initial state, choose an applicable action, apply it, and repeat this process until the goal is reached.\n"
-                "If no sequence of actions can reach the goal, return nothing.\n\n"
-                "# Context.\n\n"
-                "## Available actions.\n\n"
-                "### Action: pick up block.\n"
-                "preconditions:\n"
-                "block is on the table.\n"
-                "block is clear.\n"
-                "your hand is empty.\n\n"
-                "effects:\n"
-                "you are holding block.\n"
-                "your hand is not empty.\n"
-                "block is not on the table.\n"
-                "block is not clear.\n\n"
-                "### Action: put down block.\n"
-                "preconditions:\n"
-                "you are holding block.\n\n"
-                "effects:\n"
-                "block is on the table.\n"
-                "block is clear.\n"
-                "your hand is empty.\n"
-                "you are not holding block.\n\n"
-                "### Action: stack block1 on block2.\n"
-                "preconditions:\n"
-                "you are holding block1.\n"
-                "block2 is clear.\n\n"
-                "effects:\n"
-                "your hand is empty.\n"
-                "block1 is clear.\n"
-                "block2 is not clear.\n"
-                "you are not holding block1.\n"
-                "block1 is on block2.\n\n"
-                "### Action: unstack block1 from block2.\n"
-                "preconditions:\n"
-                "block1 is clear.\n"
-                "block1 is on block2.\n"
-                "your hand is empty.\n\n"
-                "effects:\n"
-                "you are holding block1.\n"
-                "your hand is not empty.\n"
-                "block2 is clear.\n"
-                "block1 is not clear.\n"
-                "block1 is not on block2.\n\n"
-                "## Instance.\n\n"
-                + problem_description + "\n\n"
-                "## Plan.\n\n"
-            )
-        return prompt
+        if not self._prompt:
+            problem_description = self.convert_pddl_instance_to_natural_language(self.read_instance())
+            prompt = (
+                    "# Goal.\n\n"
+                    "Use the available actions to transform the initial state into the goal state.\n\n"
+                    "# Output Format.\n\n"
+                    "Return a sequence of actions, one per line, in the order they should be applied.\n\n"
+                    "# Warnings.\n\n"
+                    "An action can only be applied if all its preconditions are true in the current state.\n"
+                    "When an action is applied, its effects update the current state by adding and removing facts.\n"
+                    "The goal is reached when all facts in the goal state are present in the current state.\n"
+                    "A valid plan must transform the initial state into the goal state using only applicable actions.\n"
+                    "Starting from the initial state, choose an applicable action, apply it, and repeat this process until the goal is reached.\n"
+                    "If no sequence of actions can reach the goal, return nothing.\n\n"
+                    "# Context.\n\n"
+                    "## Available actions.\n\n"
+                    "### Action: pick up block.\n"
+                    "preconditions:\n"
+                    "block is on the table.\n"
+                    "block is clear.\n"
+                    "your hand is empty.\n\n"
+                    "effects:\n"
+                    "you are holding block.\n"
+                    "your hand is not empty.\n"
+                    "block is not on the table.\n"
+                    "block is not clear.\n\n"
+                    "### Action: put down block.\n"
+                    "preconditions:\n"
+                    "you are holding block.\n\n"
+                    "effects:\n"
+                    "block is on the table.\n"
+                    "block is clear.\n"
+                    "your hand is empty.\n"
+                    "you are not holding block.\n\n"
+                    "### Action: stack block1 on block2.\n"
+                    "preconditions:\n"
+                    "you are holding block1.\n"
+                    "block2 is clear.\n\n"
+                    "effects:\n"
+                    "your hand is empty.\n"
+                    "block1 is clear.\n"
+                    "block2 is not clear.\n"
+                    "you are not holding block1.\n"
+                    "block1 is on block2.\n\n"
+                    "### Action: unstack block1 from block2.\n"
+                    "preconditions:\n"
+                    "block1 is clear.\n"
+                    "block1 is on block2.\n"
+                    "your hand is empty.\n\n"
+                    "effects:\n"
+                    "you are holding block1.\n"
+                    "your hand is not empty.\n"
+                    "block2 is clear.\n"
+                    "block1 is not clear.\n"
+                    "block1 is not on block2.\n\n"
+                    "## Instance.\n\n"
+                    + problem_description + "\n\n"
+                    "## Plan.\n\n"
+                )
+            self._prompt = prompt
+        return self._prompt
 
 import learning_to_plan.config as config
 
@@ -568,7 +596,7 @@ def convert_tasks_into_dataset(tasks:set[Task], tokenizer_eos:str="", with_plan:
     dataset_list = []
     for t in tasks:
         try:
-            p = t.get_prompt(tokenizer_eos=tokenizer_eos, with_plan=with_plan)
+            p = t.get_prompt(eos_token=tokenizer_eos, with_plan=with_plan)
             dataset_list.append({
                     "text": p,
                 })

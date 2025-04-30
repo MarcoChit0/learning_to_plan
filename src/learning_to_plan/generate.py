@@ -239,7 +239,7 @@ def generate_batch(
     for t in tqdm(tasks_to_process, total=len(tasks_to_process), desc="Generating plans"):
         try:
             # config.log(f"Generating plans for task {t._id} with model {model_name}", level=config.logging.DEBUG) # DEBUG level
-            prompt_text = t.add_separator(t.build_prompt()) # Ensure separator is added
+            prompt_text = t.add_separator(t.get_prompt()) # Ensure separator is added
 
             if is_gemini_model:
                 generated_plans = generate_single_gemini(

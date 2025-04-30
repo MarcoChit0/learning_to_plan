@@ -36,27 +36,25 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
     try:
         assert os.path.exists(data_file_path), f"Data file {data_file_path} does not exist."
 
-        import pandas as pd
-        df = pd.read_json(data_file_path, lines=True)
+        from learning_to_plan import task
 
-        df_train = df[df['type'] == 'train']
-        df_val = df[df['type'] == 'validation']
-
-        del df # Free up memory
-
+        tasks : set[task.Task] = task.get_tasks_from_jsonl(data_file_path)
+        train_tasks : set[task.Task]  = {t for t in tasks if t._type == task.Task.TaskType.TRAIN}
+        validation_tasks : set[task.Task]  = {t for t in tasks if t._type == task.Task.TaskType.VALIDATION}
+        assert len(train_tasks) > 0, "No training tasks found."
+        assert len(validation_tasks) > 0, "No validation tasks found."
+        
         eos_token = tokenizer.eos_token if tokenizer.eos_token else ""
-        df_train['text'] = df_train['prompt'] + eos_token + df_train['plan']
-        df_val['text'] = df_val['prompt'] + eos_token + df_val['plan']
+        training_prompts : list[str]  = [t.get_prompt(eos_token=eos_token, with_plan=True) for t in train_tasks]
+        validation_prompts : list[str]  = [t.get_prompt(eos_token=eos_token, with_plan=True) for t in validation_tasks]
 
-        df_train = df_train[['text']]
-        df_val = df_val[['text']]
+        # Create datasets.Dataset objects
+        train_dataset = datasets.Dataset.from_dict({"text": training_prompts})
+        validation_dataset = datasets.Dataset.from_dict({"text": validation_prompts})
+        config.log(f"Training dataset created with {len(train_dataset)} examples.", level=config.logging.INFO)
+        config.log(f"Validation dataset created with {len(validation_dataset)} examples.", level=config.logging.INFO)
 
-        # Convert DataFrame to Dataset
-        train_dataset = datasets.Dataset.from_pandas(df_train, preserve_index=False)
-        validation_dataset = datasets.Dataset.from_pandas(df_val, preserve_index=False)
-
-        # Free up memory
-        del df_train, df_val
+        del tasks, train_tasks, validation_tasks, training_prompts, validation_prompts
 
         # Create DatasetDict
         dataset = datasets.DatasetDict({
