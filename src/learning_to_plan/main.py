@@ -82,12 +82,6 @@ def parse_args():
         default=None, # Default is handled in config.py now
         help="Path to the base data directory (containing raw, paas_plans, etc.). Defaults to './data/'."
     )
-    # --- PaaS Specific ---
-    parser.add_argument(
-        "--overwrite_paas_plans",
-        action="store_true",
-        help="Overwrite existing PaaS plan files."
-    )
     # Custom type function to accept positive integers or specific strings
     def parse_number_of_problems_per_domain_arg(arg):
         if arg in ["all", "long", "basic"]:
@@ -128,37 +122,37 @@ def parse_args():
 
     return parser.parse_args()
 
-def get_selected_domains(args, base_dir):
+def get_selected_domains(args, dir=None, file=None) -> set[str]:
     if not args.domain:
         # Use config's logger/printer
         config.log("Please specify a domain with --domain <domain_name> or 'all'.", level=logging.ERROR)
         raise ValueError("Domain not specified.")
 
-    if not os.path.isdir(base_dir):
-        m = f"Base directory for domains not found: {base_dir}"
-        config.log(m, level=logging.ERROR)
-        raise FileNotFoundError(m)
-    try:
-        available_domains = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
-    except OSError as e:
-        config.log(f"Error listing domains in {base_dir}: {e}", level=logging.ERROR, exc_info=True)
-        raise e
-
-    if not available_domains:
-        m = f"No domain subdirectories found in {base_dir}."
-        config.log(m, level=logging.ERROR)
-        raise ValueError(m)
+    if dir:
+        assert os.path.isdir(dir), f"Directory {dir} does not exist."
+        try:
+            available_domains = {d for d in os.listdir(dir) if os.path.isdir(os.path.join(dir, d))}
+        except OSError as e:
+            config.log(f"Error listing domains in {dir}: {e}", level=logging.ERROR, exc_info=True)
+            raise e
+        assert available_domains and len(available_domains) > 0, f"No domains found in {dir}."
+    elif file:
+        assert os.path.isfile(file), f"File {file} does not exist."
+        tasks = task.get_tasks_from_jsonl(file)
+        assert tasks, f"No tasks found in {file}."
+        available_domains = {t._domain for t in tasks}
+        assert available_domains, f"No domains found in {file}."
+    else:
+        config.log("No directory or file specified for domain selection.", level=logging.ERROR)
+        raise ValueError("No directory or file specified for domain selection.")
 
     if args.domain.lower() == "all":
         config.log(f"Processing all found domains: {', '.join(available_domains)}")
         return available_domains
     else:
-        selected = args.domain.split(",")
-        for d in selected:
-            if d not in available_domains:
-                m = f"Domain '{d}' not found in {base_dir}. Available domains: {', '.join(available_domains)}"
-                config.log(m, level=logging.ERROR)
-                raise ValueError(m)
+        selected = set(s.strip() for s in args.domain.split(","))
+        assert selected.issubset(available_domains), f"Selected domains {selected} are not in available domains {available_domains}."
+        selected = selected.intersection(available_domains)
         config.log(f"Processing selected domains: {', '.join(selected)}")
         return selected
 
@@ -171,31 +165,24 @@ if __name__ == "__main__":
     # --- Action Blocks ---
     if args.call_paas:
         config.log("--- Starting Planning as a Service (PaaS) Calls ---")
-        domains = get_selected_domains(args, config.RAW_DIR)
+        domains = get_selected_domains(args, dir=config.RAW_DIR)
         for domain in domains:
             config.log(f"Processing PaaS for domain: {domain}")
             tasks = task.get_tasks_from_domain_directory(domain, args.number_of_problems_per_domain)
             if not tasks:
                 config.log(f"No tasks found for domain {domain}. Skipping.", level=logging.WARNING)
                 continue
-            data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
-            config.log(f"Outputting PaaS results to: {data_file_path}")
-            asyncio.run(utils.call_paas(tasks, data_file_path, overwrite=args.overwrite_paas_plans))
+            config.log(f"Outputting PaaS results to: {config.PROCESSED_DATA_FILE_PATH}")
+            asyncio.run(utils.call_paas(tasks))
             config.log(f"Finished PaaS calls for domain: {domain}")
         config.log("--- Finished All PaaS Calls ---")
 
     elif args.split_dataset:
         config.log("--- Starting Dataset Splitting ---")
-        domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
-        for domain in domains:
-            config.log(f"Splitting dataset for domain: {domain}")
-            data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
-            try:
-                utils.split_dataset(data_file_path)
-                config.log(f"Finished splitting dataset for domain: {domain}")
-            except Exception as e:
-                config.log(f"Error splitting dataset for domain {domain}: {e}", level=logging.ERROR)
-                continue
+        try:
+            utils.split_dataset(random_seed=42)
+        except Exception as e:
+            raise e
         config.log("--- Finished All Dataset Splitting ---")
 
     elif args.train:
@@ -207,19 +194,10 @@ if __name__ == "__main__":
             config.log(m, level=logging.ERROR)
             raise ValueError(m) 
 
-        domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
+        domains = get_selected_domains(args, file=config.PROCESSED_DATA_FILE_PATH)
         for domain in domains:
             config.log(f"Starting training for domain: {domain}")
-            data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
-            assert os.path.exists(data_file_path), f"Data file not found: {data_file_path}"
-
-            # Construct checkpoint dir using the potentially overridden model name
-            current_model_name = config.get_config("model_name") # Get final model name after potential override
-            model_checkpoint_dir = os.path.join(config.CHECKPOINTS_DIR, current_model_name, domain)
-            config.create_necessary_dirs(model_checkpoint_dir) # Use helper from config
-            config.log(f"Checkpoints will be saved to: {model_checkpoint_dir}")
-
-            train.run_training_procedure(model_checkpoint_dir, data_file_path)
+            train.run_training_procedure(domain)
             config.log(f"Finished training for domain: {domain}")
         config.log("--- Finished All Training ---")
 

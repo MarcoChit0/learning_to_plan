@@ -26,7 +26,6 @@ _CONFIG_STORE: Dict[str, Any] = {} # Holds model/training/generation parameters
 # --- Global Variables for Paths and Token (Set during initialization) ---
 DATA_DIR = "data/"
 RAW_DIR: Optional[str] = None
-PROCESSED_DATA_DIR: Optional[str] = None
 CHECKPOINTS_DIR: Optional[str] = None
 HUGGINGFACE_TOKEN: Optional[str] = None
 GOOGLE_API_KEY: Optional[str] = None
@@ -50,6 +49,7 @@ LONG_INSTANCES = "generated_basic_longer_plan_len"
 PROCESSED_DATA_FILE_NAME = "data.jsonl"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
+PROCESSED_DATA_FILE_PATH = None
 # --- End Constants ---
 
 # --- New Print and Log Function ---
@@ -93,7 +93,7 @@ def initialize(
         config_path: Path to a specific JSON configuration file to load (optional).
     """
     global _CONFIG_STORE, HUGGINGFACE_TOKEN, GOOGLE_API_KEY
-    global DATA_DIR, RAW_DIR, PROCESSED_DATA_DIR, CHECKPOINTS_DIR
+    global DATA_DIR, RAW_DIR, CHECKPOINTS_DIR
     global LOGGING_INITIALIZED, logger
 
     log("Basic console logging initialized.", level=logging.INFO)
@@ -178,10 +178,10 @@ def initialize(
         DATA_DIR = args.data_dir_path
     log(f"Using DATA_DIR: {DATA_DIR}")
     RAW_DIR = os.path.join(DATA_DIR, "raw")
-    PROCESSED_DATA_DIR = os.path.join(DATA_DIR, "processed")
     CHECKPOINTS_DIR = os.path.join(DATA_DIR, "checkpoints")
+    PROCESSED_DATA_FILE_PATH = os.path.join(DATA_DIR, PROCESSED_DATA_FILE_NAME)
 
-    for dir_path in [DATA_DIR, RAW_DIR, PROCESSED_DATA_DIR, CHECKPOINTS_DIR]:
+    for dir_path in [DATA_DIR, RAW_DIR, CHECKPOINTS_DIR]:
         try:
             os.makedirs(dir_path, exist_ok=True)
         except OSError as e:

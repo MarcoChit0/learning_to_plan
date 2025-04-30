@@ -14,13 +14,15 @@ import learning_to_plan.config as config
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-def run_training_procedure(model_checkpoint_dir, data_file_path):
+def run_training_procedure(domain):
     start_time = datetime.datetime.now()
     model_name = config.get_config('model_name')
     start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
     config.log(f"Starting training for {model_name} -- started {start_time_str}", level=config.logging.INFO)
 
-    os.makedirs(model_checkpoint_dir, exist_ok=True)
+    model_checkpoint_dir = os.path.join(config.CHECKPOINTS_DIR, domain, model_name)
+    config.create_necessary_dirs(model_checkpoint_dir) 
+    config.log(f"Checkpoints will be saved to: {model_checkpoint_dir}")
 
     # --- Load Model and Tokenizer ---
     config.log(f"Loading model and tokenizer (checkpoint dir: {model_checkpoint_dir})...", level=config.logging.INFO)
@@ -32,18 +34,22 @@ def run_training_procedure(model_checkpoint_dir, data_file_path):
 
     
     # --- Load and Prepare Dataset ---
-    config.log(f"Loading dataset from: {data_file_path}", level=config.logging.INFO)
+    config.log(f"Loading dataset from: {config.PROCESSED_DATA_FILE_PATH}", level=config.logging.INFO)
     try:
-        assert os.path.exists(data_file_path), f"Data file {data_file_path} does not exist."
-
         from learning_to_plan import task
-
-        tasks : set[task.Task] = task.get_tasks_from_jsonl(data_file_path)
+        assert os.path.exists(config.PROCESSED_DATA_FILE_PATH), f"Data file {config.PROCESSED_DATA_FILE_PATH} does not exist."
+        
+        # Load tasks from JSONL file
+        tasks : set[task.Task] = task.get_tasks_from_jsonl(config.PROCESSED_DATA_FILE_PATH)
+        assert len(tasks) > 0, f"No tasks found in {config.PROCESSED_DATA_FILE_PATH}."
+        tasks = {t for t in tasks if t._domain == domain}
+        assert len(tasks) > 0, f"No tasks found in {config.PROCESSED_DATA_FILE_PATH} for domain {domain}."
         train_tasks : set[task.Task]  = {t for t in tasks if t._type == task.Task.TaskType.TRAIN}
-        validation_tasks : set[task.Task]  = {t for t in tasks if t._type == task.Task.TaskType.VALIDATION}
         assert len(train_tasks) > 0, "No training tasks found."
+        validation_tasks : set[task.Task]  = {t for t in tasks if t._type == task.Task.TaskType.VALIDATION}
         assert len(validation_tasks) > 0, "No validation tasks found."
         
+        # Make the prompts that will be used for training and validation
         eos_token = tokenizer.eos_token if tokenizer.eos_token else ""
         training_prompts : list[str]  = [t.get_prompt(eos_token=eos_token, with_plan=True) for t in train_tasks]
         validation_prompts : list[str]  = [t.get_prompt(eos_token=eos_token, with_plan=True) for t in validation_tasks]
