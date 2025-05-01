@@ -143,28 +143,22 @@ def generate_single_gemini(
 
 
 # --- Batch Generation from File (Modified) ---
-def generate_batch(
-    model: Optional[PreTrainedModel], # Accept pre-loaded model
-    tokenizer: Optional[PreTrainedTokenizer], # Accept pre-loaded tokenizer
-    data_file_path: str,
-    number_of_problems_per_domain: Union[int, str] = "all", # Default to "all"
-):
+def generate_batch(domain:str, number_of_problems_per_domain: Union[int, str] = "all"):
     """
     Generates plans for instances in a test file using a pre-loaded model (HF)
     or the Gemini API, saves results including original instance data and multiple
     generated plans.
 
     Parameters:
-        model: The pre-loaded Hugging Face model (or None for Gemini).
-        tokenizer: The pre-loaded Hugging Face tokenizer (or None for Gemini).
-        data_file_path: Path to the input JSONL file (expected to have a 'prompt' key).
+        domain: The domain name to process.
         number_of_problems_per_domain: Criteria for selecting instances ("all", "basic", "long", or int).
     """
     start_time = datetime.datetime.now()
     model_name = config.get_config("model_name")
 
+
     config.log(
-        f"Starting generation batch with model '{model_name}' – data: {data_file_path} – time: {start_time}",
+        f"Starting generation batch with model '{model_name}' – time: {start_time}",
         level=config.logging.INFO
     )
 
@@ -181,43 +175,51 @@ def generate_batch(
         try:
             genai.configure(api_key=config.GOOGLE_API_KEY)
         except Exception as e:
-             config.log(f"Error re-configuring Gemini API (might be harmless if already configured): {e}", level=config.logging.WARNING)
+            config.log(f"Error re-configuring Gemini API (might be harmless if already configured): {e}", level=config.logging.WARNING)
     else:
         config.log(f"Using Hugging Face model: {model_name}. Model/tokenizer expected to be pre-loaded.", level=config.logging.INFO)
-        assert model is not None, "Hugging Face model was not provided to generate_batch."
-        assert tokenizer is not None, "Hugging Face tokenizer was not provided to generate_batch."
-        model.eval() # Ensure model is in evaluation mode
+        # Load model and tokenizer
+        model, tokenizer = config.load_model_and_tokenizer(checkpoint_dir=config.get_checkpoint_dir(domain, model_name))
+        assert tokenizer is not None, "Tokenizer loading failed."
+        assert model is not None, "Model loading failed."
+        config.log("Model and tokenizer loaded successfully.", level=config.logging.INFO)
 
-    # --- Load Dataset ---
+   # --- Load Dataset ---
+    data_file_path = config.PROCESSED_DATA_FILE_PATH
     config.log(f"Loading tasks from {data_file_path}")
     try:
+        # Get tasks from JSONL file
         tasks: set[task.Task] = task.get_tasks_from_jsonl(data_file_path)
-        test_tasks = {t for t in tasks if t._type == task.Task.TaskType.TEST} # Use set comprehension
-        config.log(f"Found {len(test_tasks)} test tasks out of {len(tasks)} total.")
+        assert len(tasks) > 0, f"No tasks found in {data_file_path}."
+
+        # Get test tasks
+        test_tasks = {t for t in tasks if t._type == task.Task.TaskType.TEST}
+        assert len(test_tasks) > 0, f"No test tasks found in {data_file_path}."
+
+        # Filter test tasks by domain
+        domain_specifict_test_tasks = {t for t in test_tasks if t._domain == domain}
+        assert len(domain_specifict_test_tasks) > 0, f"No test tasks found in {data_file_path} for domain {domain}."
+        config.log(f"Loaded {len(tasks)} from {data_file_path}, of which {len(test_tasks)} are test tasks and {len(domain_specifict_test_tasks)} are for domain {domain}.", level=config.logging.INFO)
 
         tasks_to_process: set[task.Task] = set()
-
-        # Default to "all" if None
         selection_criteria = number_of_problems_per_domain if number_of_problems_per_domain is not None else "all"
-
         if isinstance(selection_criteria, str) and selection_criteria.lower() == "all":
-            tasks_to_process = test_tasks
+            tasks_to_process = domain_specifict_test_tasks
             config.log(f"Selecting all {len(tasks_to_process)} test tasks.")
         elif isinstance(selection_criteria, str):
             size = selection_criteria.lower()
             if size == "basic":
-                tasks_to_process = {t for t in test_tasks if not t._is_longer_plan}
+                tasks_to_process = {t for t in domain_specifict_test_tasks if not t._is_longer_plan}
                 config.log(f"Selecting {len(tasks_to_process)} basic test tasks.")
             elif size == "long":
-                tasks_to_process = {t for t in test_tasks if t._is_longer_plan}
+                tasks_to_process = {t for t in domain_specifict_test_tasks if t._is_longer_plan}
                 config.log(f"Selecting {len(tasks_to_process)} long test tasks.")
             else:
                 raise ValueError(f"Invalid string value for selection: '{selection_criteria}'. Expected 'all', 'basic', or 'long'.")
         elif isinstance(selection_criteria, int):
             if selection_criteria > 0:
-                # Sort test_tasks before slicing for consistency
-                sorted_test_tasks = sorted(list(test_tasks)) # Convert set to list for sorting
-                tasks_to_process = set(sorted_test_tasks[:min(selection_criteria, len(sorted_test_tasks))])
+                sorted_domain_specifict_test_tasks = sorted(list(test_tasks))
+                tasks_to_process = set(sorted_domain_specifict_test_tasks[:min(selection_criteria, len(sorted_domain_specifict_test_tasks))])
                 config.log(f"Selecting the first {len(tasks_to_process)} sorted test tasks (requested {selection_criteria}).")
             else:
                 raise ValueError(f"Number of problems must be a positive integer, got: {selection_criteria}.")

@@ -122,7 +122,8 @@ def parse_args():
 
     return parser.parse_args()
 
-def get_selected_domains(args, dir=None, file=None) -> set[str]:
+from typing import Optional
+def get_selected_domains(args, dir:Optional[str]=None, is_processed_data_file:bool=False) -> set[str]:
     if not args.domain:
         # Use config's logger/printer
         config.log("Please specify a domain with --domain <domain_name> or 'all'.", level=logging.ERROR)
@@ -136,7 +137,8 @@ def get_selected_domains(args, dir=None, file=None) -> set[str]:
             config.log(f"Error listing domains in {dir}: {e}", level=logging.ERROR, exc_info=True)
             raise e
         assert available_domains and len(available_domains) > 0, f"No domains found in {dir}."
-    elif file:
+    elif is_processed_data_file:
+        file = config.PROCESSED_DATA_FILE_PATH
         assert os.path.isfile(file), f"File {file} does not exist."
         tasks = task.get_tasks_from_jsonl(file)
         assert tasks, f"No tasks found in {file}."
@@ -153,15 +155,16 @@ def get_selected_domains(args, dir=None, file=None) -> set[str]:
         selected = set(s.strip() for s in args.domain.split(","))
         assert selected.issubset(available_domains), f"Selected domains {selected} are not in available domains {available_domains}."
         selected = selected.intersection(available_domains)
+        assert len(selected) > 0, f"No valid domains selected from {args.domain}."
         config.log(f"Processing selected domains: {', '.join(selected)}")
         return selected
 
 # --- Main Execution ---
 if __name__ == "__main__":
     args = parse_args()
-
     config.initialize(args)
 
+    print(config.PROCESSED_DATA_FILE_PATH)
     # --- Action Blocks ---
     if args.call_paas:
         config.log("--- Starting Planning as a Service (PaaS) Calls ---")
@@ -179,10 +182,7 @@ if __name__ == "__main__":
 
     elif args.split_dataset:
         config.log("--- Starting Dataset Splitting ---")
-        try:
-            utils.split_dataset(random_seed=42)
-        except Exception as e:
-            raise e
+        utils.split_dataset(random_seed=42)
         config.log("--- Finished All Dataset Splitting ---")
 
     elif args.train:
@@ -194,7 +194,7 @@ if __name__ == "__main__":
             config.log(m, level=logging.ERROR)
             raise ValueError(m) 
 
-        domains = get_selected_domains(args, file=config.PROCESSED_DATA_FILE_PATH)
+        domains = get_selected_domains(args, is_processed_data_file=True)
         for domain in domains:
             config.log(f"Starting training for domain: {domain}")
             train.run_training_procedure(domain)
@@ -202,64 +202,21 @@ if __name__ == "__main__":
         config.log("--- Finished All Training ---")
 
     elif args.generate:
+        config.log("--- Starting Generation ---")
         model_name = config.get_config("model_name")
         assert model_name, "Model name not found in config. Please check your configuration."
         model_checkpoints_base_dir = None
-        domais = []
-        if model_name.lower().startswith("gemini"):
-            domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
-            config.log(f"Using Gemini API for generation. Gemini model: {model_name}")
-        else:
-            if hasattr(args, "load_without_finetuned_checkpoints") and args.load_without_finetuned_checkpoints:
-                domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
-                config.log(f"Using base model {model_name} for generation.")
-            else:
-                model_checkpoints_base_dir = os.path.join(config.CHECKPOINTS_DIR, model_name)
-                domains = get_selected_domains(args, model_checkpoints_base_dir)
-                config.log(f"Using fine-tuning checkpoints at {model_checkpoints_base_dir} for generation.")
-        assert domains != [], f"No valid domains found for generation. Please check your configuration."
-        config.log(f"Domains selected for generation: {', '.join(domains)}")
 
-
+        domains = get_selected_domains(args, is_processed_data_file=True)
         for domain in domains:
-            hf_model, hf_tokenizer = None, None
-            
             config.log(f"Starting generation for domain: {domain}")
-            data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
-            assert os.path.exists(data_file_path), f"Data file not found: {data_file_path}"
-            config.log(f"Using data: {data_file_path}.")
-
-            if model_name.lower().startswith("gemini"):
-                config.log(f"Calling Gemini API for generation.")
-            else:
-                model_checkpoint_dir = os.path.join(model_checkpoints_base_dir, domain) if model_checkpoints_base_dir else None
-                if model_checkpoint_dir and not os.path.exists(model_checkpoint_dir):
-                    m = f"Model checkpoint {model_checkpoint_dir} does not exist for domain {domain}."
-                    config.log(m, level=logging.ERROR)
-                    raise FileNotFoundError(m)
-                hf_model, hf_tokenizer = config.load_model_and_tokenizer(model_checkpoint_dir)
-                assert hf_model is not None, f"Failed to load model from {model_checkpoint_dir}."
-                assert hf_tokenizer is not None, f"Failed to load tokenizer from {model_checkpoint_dir}."
-                config.log(f"Using model checkpoint for generation: {model_checkpoint_dir}.")
-
-            generate.generate_batch(
-                model=hf_model,
-                tokenizer=hf_tokenizer,
-                data_file_path=data_file_path,
-                number_of_problems_per_domain=args.number_of_problems_per_domain
-            )
+            generate.generate_batch(domain=domain, number_of_problems_per_domain=args.number_of_problems_per_domain)
             config.log(f"Finished generation for domain: {domain}")
         config.log("--- Finished All Generation ---")
 
     elif args.validate:
         config.log("--- Starting Validation ---")
-        domains = get_selected_domains(args, config.PROCESSED_DATA_DIR)
-        for domain in domains:
-            config.log(f"Validating plans for domain: {domain}")
-            data_file_path = os.path.join(config.PROCESSED_DATA_DIR, domain, config.PROCESSED_DATA_FILE_NAME)
-            assert os.path.exists(data_file_path), f"Data file not found: {data_file_path}"
-            validate.validate_plans(data_file_path)
-            config.log(f"Finished validation for domain: {domain}")
+        validate.validate_plans()
         config.log("--- Finished All Validation ---")
 
     elif args.compute_metrics:

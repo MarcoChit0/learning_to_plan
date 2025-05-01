@@ -29,6 +29,7 @@ RAW_DIR: Optional[str] = None
 CHECKPOINTS_DIR: Optional[str] = None
 HUGGINGFACE_TOKEN: Optional[str] = None
 GOOGLE_API_KEY: Optional[str] = None
+PROCESSED_DATA_FILE_PATH: Optional[str] = None
 LOGGING_INITIALIZED: bool = False
 # --- Configure root logger minimally initially ---
 logging.basicConfig(
@@ -49,7 +50,6 @@ LONG_INSTANCES = "generated_basic_longer_plan_len"
 PROCESSED_DATA_FILE_NAME = "data.jsonl"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
-PROCESSED_DATA_FILE_PATH = None
 # --- End Constants ---
 
 # --- New Print and Log Function ---
@@ -93,7 +93,7 @@ def initialize(
         config_path: Path to a specific JSON configuration file to load (optional).
     """
     global _CONFIG_STORE, HUGGINGFACE_TOKEN, GOOGLE_API_KEY
-    global DATA_DIR, RAW_DIR, CHECKPOINTS_DIR
+    global DATA_DIR, RAW_DIR, CHECKPOINTS_DIR, PROCESSED_DATA_FILE_PATH, PROCESSED_DATA_FILE_NAME
     global LOGGING_INITIALIZED, logger
 
     log("Basic console logging initialized.", level=logging.INFO)
@@ -238,6 +238,21 @@ def create_necessary_dirs(file_path: str) -> None:
     except Exception as e:
         log(f"Unexpected error in create_necessary_dirs for {file_path}: {e}", level=logging.ERROR, exc_info=True)
 
+def get_checkpoint_dir(domain: str, model_name: str) -> str:
+    """
+    Constructs the checkpoint directory path based on domain and model name.
+
+    Args:
+        domain: The domain name.
+        model_name: The model name.
+
+    Returns:
+        The constructed checkpoint directory path.
+    """
+    checkpoint_dir = os.path.join(CHECKPOINTS_DIR, domain, model_name)
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir, exist_ok=True)
+    return checkpoint_dir
 
 def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[PreTrainedModel], Optional[PreTrainedTokenizer]]:
     """
@@ -265,13 +280,17 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
         return None, None
 
     # --- Determine Model Source (Checkpoint or Base) ---
+
     print(f"Checkpoint dir: {checkpoint_dir}")
     last_checkpoint = None
     model_source = model_name_from_config
+
+    # -- directly from checkpoint_dir
     if checkpoint_dir:
         last_checkpoint = get_last_checkpoint(checkpoint_dir)
-        if last_checkpoint:
-            model_source = last_checkpoint
+    
+    if last_checkpoint:
+        model_source = last_checkpoint
 
     log(f"Determined model source: {model_source} ({'Checkpoint' if last_checkpoint else 'Base Model'})", level=logging.INFO)
 

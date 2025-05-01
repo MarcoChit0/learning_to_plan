@@ -2,7 +2,7 @@
 
 # --- Configuration ---
 # Updated names to use underscores
-CONDA_ENV_NAME = learning_to_plan_env
+CONDA_ENV_NAME = learning_to_plan
 DOCKER_IMAGE_NAME = learning_to_plan_app
 MAIN_SCRIPT = main.py# Path to your main script at the root
 VAL_DIR = utils/VAL# Path to VAL submodule

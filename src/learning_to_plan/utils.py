@@ -53,9 +53,11 @@ async def call_paas(
                 raise e
 
     processed_tasks = set()
-    if os.path.exists(config.PROCESSED_DATA_FILE_PATH):
-        config.log(f"Loading existing dataset at {config.PROCESSED_DATA_FILE_PATH}. Skipping recalculation for already processed tasks.", level=config.logging.INFO)
-        processed_tasks = task.get_tasks_from_jsonl(config.PROCESSED_DATA_FILE_PATH)
+    data_file_path = config.PROCESSED_DATA_FILE_PATH
+    print(f"Data file path: {data_file_path}")
+    if os.path.exists(data_file_path):
+        config.log(f"Loading existing dataset at {data_file_path}. Skipping recalculation for already processed tasks.", level=config.logging.INFO)
+        processed_tasks = task.get_tasks_from_jsonl(data_file_path)
         processed_tasks = {t for t in processed_tasks if t._status == task.Task.TaskStatus.OK}
         tasks = tasks - processed_tasks
     
@@ -64,9 +66,9 @@ async def call_paas(
     await asyncio.gather(*[process_instance(t) for t in tasks])
 
     processed_tasks.update(tasks)
-    config.create_necessary_dirs(config.PROCESSED_DATA_FILE_PATH)
-    task.save_tasks_to_jsonl(processed_tasks, config.PROCESSED_DATA_FILE_PATH)
-    config.log(f"Finished writing to {config.PROCESSED_DATA_FILE_PATH}.", level=config.logging.INFO)
+    config.create_necessary_dirs(data_file_path)
+    task.save_tasks_to_jsonl(processed_tasks, data_file_path)
+    config.log(f"Finished writing to {data_file_path}.", level=config.logging.INFO)
 
     config.log(f"Finished call to planning as a service at {datetime.datetime.now()}.", level=config.logging.INFO)
 
@@ -76,12 +78,13 @@ def split_dataset(
     random_seed=42
 ):
     config.log(f"Starting to build finetuning dataset at {datetime.datetime.now()}.", level=config.logging.INFO)
-    if not os.path.exists(config.PROCESSED_DATA_FILE_PATH):
-        e = f"Data file not found: {config.PROCESSED_DATA_FILE_PATH}"
+    data_file_path = config.PROCESSED_DATA_FILE_PATH
+    if not os.path.exists(data_file_path):
+        e = f"Data file not found: {data_file_path}"
         config.log(e, level=config.logging.ERROR)
         raise ValueError(e)
 
-    tasks = task.get_tasks_from_jsonl(config.PROCESSED_DATA_FILE_PATH)
+    tasks = task.get_tasks_from_jsonl(data_file_path)
     
     valid_tasks:set[task.Task] = {t for t in tasks if t._status == task.Task.TaskStatus.OK}
     domains:set[str] = {t._domain for t in valid_tasks}
@@ -119,8 +122,8 @@ def split_dataset(
         
         tasks.update(divided_tasks)
         # Save the final dataset
-        config.log(f"Writing {len(tasks)} tasks to {config.PROCESSED_DATA_FILE_PATH}.", level=config.logging.INFO)
-        task.save_tasks_to_jsonl(tasks, config.PROCESSED_DATA_FILE_PATH)
-        config.log(f"Finished writing {len(tasks)} tasks to {config.PROCESSED_DATA_FILE_PATH}.", level=config.logging.INFO)
+        config.log(f"Writing {len(tasks)} tasks to {data_file_path}.", level=config.logging.INFO)
+        task.save_tasks_to_jsonl(tasks, data_file_path)
+        config.log(f"Finished writing {len(tasks)} tasks to {data_file_path}.", level=config.logging.INFO)
         config.log(f"Finished splitting tasks in domain: {d}.", level=config.logging.INFO)
     config.log(f"Finished building finetuning dataset at {datetime.datetime.now()}.", level=config.logging.INFO)

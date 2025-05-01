@@ -20,7 +20,7 @@ def run_training_procedure(domain):
     start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
     config.log(f"Starting training for {model_name} -- started {start_time_str}", level=config.logging.INFO)
 
-    model_checkpoint_dir = os.path.join(config.CHECKPOINTS_DIR, domain, model_name)
+    model_checkpoint_dir = config.get_checkpoint_dir(domain, model_name)
     config.create_necessary_dirs(model_checkpoint_dir) 
     config.log(f"Checkpoints will be saved to: {model_checkpoint_dir}")
 
@@ -32,18 +32,18 @@ def run_training_procedure(domain):
     assert model is not None, "Model loading failed."
     config.log("Model and tokenizer loaded successfully.", level=config.logging.INFO)
 
-    
+    data_file_path = config.PROCESSED_DATA_FILE_PATH
     # --- Load and Prepare Dataset ---
-    config.log(f"Loading dataset from: {config.PROCESSED_DATA_FILE_PATH}", level=config.logging.INFO)
+    config.log(f"Loading dataset from: {data_file_path}", level=config.logging.INFO)
     try:
         from learning_to_plan import task
-        assert os.path.exists(config.PROCESSED_DATA_FILE_PATH), f"Data file {config.PROCESSED_DATA_FILE_PATH} does not exist."
+        assert os.path.exists(data_file_path), f"Data file {data_file_path} does not exist."
         
         # Load tasks from JSONL file
-        tasks : set[task.Task] = task.get_tasks_from_jsonl(config.PROCESSED_DATA_FILE_PATH)
-        assert len(tasks) > 0, f"No tasks found in {config.PROCESSED_DATA_FILE_PATH}."
+        tasks : set[task.Task] = task.get_tasks_from_jsonl(data_file_path)
+        assert len(tasks) > 0, f"No tasks found in {data_file_path}."
         tasks = {t for t in tasks if t._domain == domain}
-        assert len(tasks) > 0, f"No tasks found in {config.PROCESSED_DATA_FILE_PATH} for domain {domain}."
+        assert len(tasks) > 0, f"No tasks found in {data_file_path} for domain {domain}."
         train_tasks : set[task.Task]  = {t for t in tasks if t._type == task.Task.TaskType.TRAIN}
         assert len(train_tasks) > 0, "No training tasks found."
         validation_tasks : set[task.Task]  = {t for t in tasks if t._type == task.Task.TaskType.VALIDATION}

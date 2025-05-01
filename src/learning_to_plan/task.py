@@ -520,7 +520,7 @@ def get_tasks_from_jsonl(jsonl_file_path):
 
 def save_tasks_to_jsonl(tasks:set[Task], jsonl_file_path:str):
     with open(jsonl_file_path, "w", encoding='utf-8') as f:
-        for task in tasks:
+        for task in sorted(tasks):
             try:
                 json_str = task.to_json() # Get the JSON string representation
                 f.write(json_str + "\n") # Write the JSON string followed by a newline

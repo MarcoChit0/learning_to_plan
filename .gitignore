@@ -1,6 +1,7 @@
 *.pddl
 **__pycache__/
-**data/
+**checkpoints/
+**raw/
 .env
 .vscode/
 *.egg-info/
