@@ -2,7 +2,6 @@
 import os
 import argparse
 import asyncio
-import logging
 
 # Import project modules
 from learning_to_plan import train
@@ -12,6 +11,8 @@ from learning_to_plan import config # Import the refactored config
 from learning_to_plan import generate # Import the new generate module
 from learning_to_plan import validate
 from learning_to_plan import metrics
+
+logger = config.get_logger(__name__)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Learning to Plan")
@@ -54,7 +55,7 @@ def parse_args():
     )
     # --- Configuration & Overrides ---
     parser.add_argument(
-        "--config_path",
+        "-c", "--config_path",
         type=str,
         default=None,
         help="Path to a custom JSON configuration file (overrides defaults)."
@@ -101,10 +102,23 @@ def parse_args():
         help="Number of problems per domain: positive integer or 'all', 'long', 'basic'"
     )
     # --- Generate Specific ---
+    # TODO: change generate name to inference
     parser.add_argument(
         "--load_without_finetuned_checkpoints",
         action="store_true",
         help="Load the model with fine-tuned checkpoints."
+    )
+    parser.add_argument(
+        "--cot",
+        type=int,
+        default=0,
+        help="Number of Chain of Thought (CoT) steps to use."
+    )
+    parser.add_argument(
+        "--random_seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducibility."
     )
     # --- Credentials ---
     parser.add_argument(
@@ -125,8 +139,7 @@ def parse_args():
 from typing import Optional
 def get_selected_domains(args, dir:Optional[str]=None, is_processed_data_file:bool=False) -> set[str]:
     if not args.domain:
-        # Use config's logger/printer
-        config.log("Please specify a domain with --domain <domain_name> or 'all'.", level=logging.ERROR)
+        logger.error("Please specify a domain with --domain <domain_name> or 'all'.")
         raise ValueError("Domain not specified.")
 
     if dir:
@@ -134,7 +147,7 @@ def get_selected_domains(args, dir:Optional[str]=None, is_processed_data_file:bo
         try:
             available_domains = {d for d in os.listdir(dir) if os.path.isdir(os.path.join(dir, d))}
         except OSError as e:
-            config.log(f"Error listing domains in {dir}: {e}", level=logging.ERROR, exc_info=True)
+            logger.error(f"Error listing domains in {dir}: {e}", exc_info=True)
             raise e
         assert available_domains and len(available_domains) > 0, f"No domains found in {dir}."
     elif is_processed_data_file:
@@ -145,84 +158,88 @@ def get_selected_domains(args, dir:Optional[str]=None, is_processed_data_file:bo
         available_domains = {t._domain for t in tasks}
         assert available_domains, f"No domains found in {file}."
     else:
-        config.log("No directory or file specified for domain selection.", level=logging.ERROR)
+        logger.error("No directory or file specified for domain selection.")
         raise ValueError("No directory or file specified for domain selection.")
 
     if args.domain.lower() == "all":
-        config.log(f"Processing all found domains: {', '.join(available_domains)}")
+        logger.info(f"Processing all found domains: {', '.join(available_domains)}")
         return available_domains
     else:
         selected = set(s.strip() for s in args.domain.split(","))
         assert selected.issubset(available_domains), f"Selected domains {selected} are not in available domains {available_domains}."
         selected = selected.intersection(available_domains)
         assert len(selected) > 0, f"No valid domains selected from {args.domain}."
-        config.log(f"Processing selected domains: {', '.join(selected)}")
+        logger.info(f"Processing selected domains: {', '.join(selected)}")
         return selected
 
 # --- Main Execution ---
 if __name__ == "__main__":
     args = parse_args()
-    config.initialize(args)
+    config.initialize(args) # Config initialization likely sets up logging
 
     print(config.PROCESSED_DATA_FILE_PATH)
     # --- Action Blocks ---
     if args.call_paas:
-        config.log("--- Starting Planning as a Service (PaaS) Calls ---")
+        logger.info("--- Starting Planning as a Service (PaaS) Calls ---")
         domains = get_selected_domains(args, dir=config.RAW_DIR)
         for domain in domains:
-            config.log(f"Processing PaaS for domain: {domain}")
+            logger.info(f"Processing PaaS for domain: {domain}")
             tasks = task.get_tasks_from_domain_directory(domain, args.number_of_problems_per_domain)
             if not tasks:
-                config.log(f"No tasks found for domain {domain}. Skipping.", level=logging.WARNING)
+                logger.warning(f"No tasks found for domain {domain}. Skipping.")
                 continue
-            config.log(f"Outputting PaaS results to: {config.PROCESSED_DATA_FILE_PATH}")
+            logger.info(f"Outputting PaaS results to: {config.PROCESSED_DATA_FILE_PATH}")
             asyncio.run(utils.call_paas(tasks))
-            config.log(f"Finished PaaS calls for domain: {domain}")
-        config.log("--- Finished All PaaS Calls ---")
+            logger.info(f"Finished PaaS calls for domain: {domain}")
+        logger.info("--- Finished All PaaS Calls ---")
 
     elif args.split_dataset:
-        config.log("--- Starting Dataset Splitting ---")
-        utils.split_dataset(random_seed=42)
-        config.log("--- Finished All Dataset Splitting ---")
+        logger.info("--- Starting Dataset Splitting ---")
+        utils.split_dataset(random_seed=args.random_seed)
+        logger.info("--- Finished All Dataset Splitting ---")
 
     elif args.train:
-        config.log("--- Starting Model Training ---")
+        logger.info("--- Starting Model Training ---")
 
         model_name = config.get_config("model_name")
         if model_name and model_name.lower().startswith("gemini"):
             m = f"Model '{model_name}' is a Gemini model. Training is not supported for Gemini."
-            config.log(m, level=logging.ERROR)
-            raise ValueError(m) 
+            logger.error(m)
+            raise ValueError(m)
 
         domains = get_selected_domains(args, is_processed_data_file=True)
         for domain in domains:
-            config.log(f"Starting training for domain: {domain}")
+            logger.info(f"Starting training for domain: {domain}")
             train.run_training_procedure(domain)
-            config.log(f"Finished training for domain: {domain}")
-        config.log("--- Finished All Training ---")
+            logger.info(f"Finished training for domain: {domain}")
+        logger.info("--- Finished All Training ---")
 
     elif args.generate:
-        config.log("--- Starting Generation ---")
+        logger.info("--- Starting Generation ---")
         model_name = config.get_config("model_name")
         assert model_name, "Model name not found in config. Please check your configuration."
         model_checkpoints_base_dir = None
 
         domains = get_selected_domains(args, is_processed_data_file=True)
         for domain in domains:
-            config.log(f"Starting generation for domain: {domain}")
-            generate.generate_batch(domain=domain, number_of_problems_per_domain=args.number_of_problems_per_domain)
-            config.log(f"Finished generation for domain: {domain}")
-        config.log("--- Finished All Generation ---")
+            logger.info(f"Starting generation for domain: {domain}")
+            generate.generate_batch(domain=domain, number_of_problems_per_domain=args.number_of_problems_per_domain, number_of_cot_examples=args.cot, random_seed=args.random_seed)
+            logger.info(f"Finished generation for domain: {domain}")
+        logger.info("--- Finished All Generation ---")
 
     elif args.validate:
-        config.log("--- Starting Validation ---")
+        logger.info("--- Starting Validation ---")
         validate.validate_plans()
-        config.log("--- Finished All Validation ---")
+        logger.info("--- Finished All Validation ---")
 
     elif args.compute_metrics:
-        pass
+        # Placeholder: Add logging if needed when implementing metrics
+        logger.info("--- Starting Metric Computation ---")
+        # metrics.compute(...) # Example call
+        logger.info("--- Finished Metric Computation ---")
+        pass # Replace with actual metric computation logic
 
     else:
-        config.log("No action requested (e.g., --train, --generate). Exiting.", level=logging.WARNING)
+        logger.warning("No action requested (e.g., --train, --generate). Exiting.")
 
-    config.log("--- Main script execution finished ---")
+    logger.info("--- Main script execution finished ---")

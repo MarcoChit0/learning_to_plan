@@ -32,12 +32,18 @@ GOOGLE_API_KEY: Optional[str] = None
 PROCESSED_DATA_FILE_PATH: Optional[str] = None
 LOGGING_INITIALIZED: bool = False
 # --- Configure root logger minimally initially ---
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s [%(name)s]: %(message)s',
-    handlers=[logging.StreamHandler()] # Log to console initially
-)
-logger = logging.getLogger(__name__) # Module-level logger
+
+def get_logger(name: str = __name__) -> logging.Logger:
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s [%(name)s]: %(message)s',
+        handlers=[logging.StreamHandler()] # Log to console initially
+    )
+    logger = logging.getLogger(name=name) # Module-level logger
+    return logger
+
+logger = get_logger() # Initialize logger
 
 
 # --- Constants for directory/file names ---
@@ -51,28 +57,6 @@ PROCESSED_DATA_FILE_NAME = "data.jsonl"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
 # --- End Constants ---
-
-# --- New Print and Log Function ---
-def log(
-    message: str,
-    level: int = logging.INFO,
-    do_print: bool = True,
-    exc_info = False # Add exc_info for logging exceptions
-    ) -> None:
-    """
-    Logs a message using the configured logger and optionally prints it.
-
-    Args:
-        message: The message string to log and potentially print.
-        level: The logging level (e.g., logging.INFO, logging.WARNING).
-        do_print: If True, prints the message to the console.
-        exc_info: If True, includes exception information in the log.
-    """
-    # Use the logger instance defined at the module level
-    logger.log(level, message, exc_info=exc_info)
-    if do_print:
-        # Basic print, might not handle multi-line/formatting exactly like logger
-        print(message)
 
 
 def initialize(
@@ -96,11 +80,11 @@ def initialize(
     global DATA_DIR, RAW_DIR, CHECKPOINTS_DIR, PROCESSED_DATA_FILE_PATH, PROCESSED_DATA_FILE_NAME
     global LOGGING_INITIALIZED, logger
 
-    log("Basic console logging initialized.", level=logging.INFO)
+    logger.info("Basic console logging initialized.")
 
     if args is None:
         e = "Config initialization called without 'args'. Cannot determine context or apply overrides."
-        log(e, level=logging.ERROR)
+        logger.error(e)
         raise ValueError(e) # Raise error as it's critical
 
     # --- 1. Determine and Load Base Configuration ---
@@ -114,69 +98,69 @@ def initialize(
     elif hasattr(args, 'generate') and args.generate:
         config_file_path = os.path.join(CONFIGS_DIR, DEFAULT_GENERATE_CONFIG)
         context = "Generation"
-    
+
     if context in ["Training", "Generation"]:
         if hasattr(args, 'config_path') and args.config_path:
             config_file_path = args.config_path
-            log(f"Explicit config path provided.", level=logging.INFO)
+            logger.info(f"Explicit config path provided.")
         else:
-            log("No explicit config path provided and context is not Train or Generate. No config file will be loaded by default.", level=logging.INFO)
-        log(f"Using config file: {config_file_path}", level=logging.INFO)
+            logger.info("No explicit config path provided and context is not Train or Generate. No config file will be loaded by default.")
+        logger.info(f"Using config file: {config_file_path}")
 
         if not os.path.exists(config_file_path):
-            log(f"Config file '{config_file_path}' does not exist. Cannot load configuration.", level=logging.ERROR)
+            logger.error(f"Config file '{config_file_path}' does not exist. Cannot load configuration.")
             raise FileNotFoundError(f"Config file '{config_file_path}' not found.")
         try:
             with open(config_file_path, 'r', encoding='utf-8') as f:
                 loaded_config = json.load(f)
-            log(f"{context} Configuration File: {config_file_path}", level=logging.INFO)
-            log(f"Successfully loaded configuration from {config_file_path}.", level=logging.INFO)
+            logger.info(f"{context} Configuration File: {config_file_path}")
+            logger.info(f"Successfully loaded configuration from {config_file_path}.")
         except Exception as e:
             m = f"Error loading config file {config_file_path}: {e}"
-            log(m, level=logging.ERROR, exc_info=True)
+            logger.error(m, exc_info=True)
             raise ValueError(m) from e
 
     # --- 2. Apply Overrides from Args ---
     if loaded_config:
-        log("Applying command-line argument overrides to configuration...")
+        logger.info("Applying command-line argument overrides to configuration...")
         override_keys = {"model_name", "num_train_epochs"}
         for arg_name, arg_value in vars(args).items():
             if arg_name in override_keys and arg_value is not None:
                 original_value = loaded_config.get(arg_name)
                 if arg_name not in loaded_config or original_value != arg_value:
-                    log(f"\tOverriding '{arg_name}': {original_value if arg_name in loaded_config else '<Not Set>'} -> {arg_value}")
+                    logger.info(f"Overriding '{arg_name}': {original_value if arg_name in loaded_config else '<Not Set>'} -> {arg_value}")
                     loaded_config[arg_name] = arg_value
 
         # Handle 4bit/8bit/bf16 overrides
         # Priority: 8bit > bf16 > fp16
         if (hasattr(args, 'load_in_8bit') and args.load_in_8bit) or loaded_config.get("load_in_8bit", False):
-            loaded_config["load_in_8bit"] = True 
+            loaded_config["load_in_8bit"] = True
             loaded_config["bf16"] = False
-            log("Set bf16 to False due to 8bit override.", level=logging.INFO)
+            logger.info("Set bf16 to False due to 8bit override.")
 
     # --- 3. Store Final Model/Train/Generate Configuration ---
-    _CONFIG_STORE = loaded_config 
-    log(f"Final Configuration: {json.dumps(_CONFIG_STORE, indent=2)}", level=logging.DEBUG, do_print=False)
+    _CONFIG_STORE = loaded_config
+    logger.debug(f"Final Configuration: {json.dumps(_CONFIG_STORE, indent=2)}")
 
 
     # --- 4. Setup Tokens and API Keys ---
-    dotenv.load_dotenv()  
+    dotenv.load_dotenv()
 
     # --- Handle Hugging Face Token ---
     HUGGINGFACE_TOKEN = args.huggingface_token if hasattr(args, 'huggingface_token') and args.huggingface_token else os.getenv("HUGGINGFACE_TOKEN")
     if not HUGGINGFACE_TOKEN:
-        log("Hugging Face token not provided. Set it via --huggingface_token or HUGGINGFACE_TOKEN environment variable. HF model loading may fail.", level=logging.WARNING)
+        logger.warning("Hugging Face token not provided. Set it via --huggingface_token or HUGGINGFACE_TOKEN environment variable. HF model loading may fail.")
 
     # --- Handle Google API Key ---
     GOOGLE_API_KEY = args.google_api_key if hasattr(args, 'google_api_key') and args.google_api_key else os.getenv("GOOGLE_API_KEY")
     if not GOOGLE_API_KEY:
-        log("Google API key not provided. Set it via --google_api_key or GOOGLE_API_KEY environment variable. Gemini model generation may fail.", level=logging.WARNING)
+        logger.warning("Google API key not provided. Set it via --google_api_key or GOOGLE_API_KEY environment variable. Gemini model generation may fail.")
 
 
     # --- 5. Setup Data Directories ---
     if hasattr(args, 'data_dir_path') and args.data_dir_path:
         DATA_DIR = args.data_dir_path
-    log(f"Using DATA_DIR: {DATA_DIR}")
+    logger.info(f"Using DATA_DIR: {DATA_DIR}")
     RAW_DIR = os.path.join(DATA_DIR, "raw")
     CHECKPOINTS_DIR = os.path.join(DATA_DIR, "checkpoints")
     PROCESSED_DATA_FILE_PATH = os.path.join(DATA_DIR, PROCESSED_DATA_FILE_NAME)
@@ -185,8 +169,8 @@ def initialize(
         try:
             os.makedirs(dir_path, exist_ok=True)
         except OSError as e:
-            log(f"Failed to create directory {dir_path}: {e}", level=logging.ERROR, exc_info=True)
-    log("Data directories ensured/created.")
+            logger.error(f"Failed to create directory {dir_path}: {e}", exc_info=True)
+    logger.info("Data directories ensured/created.")
 
     # --- 6. Initialize File Logging (Add Handler Once) ---
     root_logger = logging.getLogger()
@@ -205,13 +189,13 @@ def initialize(
             root_logger.addHandler(file_handler)
             if root_logger.level > logging.INFO:
                  root_logger.setLevel(logging.INFO)
-            log(f"File logging initialized. Log file: {log_file_path}")
+            logger.info(f"File logging initialized. Log file: {log_file_path}")
         except Exception as e:
-            log(f"Failed to configure file logging to {log_file_path}: {e}. Continuing with console logging only.", level=logging.ERROR, exc_info=True)
+            logger.error(f"Failed to configure file logging to {log_file_path}: {e}. Continuing with console logging only.", exc_info=True)
     elif has_file_handler:
-        log("File logging handler already exists.", level=logging.DEBUG, do_print=False)
+        logger.debug("File logging handler already exists.")
     elif not DATA_DIR:
-        log("DATA_DIR not set. File logging skipped.", level=logging.WARNING)
+        logger.warning("DATA_DIR not set. File logging skipped.")
 
 
 def get_config(key: str, default: Any = None) -> Any:
@@ -226,7 +210,7 @@ def get_config(key: str, default: Any = None) -> Any:
         The configuration value or the default.
     """
     if not _CONFIG_STORE:
-        log(f"Model config store accessed for key '{key}' but is empty. Returning default.", level=logging.DEBUG, do_print=False)
+        logger.debug(f"Model config store accessed for key '{key}' but is empty. Returning default.")
     return _CONFIG_STORE.get(key, default)
 
 def create_necessary_dirs(file_path: str) -> None:
@@ -236,7 +220,7 @@ def create_necessary_dirs(file_path: str) -> None:
         if dirs:
             os.makedirs(dirs, exist_ok=True)
     except Exception as e:
-        log(f"Unexpected error in create_necessary_dirs for {file_path}: {e}", level=logging.ERROR, exc_info=True)
+        logger.error(f"Unexpected error in create_necessary_dirs for {file_path}: {e}", exc_info=True)
 
 def get_checkpoint_dir(domain: str, model_name: str) -> str:
     """
@@ -276,7 +260,7 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
 
     # --- Handle Gemini Case ---
     if model_name_from_config.lower().startswith("gemini"):
-        log(f"Requested model '{model_name_from_config}' is Gemini. Skipping HF load.", level=logging.INFO)
+        logger.info(f"Requested model '{model_name_from_config}' is Gemini. Skipping HF load.")
         return None, None
 
     # --- Determine Model Source (Checkpoint or Base) ---
@@ -288,11 +272,11 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
     # -- directly from checkpoint_dir
     if checkpoint_dir:
         last_checkpoint = get_last_checkpoint(checkpoint_dir)
-    
+
     if last_checkpoint:
         model_source = last_checkpoint
 
-    log(f"Determined model source: {model_source} ({'Checkpoint' if last_checkpoint else 'Base Model'})", level=logging.INFO)
+    logger.info(f"Determined model source: {model_source} ({'Checkpoint' if last_checkpoint else 'Base Model'})")
 
     assert HUGGINGFACE_TOKEN, "Hugging Face token is required for model loading."
     tokenizer = AutoTokenizer.from_pretrained(model_source, trust_remote_code=True, token=HUGGINGFACE_TOKEN)
@@ -325,3 +309,4 @@ def load_model_and_tokenizer(checkpoint_dir: Optional[str]) -> Tuple[Optional[Pr
             token=HUGGINGFACE_TOKEN,
         )
     return model, tokenizer
+

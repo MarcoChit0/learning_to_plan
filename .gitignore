@@ -5,4 +5,4 @@
 .env
 .vscode/
 *.egg-info/
-**logs.log
+data/logs.log

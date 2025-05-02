@@ -4,6 +4,8 @@ import asyncio
 import aiohttp
 import os
 import datetime
+from sklearn.model_selection import train_test_split
+logger = config.get_logger(__name__)
 
 async def get_plan_from_paas(domain_content, instance_content, instance_name, solver_url="http://localhost:5001/package/lama-first/solve", max_retries=3):
     req_body = {"domain": domain_content, "problem": instance_content}
@@ -23,14 +25,14 @@ async def get_plan_from_paas(domain_content, instance_content, instance_name, so
                         output = result_data.get("result", {}).get("output", {})
                         stderr = result_data.get("result", {}).get("stderr", "")
                         if output.get("sas_plan") and stderr.strip() == "":
-                            config.log(f"Instance {instance_name} -- Attempt {attempt} -- Success!", level=config.logging.INFO)
+                            logger.info(f"Instance {instance_name} -- Attempt {attempt} -- Success!")
                             return result_data
                     break
             except Exception as e:
-                config.log(f"Instance {instance_name} -- Attempt {attempt} -- Error during planning request: {e}", level=config.logging.WARNING)
-            config.log(f"Instance {instance_name} -- Attempt {attempt} -- Retrying...", level=config.logging.INFO)
+                logger.warning(f"Instance {instance_name} -- Attempt {attempt} -- Error during planning request: {e}")
+            logger.info(f"Instance {instance_name} -- Attempt {attempt} -- Retrying...")
             await asyncio.sleep(2)
-        config.log(f"Instance {instance_name} -- Attempt {attempt} -- Exceeded max retries.", level=config.logging.WARNING)
+        logger.warning(f"Instance {instance_name} -- Attempt {attempt} -- Exceeded max retries.")
         return {"status": "error", "error": "Max retries exceeded or no valid plan returned."}
 
 async def call_paas(
@@ -38,7 +40,7 @@ async def call_paas(
     max_retries=3,
     num_workers=4
 ):
-    config.log(f"Starting call to planning as a service at {datetime.datetime.now()}.", level=config.logging.INFO)
+    logger.info(f"Starting call to planning as a service at {datetime.datetime.now()}.")
     async def process_instance(t: task.Task):
         async with semaphore:
             try:
@@ -56,32 +58,31 @@ async def call_paas(
     data_file_path = config.PROCESSED_DATA_FILE_PATH
     print(f"Data file path: {data_file_path}")
     if os.path.exists(data_file_path):
-        config.log(f"Loading existing dataset at {data_file_path}. Skipping recalculation for already processed tasks.", level=config.logging.INFO)
+        logger.info(f"Loading existing dataset at {data_file_path}. Skipping recalculation for already processed tasks.")
         processed_tasks = task.get_tasks_from_jsonl(data_file_path)
         processed_tasks = {t for t in processed_tasks if t._status == task.Task.TaskStatus.OK}
         tasks = tasks - processed_tasks
     
-    config.log(f"Must process {len(tasks)} tasks.", level=config.logging.INFO)
+    logger.info(f"Must process {len(tasks)} tasks.")
     semaphore = asyncio.Semaphore(num_workers)
     await asyncio.gather(*[process_instance(t) for t in tasks])
 
     processed_tasks.update(tasks)
     config.create_necessary_dirs(data_file_path)
     task.save_tasks_to_jsonl(processed_tasks, data_file_path)
-    config.log(f"Finished writing to {data_file_path}.", level=config.logging.INFO)
+    logger.info(f"Finished writing to {data_file_path}.")
 
-    config.log(f"Finished call to planning as a service at {datetime.datetime.now()}.", level=config.logging.INFO)
+    logger.info(f"Finished call to planning as a service at {datetime.datetime.now()}.")
 
-from sklearn.model_selection import train_test_split
 
 def split_dataset(
     random_seed=42
 ):
-    config.log(f"Starting to build finetuning dataset at {datetime.datetime.now()}.", level=config.logging.INFO)
+    logger.info(f"Starting to build finetuning dataset at {datetime.datetime.now()}.")
     data_file_path = config.PROCESSED_DATA_FILE_PATH
     if not os.path.exists(data_file_path):
         e = f"Data file not found: {data_file_path}"
-        config.log(e, level=config.logging.ERROR)
+        logger.error(e)
         raise ValueError(e)
 
     tasks = task.get_tasks_from_jsonl(data_file_path)
@@ -91,7 +92,7 @@ def split_dataset(
     tasks_per_domain = {d: [t for t in valid_tasks if t._domain == d] for d in domains}
 
     for d in domains:
-        config.log(f"Splitting tasks in domain: {d}", level=config.logging.INFO)
+        logger.info(f"Splitting tasks in domain: {d}")
         assert len(tasks_per_domain[d]) == 4400, f"Data file must contain at least 4400 valid instances, but only {len(valid_tasks)} instances were found."
         
         # Extract longer plans and basic plans
@@ -122,8 +123,8 @@ def split_dataset(
         
         tasks.update(divided_tasks)
         # Save the final dataset
-        config.log(f"Writing {len(tasks)} tasks to {data_file_path}.", level=config.logging.INFO)
+        logger.info(f"Writing {len(tasks)} tasks to {data_file_path}.")
         task.save_tasks_to_jsonl(tasks, data_file_path)
-        config.log(f"Finished writing {len(tasks)} tasks to {data_file_path}.", level=config.logging.INFO)
-        config.log(f"Finished splitting tasks in domain: {d}.", level=config.logging.INFO)
-    config.log(f"Finished building finetuning dataset at {datetime.datetime.now()}.", level=config.logging.INFO)
+        logger.info(f"Finished writing {len(tasks)} tasks to {data_file_path}.")
+        logger.info(f"Finished splitting tasks in domain: {d}.")
+    logger.info(f"Finished building finetuning dataset at {datetime.datetime.now()}.")

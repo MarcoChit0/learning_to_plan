@@ -1,32 +1,117 @@
+from __future__ import annotations
 import threading
 import abc
 import re
 import json
 import os
+import learning_to_plan.config as config
 from typing import Optional
 from enum import Enum
+
+logger = config.get_logger(__name__)
 
 instance_pattern = re.compile(r"instance-(\d+)\.pddl$")
 lock = threading.Lock()
 
-class NaturalLanguagePlan:
-    def __init__(self, plan:str, is_valid:Optional[bool]=None):
-        self._plan:str = plan
-        self._is_valid:Optional[bool] = is_valid
-    
-    def validate(self, is_valid:bool):
-        self._is_valid = is_valid
-    
+class PlanManager:
+    # TODO: add on the future the possibility of distinguishing between multiple finetuned versions of the same model
+    class PromptType(Enum):
+        IO = "io"
+        COT = "cot"
+
+    class Plan:
+        def __init__(self, plan: str, is_valid: Optional[bool] = None):
+            self._plan : str = plan
+            # None means that the plan is not validated yet
+            self._is_valid : Optional[bool] = is_valid
+
+        def to_json(self):
+            return {
+                "plan": self._plan,
+                "is_valid": self._is_valid,
+            }
+
+        def from_json(self, json_obj):
+            self._plan = json_obj.get("plan", None)
+            self._is_valid = json_obj.get("is_valid", None)
+            assert self._plan is not None, "NaturalLanguagePlan must have a plan."
+
+    def __init__(self, model_name : Optional[str] = None):
+        self._model_name = model_name
+        self._prompt_to_plan_mapping : dict[PlanManager.PromptType, PlanManager.Plan] = {}
+
+    def __hash__(self):
+        return hash(self._model_name)
+
+    def __eq__(self, other):
+        if not isinstance(other, PlanManager):
+            return NotImplemented
+        return self._model_name == other._model_name
+
+    def add_plan(self, prompt_type: PlanManager.PromptType, plan: str):
+        if prompt_type not in PlanManager.PromptType:
+            raise ValueError(f"Invalid prompt type: {prompt_type}.")
+        if prompt_type in self._prompt_to_plan_mapping:
+            # Changed config.log to logger.warning
+            logger.warning(f"Prompt type {prompt_type} already exists for model {self._model_name}. Overwriting it.")
+        else:
+            # Changed config.log to logger.info
+            logger.info(f"Adding plan for model {self._model_name} with prompt type {prompt_type}.")
+        
+        self._prompt_to_plan_mapping.update({prompt_type: PlanManager.Plan(plan=plan)})
+
+    def validate(self, prompt_type: PlanManager.PromptType , is_valid: bool):
+        if prompt_type not in self._prompt_to_plan_mapping:
+            raise ValueError(f"Prompt type {prompt_type} not found for model {self._model_name}.")
+        plan = self._prompt_to_plan_mapping[prompt_type]
+        plan._is_valid = is_valid
+        self._prompt_to_plan_mapping.update({prompt_type: plan})
+        # Changed config.log to logger.info
+        logger.info(f"Plan for model {self._model_name} with prompt type {prompt_type} is valid: {is_valid}.")
+
     def to_json(self):
+        serialized_plans = {}
+        for prompt_type, plan in self._prompt_to_plan_mapping.items():
+            serialized_plans[prompt_type.value] = plan.to_json()
         return {
-            "plan": self._plan,
-            "is_valid": self._is_valid,
+            "model_name": self._model_name,
+            "plans": serialized_plans
         }
 
     def from_json(self, json_obj):
-        self._plan = json_obj.get("plan", None)
-        self._is_valid = json_obj.get("is_valid", None)
-        assert self._plan is not None, "NaturalLanguagePlan must have a plan."
+        '''
+        {
+            "model_name": "model_name",
+            "plans": {
+                "io": {
+                    "plan": "plan",
+                    "is_valid": false
+                },
+                "cot": {
+                    "plan": "plan",
+                    "is_valid": true
+                }
+            },
+        }
+        '''
+
+        self._model_name = json_obj.get("model_name", None)
+        if self._model_name is None:
+            raise ValueError("Model name is required.")
+
+        plans_json = json_obj.get("plans", {})
+        for prompt_type_str, plan_json in plans_json.items():
+            try:
+                prompt_type = PlanManager.PromptType(prompt_type_str)
+                plan = PlanManager.Plan(plan="")
+                plan.from_json(plan_json)
+                self._prompt_to_plan_mapping[prompt_type] = plan
+            except ValueError as e:
+                # Changed config.log to logger.error
+                logger.error(f"Invalid prompt type in JSON: {e}")
+                raise e
+
+
 
 class Task(abc.ABC):
     class TaskType(Enum):
@@ -43,44 +128,57 @@ class Task(abc.ABC):
         self._domain_file_path : str = domain_file_path
         self._instance_file_path : str = instance_file_path
         self._instance : str = instance_pattern.search(self._instance_file_path).group(0)
+        # Assuming config.LONG_INSTANCES is defined elsewhere or needs replacement
+        # For now, keeping it as is, but it might need adjustment depending on where LONG_INSTANCES comes from.
         self._is_longer_plan : bool = True if config.LONG_INSTANCES in self._instance_file_path else False
         self._status : Optional[Task.TaskStatus] = None
         self._error_message : Optional[str] = None
         self._plan : Optional[str] = None
         self._type : Optional[Task.TaskType] = None # training, validation, test | None
-        self._model_generated_plans : Optional[dict[str, list[NaturalLanguagePlan]]] = None # Updated type hint
-        self._prompt : Optional[str] = None
-
-    def validate_plan(self, model_name : str, plan_idx : int, is_valid: bool):
-        if self._model_generated_plans:
-            if model_name in self._model_generated_plans:
-                if len(self._model_generated_plans[model_name]) > plan_idx:
-                    self._model_generated_plans[model_name][plan_idx].validate(is_valid)
-                else:
-                    raise IndexError(f"Plan index {plan_idx} out of range for model {model_name}.")
-            else:
-                raise KeyError(f"Model {model_name} not found in generated plans.")
-        else:
-            raise ValueError("No generated plans available to validate.")
+        self._plan_managers : set[PlanManager] = set() # Updated type
 
     @abc.abstractmethod
-    def convert_pddl_instance_to_natural_language(self, plan) -> str:
+    def convert_pddl_instance_to_natural_language(self, pddl_instance) -> str:
         raise NotImplementedError("Subclasses must implement this method.")
 
     @abc.abstractmethod
-    def convert_pddl_plan_to_natural_language(self, plan) -> str:
+    def convert_pddl_plan_to_natural_language(self, pddl_plan) -> str:
+        raise NotImplementedError("Subclasses must implement this method.")
+    
+    @abc.abstractmethod
+    def convert_natural_language_plan_to_pddl(self, nl_plan) -> str:
         raise NotImplementedError("Subclasses must implement this method.")
 
+    @property
     @abc.abstractmethod
-    def build_prompt(self, **kwargs) -> str:
-        raise NotImplementedError("Subclasses must implement this method.")
-        
-    def get_prompt(self, eos_token: str = "", with_plan: bool = True) -> str:
+    def _domain_description_in_natural_language(self) -> str:
+        raise NotImplementedError("Subclasses must implement this property.")
+
+    def get_prompt(self, eos_token: Optional[str] = None, with_plan: bool = True,  cot_examples:set[Task] = set()) -> str:
         try:
-            prompt = self.build_prompt()
-            if "## Plan." not in prompt:
-                prompt += "\n\n# Plan.\n\n"
-            prompt += eos_token
+            is_cot = len(cot_examples) > 0
+            prompt = ""
+            prompt += self._domain_description_in_natural_language
+            if is_cot:
+                assert len(cot_examples) > 0, "is_cot is True but no examples provided."
+                prompt += "## Examples.\n\n"
+                for i, example in enumerate(cot_examples):
+                    # assert the subclasses are the same
+                    assert type(example) == type(self), f"Example task {example._id} is not of the same type as the current task {self._id}."
+                    prompt += f"### Example {i+1}/{len(cot_examples)}.\n\n"
+                    prompt += f"#### Example {i+1} Instance.\n\n"
+                    prompt += example.convert_pddl_instance_to_natural_language(example.read_instance())
+                    prompt += f"#### Example {i+1} Plan.\n\n"
+                    if example._plan:
+                        prompt += example._plan
+                    else:
+                        raise ValueError(f"Example {i+1} -- {example._id} -- does not have a plan.")
+                    prompt += "\n\n"
+            prompt += "## Instance.\n\n"
+            prompt += self.convert_pddl_instance_to_natural_language(self.read_instance())
+            prompt += "## Plan.\n\n"
+            if eos_token:
+                prompt += eos_token
             if with_plan and self._plan:
                 prompt += self._plan
             return prompt
@@ -88,36 +186,30 @@ class Task(abc.ABC):
             raise NotImplementedError(f"Method not implemented: {e}")
         except Exception as e:
             raise Exception(f"An error occurred while building the prompt: {e}")
-        
+
 
 
     @property
     def _id(self):
         return f"{self._domain_file_path} - {self._instance_file_path}"
 
-    def add_generated_plans(self, model_name: str, plans: list[str], overwrite: bool = True):
-        if self._model_generated_plans is None:
-            self._model_generated_plans = {}
-        if model_name not in self._model_generated_plans or overwrite:
-            self._model_generated_plans[model_name] = [] # Initialize/clear the list for the model
-            if overwrite:
-                config.log(f"Overwriting plans for model {model_name} in task {self._id}.")
-
-        # Create NaturalLanguagePlan objects for the new plans
-        new_nl_plans = [NaturalLanguagePlan(plan) for plan in plans]
-        self._model_generated_plans[model_name].extend(new_nl_plans)
-        config.log(f"Added {len(plans)} plans for model {model_name} in task {self._id}.")
-
+    def add_plan(self, model_name: str, prompt_type: PlanManager.PromptType, plan : str):
+        plan_manager = next((pm for pm in self._plan_managers if pm._model_name == model_name), None)
+        if not plan_manager:
+            plan_manager = PlanManager(model_name)
+            # Changed config.log to logger.info
+            logger.info(f"Plan Manager for model {model_name} not found... Creating one for prompt type {prompt_type}.")
+            self._plan_managers.add(plan_manager) # Ensure the new manager is added
+        plan_manager.add_plan(prompt_type, plan)
+        # Changed config.log to logger.info
+        logger.info(f"Plan added to Plan Manager of model {model_name} with prompt type {prompt_type}.")
 
     def to_json(self):
-        # Serialize model_generated_plans
-        serialized_plans = None
-        if self._model_generated_plans:
-            serialized_plans = {}
-            for model_name, nl_plans_list in self._model_generated_plans.items():
-                serialized_plans[model_name] = [nl_plan.to_json() for nl_plan in nl_plans_list]
-
         try:
+            # Serialize plan_managers
+            # It is stored on the json as a list of dictionaries
+            # In the class plan_managers is a set of PlanManager
+            plan_manager_list_json = [plan_manager.to_json() for plan_manager in self._plan_managers]
             data = {
                 "domain_file_path": self._domain_file_path,
                 "instance_file_path": self._instance_file_path,
@@ -128,11 +220,11 @@ class Task(abc.ABC):
                 "domain": self._domain,
                 "is_longer_plan": self._is_longer_plan,
                 "type": self._type.value if self._type else None,
-                "model_generated_plans": serialized_plans,
-                "prompt": self.get_prompt(with_plan=False)
+                "plan_managers": plan_manager_list_json,
             }
         except (NotImplementedError, AssertionError, Exception) as e:
-            config.log(f"Error generating prompt for task {self._id}: {e}", level=config.logging.ERROR)
+            # Changed config.log to logger.error
+            logger.error(f"Error generating prompt for task {self._id}: {e}")
             raise e
 
         return json.dumps(data, ensure_ascii=False)
@@ -170,45 +262,46 @@ class Task(abc.ABC):
             if json_value is not None:
                 if not isinstance(json_value, str):
                      msg = f"Expected string for {field_name}, but got {type(json_value)}"
-                     config.log(msg, level=config.logging.ERROR)
+                     # Changed config.log to logger.error
+                     logger.error(msg)
                      continue
                 try:
                     setattr(self, f"_{field_name}", enum_type(json_value.strip()))
                 except (ValueError, KeyError):
                     msg = f"Invalid {field_name} value in JSON: '{json_value}'"
-                    config.log(msg, level=config.logging.ERROR)
+                    # Changed config.log to logger.error
+                    logger.error(msg)
                     raise ValueError(msg)
 
         # Deserialize simple string fields
-        for field_name in ["plan", "error_message", "prompt"]:
+        for field_name in ["plan", "error_message"]:
             value = json_obj.get(field_name)
             if value is not None:
                 if not isinstance(value, str):
                    raise TypeError(f"{field_name} must be a string or null, but got {type(value)}")
                 setattr(self, f"_{field_name}", value)
 
-        # Deserialize model_generated_plans
-        plans_map_json = json_obj.get("model_generated_plans")
-        if plans_map_json is not None:
-            if not isinstance(plans_map_json, dict):
-                raise TypeError(f"model_generated_plans must be a dictionary or null, but got {type(plans_map_json)}")
+        # Deserialize plan_managers
+        # It is stored on the json as a list of dictionaries
+        # In the class plan_managers is a set of PlanManager
+        plan_manager_list_json = json_obj.get("plan_managers")
+        self._plan_managers = set()
+        if plan_manager_list_json is not None:
+            if not isinstance(plan_manager_list_json, list):
+                raise TypeError(f"plan_managers must be a list or null, but got {type(plan_manager_list_json)}")
 
-            self._model_generated_plans = {}
-            for model_name, plans_list_json in plans_map_json.items():
-                if not isinstance(model_name, str):
-                    raise TypeError(f"Keys in model_generated_plans must be strings, but got {type(model_name)}")
-                if not isinstance(plans_list_json, list):
-                     raise TypeError(f"Values in model_generated_plans must be lists, but got {type(plans_list_json)} for key '{model_name}'")
+            for plan_manager_json in plan_manager_list_json:
+                if not isinstance(plan_manager_json, dict):
+                    raise TypeError(f"Elements in plan_managers must be dictionaries, but got {type(plan_manager_json)}")
 
-                nl_plans_list = []
-                for plan_json in plans_list_json:
-                    if not isinstance(plan_json, dict):
-                        raise TypeError(f"Elements in the plan list for model '{model_name}' must be dictionaries, but got {type(plan_json)}")
-                    nl_plan = NaturalLanguagePlan(plan="") # Create an empty instance
-                    nl_plan.from_json(plan_json) # Populate from JSON dict
-                    nl_plans_list.append(nl_plan)
-
-                self._model_generated_plans[model_name] = nl_plans_list
+                try:
+                    plan_manager = PlanManager()
+                    plan_manager.from_json(plan_manager_json)
+                    self._plan_managers.add(plan_manager)
+                except Exception as e:
+                    # Changed config.log to logger.error
+                    logger.error(f"Error deserializing PlanManager: {e}")
+                    raise e
 
 
     def update_status(self, response):
@@ -233,12 +326,12 @@ class Task(abc.ABC):
         with lock and open(self._domain_file_path, "r", encoding='utf-8') as f:
             domain_content = f.read()
         return domain_content
-    
+
 
 class BlocksworldTask(Task):
     def __init__(self, domain_file_path, instance_file_path):
         super().__init__("blocksworld", domain_file_path, instance_file_path)
-    
+
     def fact_to_natural_language(self, fact:str) -> str:
         """
             fact : str - a line of PDDL representing a fact
@@ -259,11 +352,11 @@ class BlocksworldTask(Task):
             return f"{tokens[1]} is on {tokens[2]}."
         else:
             raise ValueError(f"Unknown fact: {fact}")
-        
-        
+
+
     def convert_pddl_instance_to_natural_language(self, instance:str):
         """
-            Example:     
+            Example:
             instance: str - PDDL instance
 
             (define (problem BW-rand-6)
@@ -316,14 +409,14 @@ class BlocksworldTask(Task):
 
         if not (objects_match and init_match and goal_match):
             raise ValueError("Invalid PDDL instance format.")
-        
+
         objects = objects_match.group(1).strip().split()
         init_facts = init_match.group(1).strip().split("\n")
         goal_facts = goal_match.group(1).strip().split("\n")
 
         if objects == [] or init_facts == [] or goal_facts == []:
             raise ValueError("Empty objects, init, or goal in PDDL instance.")
-        
+
         # Process objects
         objects = [obj.strip() for obj in objects if obj.strip()]
         objects_str = "blocks: " + ", ".join(objects) + "."
@@ -336,8 +429,8 @@ class BlocksworldTask(Task):
         goal_facts = [self.fact_to_natural_language(fact) for fact in goal_facts if fact.strip()]
         goal_facts_str = "goal state:\n" + "\n".join(goal_facts)
 
-        return f"{objects_str}\n\n{init_facts_str}\n\n{goal_facts_str}"
-        
+        return f"{objects_str}\n\n{init_facts_str}\n\n{goal_facts_str}\n\n"
+
 
 
     def convert_pddl_plan_to_natural_language(self, plan:str) -> str:
@@ -362,7 +455,7 @@ class BlocksworldTask(Task):
                 else:
                     raise ValueError(f"Unknown action: {action}")
         return nl_plan
-    
+
     def convert_natural_language_plan_to_pddl(self, plan:str) -> str:
         """
         Converts a natural language plan into PDDL format.
@@ -411,72 +504,67 @@ class BlocksworldTask(Task):
                 # Raise error only if the line was not empty and didn't match any known pattern
                 raise ValueError(f"Unknown or malformed action: '{nl_a}'")
 
-        return "\n".join(pddl_actions)
+        return "\n".join(pddl_actions) + "\n" if pddl_actions else ""
 
-    def build_prompt(self, **kwargs):
-        if not self._prompt:
-            problem_description = self.convert_pddl_instance_to_natural_language(self.read_instance())
-            prompt = (
-                    "# Goal.\n\n"
-                    "Use the available actions to transform the initial state into the goal state.\n\n"
-                    "# Output Format.\n\n"
-                    "Return a sequence of actions, one per line, in the order they should be applied.\n\n"
-                    "# Warnings.\n\n"
-                    "An action can only be applied if all its preconditions are true in the current state.\n"
-                    "When an action is applied, its effects update the current state by adding and removing facts.\n"
-                    "The goal is reached when all facts in the goal state are present in the current state.\n"
-                    "A valid plan must transform the initial state into the goal state using only applicable actions.\n"
-                    "Starting from the initial state, choose an applicable action, apply it, and repeat this process until the goal is reached.\n"
-                    "If no sequence of actions can reach the goal, return nothing.\n\n"
-                    "# Context.\n\n"
-                    "## Available actions.\n\n"
-                    "### Action: pick up block.\n"
-                    "preconditions:\n"
-                    "block is on the table.\n"
-                    "block is clear.\n"
-                    "your hand is empty.\n\n"
-                    "effects:\n"
-                    "you are holding block.\n"
-                    "your hand is not empty.\n"
-                    "block is not on the table.\n"
-                    "block is not clear.\n\n"
-                    "### Action: put down block.\n"
-                    "preconditions:\n"
-                    "you are holding block.\n\n"
-                    "effects:\n"
-                    "block is on the table.\n"
-                    "block is clear.\n"
-                    "your hand is empty.\n"
-                    "you are not holding block.\n\n"
-                    "### Action: stack block1 on block2.\n"
-                    "preconditions:\n"
-                    "you are holding block1.\n"
-                    "block2 is clear.\n\n"
-                    "effects:\n"
-                    "your hand is empty.\n"
-                    "block1 is clear.\n"
-                    "block2 is not clear.\n"
-                    "you are not holding block1.\n"
-                    "block1 is on block2.\n\n"
-                    "### Action: unstack block1 from block2.\n"
-                    "preconditions:\n"
-                    "block1 is clear.\n"
-                    "block1 is on block2.\n"
-                    "your hand is empty.\n\n"
-                    "effects:\n"
-                    "you are holding block1.\n"
-                    "your hand is not empty.\n"
-                    "block2 is clear.\n"
-                    "block1 is not clear.\n"
-                    "block1 is not on block2.\n\n"
-                    "## Instance.\n\n"
-                    + problem_description + "\n\n"
-                    "## Plan.\n\n"
-                )
-            self._prompt = prompt
-        return self._prompt
-
-import learning_to_plan.config as config
+    @property
+    def _domain_description_in_natural_language(self) -> str:
+        return (
+            "# Goal.\n\n"
+            "Using only the available actions described below, create a plan (sequence of actions) that transforms the initial state into the goal state.\n\n"
+            "# Output Format.\n\n"
+            "Your response must contain *only* the plan.\n"
+            "List each action on a new line.\n"
+            "Use the exact action format shown in the examples.\n"
+            "Do not add any explanations, comments, or introductory text.\n\n"
+            "# Warnings.\n\n"
+            "An action can only be applied if all its preconditions are true in the current state.\n"
+            "When an action is applied, its effects update the current state by adding and removing facts.\n"
+            "The goal is reached when all facts in the goal state are present in the current state.\n"
+            "A valid plan must transform the initial state into the goal state using only applicable actions.\n"
+            "Starting from the initial state, choose an applicable action, apply it, and repeat this process until the goal is reached.\n"
+            "If no sequence of actions can reach the goal, return nothing.\n\n"
+            "# Context.\n\n"
+            "## Available actions.\n\n"
+            "### Action: pick up block.\n"
+            "preconditions:\n"
+            "block is on the table.\n"
+            "block is clear.\n"
+            "your hand is empty.\n\n"
+            "effects:\n"
+            "you are holding block.\n"
+            "your hand is not empty.\n"
+            "block is not on the table.\n"
+            "block is not clear.\n\n"
+            "### Action: put down block.\n"
+            "preconditions:\n"
+            "you are holding block.\n\n"
+            "effects:\n"
+            "block is on the table.\n"
+            "block is clear.\n"
+            "your hand is empty.\n"
+            "you are not holding block.\n\n"
+            "### Action: stack block1 on block2.\n"
+            "preconditions:\n"
+            "you are holding block1.\n"
+            "block2 is clear.\n\n"
+            "effects:\n"
+            "your hand is empty.\n"
+            "block1 is clear.\n"
+            "block2 is not clear.\n"
+            "you are not holding block1.\n"
+            "block1 is on block2.\n\n"
+            "### Action: unstack block1 from block2.\n"
+            "preconditions:\n"
+            "block1 is clear.\n"
+            "block1 is on block2.\n"
+            "your hand is empty.\n\n"
+            "effects:\n"
+            "you are holding block1.\n"
+            "your hand is not empty.\n"
+            "block2 is clear.\n"
+            "block1 is not clear.\n"
+            "block1 is not on block2.\n\n"
+        )
 
 def get_task_from_domain(domain, domain_file_path, instance_file_path):
     if domain == "blocksworld":
@@ -510,11 +598,13 @@ def get_tasks_from_jsonl(jsonl_file_path):
                 tasks.add(task)
             except json.JSONDecodeError as e:
                 m = f"Error decoding JSONL {jsonl_file_path}: {e}"
-                config.log(m, level=config.logging.ERROR)
+                # Changed config.log to logger.error
+                logger.error(m)
                 raise e
             except Exception as e:
                 m = f"Error processing task from file {jsonl_file_path}: {e}"
-                config.log(m, level=config.logging.ERROR)
+                # Changed config.log to logger.error
+                logger.error(m)
                 raise e
     return tasks
 
@@ -526,11 +616,13 @@ def save_tasks_to_jsonl(tasks:set[Task], jsonl_file_path:str):
                 f.write(json_str + "\n") # Write the JSON string followed by a newline
             except Exception as e:
                 m = f"Error saving task to file {jsonl_file_path}: {e}"
-                config.log(m, level=config.logging.ERROR)
+                # Changed config.log to logger.error
+                logger.error(m)
                 raise e
 
 from typing import Union, Set
-from datasets import Dataset
+# Removed unused import 'Dataset'
+# from datasets import Dataset
 def get_tasks_from_domain_directory(domain: str, number_of_problems_per_domain: Union[str, int] = "all") -> Set[Task]:
     """
     Get tasks from a domain directory.
@@ -542,6 +634,7 @@ def get_tasks_from_domain_directory(domain: str, number_of_problems_per_domain: 
     Returns:
         Set of Task objects
     """
+    # Assuming config.RAW_DIR, config.DOMAIN_FILE_NAME, config.BASIC_INSTANCES, config.LONG_INSTANCES are defined
     domain_file_path = os.path.join(config.RAW_DIR, domain, config.DOMAIN_FILE_NAME)
 
     # Determine which instance directories to include
@@ -576,31 +669,3 @@ def get_tasks_from_domain_directory(domain: str, number_of_problems_per_domain: 
             tasks = tasks[:number_of_problems_per_domain]
 
     return set(tasks)
- 
-
-def convert_tasks_into_dataset(tasks:set[Task], tokenizer_eos:str="", with_plan:bool=True) -> Dataset:
-    """
-    Converts a set of Task objects into a datasets.Dataset object.
-
-    Args:
-        tasks: A set of Task objects.
-        tokenizer_eos: End-of-sequence token to append to the prompt.
-        with_plan: Whether to include the plan in the prompt.
-
-    Returns:
-        A datasets.Dataset object containing the prompts.
-    """
-    dataset_list = []
-    for t in tasks:
-        try:
-            p = t.get_prompt(eos_token=tokenizer_eos, with_plan=with_plan)
-            dataset_list.append({
-                    "text": p,
-                })
-        except Exception as e:
-            m = f"Error converting task {t._id} into dataset format: {e}"
-            config.log(m, level=config.logging.ERROR)
-            # Depending on requirements, you might want to skip the task or raise the exception
-            raise e
-    # Create a Dataset object from the list of dictionaries
-    return Dataset.from_list(dataset_list)
