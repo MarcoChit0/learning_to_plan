@@ -9,8 +9,6 @@ from learning_to_plan import utils
 from learning_to_plan import task
 from learning_to_plan import config # Import the refactored config
 from learning_to_plan import generate # Import the new generate module
-from learning_to_plan import validate
-from learning_to_plan import metrics
 
 logger = config.get_logger(__name__)
 
@@ -55,7 +53,7 @@ def parse_args():
     )
     # --- Configuration & Overrides ---
     parser.add_argument(
-        "-c", "--config_path",
+        "-c", "--config_file_path",
         type=str,
         default=None,
         help="Path to a custom JSON configuration file (overrides defaults)."
@@ -83,31 +81,19 @@ def parse_args():
         default=None, # Default is handled in config.py now
         help="Path to the base data directory (containing raw, paas_plans, etc.). Defaults to './data/'."
     )
-    # Custom type function to accept positive integers or specific strings
-    def parse_number_of_problems_per_domain_arg(arg):
-        if arg in ["all", "long", "basic"]:
-            return arg
-        try:
-            val = int(arg)
-            if val <= 0:
-                raise argparse.ArgumentTypeError("Integer must be positive")
-            return val
-        except ValueError:
-            raise argparse.ArgumentTypeError("Must be a positive integer or 'all', 'long', or 'basic'")
-
     parser.add_argument(
-        "-n", "--number_of_problems_per_domain",
-        type=parse_number_of_problems_per_domain_arg,
+        "--tasks_dataset_file_path",
+        type=str,
+        default=None,
+        help="Path to the tasks dataset file (e.g., 'data/tasks.jsonl'). Defaults to './data/tasks.jsonl'."
+    )
+    parser.add_argument(
+        "-n", "--number_of_instances",
+        type=str,
         default="all",
         help="Number of problems per domain: positive integer or 'all', 'long', 'basic'"
     )
     # --- Generate Specific ---
-    # TODO: change generate name to inference
-    parser.add_argument(
-        "--load_without_finetuned_checkpoints",
-        action="store_true",
-        help="Load the model with fine-tuned checkpoints."
-    )
     parser.add_argument(
         "--cot",
         type=int,
@@ -119,6 +105,11 @@ def parse_args():
         type=int,
         default=42,
         help="Random seed for reproducibility."
+    )
+    parser.add_argument(
+        "--dont_use_checkpoint",
+        action="store_true",
+        help="Do not use the latest checkpoint for training."
     )
     # --- Credentials ---
     parser.add_argument(
@@ -137,7 +128,7 @@ def parse_args():
     return parser.parse_args()
 
 from typing import Optional
-def get_selected_domains(args, dir:Optional[str]=None, is_processed_data_file:bool=False) -> set[str]:
+def get_selected_domains(args, dir:Optional[str]=None, is_file:bool=False) -> set[str]:
     if not args.domain:
         logger.error("Please specify a domain with --domain <domain_name> or 'all'.")
         raise ValueError("Domain not specified.")
@@ -150,13 +141,11 @@ def get_selected_domains(args, dir:Optional[str]=None, is_processed_data_file:bo
             logger.error(f"Error listing domains in {dir}: {e}", exc_info=True)
             raise e
         assert available_domains and len(available_domains) > 0, f"No domains found in {dir}."
-    elif is_processed_data_file:
-        file = config.PROCESSED_DATA_FILE_PATH
-        assert os.path.isfile(file), f"File {file} does not exist."
-        tasks = task.get_tasks_from_jsonl(file)
-        assert tasks, f"No tasks found in {file}."
+    elif is_file:
+        tasks = task.get_dataset()
+        assert tasks, f"No tasks found in {config.TASKS_DATASET_FILE_PATH}."
         available_domains = {t._domain for t in tasks}
-        assert available_domains, f"No domains found in {file}."
+        assert available_domains, f"No domains found in {config.TASKS_DATASET_FILE_PATH}."
     else:
         logger.error("No directory or file specified for domain selection.")
         raise ValueError("No directory or file specified for domain selection.")
@@ -177,19 +166,13 @@ if __name__ == "__main__":
     args = parse_args()
     config.initialize(args) # Config initialization likely sets up logging
 
-    print(config.PROCESSED_DATA_FILE_PATH)
     # --- Action Blocks ---
     if args.call_paas:
         logger.info("--- Starting Planning as a Service (PaaS) Calls ---")
         domains = get_selected_domains(args, dir=config.RAW_DIR)
         for domain in domains:
             logger.info(f"Processing PaaS for domain: {domain}")
-            tasks = task.get_tasks_from_domain_directory(domain, args.number_of_problems_per_domain)
-            if not tasks:
-                logger.warning(f"No tasks found for domain {domain}. Skipping.")
-                continue
-            logger.info(f"Outputting PaaS results to: {config.PROCESSED_DATA_FILE_PATH}")
-            asyncio.run(utils.call_paas(tasks))
+            asyncio.run(utils.call_paas(domain=domain))
             logger.info(f"Finished PaaS calls for domain: {domain}")
         logger.info("--- Finished All PaaS Calls ---")
 
@@ -200,44 +183,38 @@ if __name__ == "__main__":
 
     elif args.train:
         logger.info("--- Starting Model Training ---")
-
-        model_name = config.get_config("model_name")
-        if model_name and model_name.lower().startswith("gemini"):
-            m = f"Model '{model_name}' is a Gemini model. Training is not supported for Gemini."
-            logger.error(m)
-            raise ValueError(m)
-
-        domains = get_selected_domains(args, is_processed_data_file=True)
+        config_file_path = args.config_file_path or os.path.join(config.CONFIGS_DIR, config.DEFAULT_TRAIN_CONFIG)
+        train_kwargs = config.get_config(config_file_path=config_file_path, args=args)
+        assert train_kwargs["model_name"], "Model name not found in config. Please check your configuration."
+        domains = get_selected_domains(args=args, is_file=True)
         for domain in domains:
             logger.info(f"Starting training for domain: {domain}")
-            train.run_training_procedure(domain)
+            train.run_training_procedure(model_name=train_kwargs["model_name"], domain=domain, **train_kwargs)
             logger.info(f"Finished training for domain: {domain}")
         logger.info("--- Finished All Training ---")
 
     elif args.generate:
         logger.info("--- Starting Generation ---")
-        model_name = config.get_config("model_name")
-        assert model_name, "Model name not found in config. Please check your configuration."
-        model_checkpoints_base_dir = None
-
-        domains = get_selected_domains(args, is_processed_data_file=True)
+        config_file_path = args.config_file_path or os.path.join(config.CONFIGS_DIR, config.DEFAULT_GENERATE_CONFIG)
+        generate_kwargs = config.get_config(config_file_path=config_file_path, args=args)
+        assert generate_kwargs["model_name"], "Model name not found in config. Please check your configuration."
+        domains = get_selected_domains(args=args, is_file=True)
         for domain in domains:
             logger.info(f"Starting generation for domain: {domain}")
-            generate.generate_batch(domain=domain, number_of_problems_per_domain=args.number_of_problems_per_domain, number_of_cot_examples=args.cot, random_seed=args.random_seed)
+            checkpoint_dir = config.get_checkpoint_dir(domain, generate_kwargs["model_name"]) if not args.dont_use_checkpoint else None
+            generate.generate_batch(model_name=generate_kwargs["model_name"], domain=domain, number_of_instances=args.number_of_instances, random_seed=args.random_seed, number_of_cot_examples=args.cot, checkpoint_dir=checkpoint_dir, **generate_kwargs)
             logger.info(f"Finished generation for domain: {domain}")
         logger.info("--- Finished All Generation ---")
 
-    elif args.validate:
-        logger.info("--- Starting Validation ---")
-        validate.validate_plans()
-        logger.info("--- Finished All Validation ---")
+    # elif args.validate:
+    #     logger.info("--- Starting Validation ---")
+    #     validate.validate_plans(data_file_path=data_file_path)
+    #     logger.info("--- Finished All Validation ---")
 
-    elif args.compute_metrics:
-        # Placeholder: Add logging if needed when implementing metrics
-        logger.info("--- Starting Metric Computation ---")
-        # metrics.compute(...) # Example call
-        logger.info("--- Finished Metric Computation ---")
-        pass # Replace with actual metric computation logic
+    # elif args.compute_metrics:
+    #     logger.info("--- Starting Metric Computation ---")
+    #     metrics.compute_metrics(data_file_path=data_file_path)
+    #     logger.info("--- Finished Metric Computation ---")
 
     else:
         logger.warning("No action requested (e.g., --train, --generate). Exiting.")

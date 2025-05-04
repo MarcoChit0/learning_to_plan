@@ -1,4 +1,5 @@
 from __future__ import annotations
+from copy import deepcopy
 import threading
 import abc
 import re
@@ -13,225 +14,60 @@ logger = config.get_logger(__name__)
 instance_pattern = re.compile(r"instance-(\d+)\.pddl$")
 lock = threading.Lock()
 
-class PlanManager:
-    # TODO: add on the future the possibility of distinguishing between multiple finetuned versions of the same model
-    class PromptType(Enum):
-        IO = "io"
-        COT = "cot"
-
-    class Plan:
-        def __init__(self, plan: str, is_valid: Optional[bool] = None):
-            self._plan : str = plan
-            # None means that the plan is not validated yet
-            self._is_valid : Optional[bool] = is_valid
-
-        def to_json(self):
-            return {
-                "plan": self._plan,
-                "is_valid": self._is_valid,
-            }
-
-        def from_json(self, json_obj):
-            self._plan = json_obj.get("plan", None)
-            self._is_valid = json_obj.get("is_valid", None)
-            assert self._plan is not None, "NaturalLanguagePlan must have a plan."
-
-    def __init__(self, model_name : Optional[str] = None):
-        self._model_name = model_name
-        self._prompt_to_plan_mapping : dict[PlanManager.PromptType, PlanManager.Plan] = {}
-
-    def __hash__(self):
-        return hash(self._model_name)
-
-    def __eq__(self, other):
-        if not isinstance(other, PlanManager):
-            return NotImplemented
-        return self._model_name == other._model_name
-
-    def add_plan(self, prompt_type: PlanManager.PromptType, plan: str):
-        if prompt_type not in PlanManager.PromptType:
-            raise ValueError(f"Invalid prompt type: {prompt_type}.")
-        if prompt_type in self._prompt_to_plan_mapping:
-            # Changed config.log to logger.warning
-            logger.warning(f"Prompt type {prompt_type} already exists for model {self._model_name}. Overwriting it.")
-        else:
-            # Changed config.log to logger.info
-            logger.info(f"Adding plan for model {self._model_name} with prompt type {prompt_type}.")
-        
-        self._prompt_to_plan_mapping.update({prompt_type: PlanManager.Plan(plan=plan)})
-
-    def validate(self, prompt_type: PlanManager.PromptType , is_valid: bool):
-        if prompt_type not in self._prompt_to_plan_mapping:
-            raise ValueError(f"Prompt type {prompt_type} not found for model {self._model_name}.")
-        plan = self._prompt_to_plan_mapping[prompt_type]
-        plan._is_valid = is_valid
-        self._prompt_to_plan_mapping.update({prompt_type: plan})
-        # Changed config.log to logger.info
-        logger.info(f"Plan for model {self._model_name} with prompt type {prompt_type} is valid: {is_valid}.")
-
-    def to_json(self):
-        serialized_plans = {}
-        for prompt_type, plan in self._prompt_to_plan_mapping.items():
-            serialized_plans[prompt_type.value] = plan.to_json()
-        return {
-            "model_name": self._model_name,
-            "plans": serialized_plans
-        }
-
-    def from_json(self, json_obj):
-        '''
-        {
-            "model_name": "model_name",
-            "plans": {
-                "io": {
-                    "plan": "plan",
-                    "is_valid": false
-                },
-                "cot": {
-                    "plan": "plan",
-                    "is_valid": true
-                }
-            },
-        }
-        '''
-
-        self._model_name = json_obj.get("model_name", None)
-        if self._model_name is None:
-            raise ValueError("Model name is required.")
-
-        plans_json = json_obj.get("plans", {})
-        for prompt_type_str, plan_json in plans_json.items():
-            try:
-                prompt_type = PlanManager.PromptType(prompt_type_str)
-                plan = PlanManager.Plan(plan="")
-                plan.from_json(plan_json)
-                self._prompt_to_plan_mapping[prompt_type] = plan
-            except ValueError as e:
-                # Changed config.log to logger.error
-                logger.error(f"Invalid prompt type in JSON: {e}")
-                raise e
-
-
-
 class Task(abc.ABC):
-    class TaskType(Enum):
+    class Type(Enum):
         TRAIN = "train"
         VALIDATION = "validation"
         TEST = "test"
 
-    class TaskStatus(Enum):
+    class PlanningAsAServiceStatus(Enum):
         OK = "ok"
         ERROR = "error"
+    
+    class LanguageConverter(abc.ABC):
+        @abc.abstractmethod
+        def fact_to_natural_language(self, fact: str) -> str:
+            raise NotImplementedError("Subclasses must implement this method.")
+
+        @abc.abstractmethod
+        def pddl_instance_to_natural_language(self, pddl_instance) -> str:
+            raise NotImplementedError("Subclasses must implement this method.")
+
+        @abc.abstractmethod
+        def pddl_plan_to_natural_language(self, pddl_plan) -> str:
+            raise NotImplementedError("Subclasses must implement this method.")
+        
+        @abc.abstractmethod
+        def natural_language_plan_to_pddl(self, nl_plan) -> str:
+            raise NotImplementedError("Subclasses must implement this method.")
+        
+        @property
+        @abc.abstractmethod
+        def _domain_description_in_natural_language(self) -> str:
+            raise NotImplementedError("Subclasses must implement this property.")
+
 
     def __init__(self, domain : str, domain_file_path : str, instance_file_path : str):
         self._domain :str = domain
         self._domain_file_path : str = domain_file_path
         self._instance_file_path : str = instance_file_path
-        self._instance : str = instance_pattern.search(self._instance_file_path).group(0)
-        # Assuming config.LONG_INSTANCES is defined elsewhere or needs replacement
-        # For now, keeping it as is, but it might need adjustment depending on where LONG_INSTANCES comes from.
         self._is_longer_plan : bool = True if config.LONG_INSTANCES in self._instance_file_path else False
-        self._status : Optional[Task.TaskStatus] = None
-        self._error_message : Optional[str] = None
-        self._plan : Optional[str] = None
-        self._type : Optional[Task.TaskType] = None # training, validation, test | None
-        self._plan_managers : set[PlanManager] = set() # Updated type
+        self._id : int = int(re.search(instance_pattern, self._instance_file_path).group(1))
+        self._paas_status : Optional[Task.PlanningAsAServiceStatus] = None # ok, error
+        self._pddl_plan : Optional[str] = None
+        self._type : Optional[Task.Type] = None # training, validation, test | None
 
-    @abc.abstractmethod
-    def convert_pddl_instance_to_natural_language(self, pddl_instance) -> str:
-        raise NotImplementedError("Subclasses must implement this method.")
-
-    @abc.abstractmethod
-    def convert_pddl_plan_to_natural_language(self, pddl_plan) -> str:
-        raise NotImplementedError("Subclasses must implement this method.")
-    
-    @abc.abstractmethod
-    def convert_natural_language_plan_to_pddl(self, nl_plan) -> str:
-        raise NotImplementedError("Subclasses must implement this method.")
-
-    @property
-    @abc.abstractmethod
-    def _domain_description_in_natural_language(self) -> str:
-        raise NotImplementedError("Subclasses must implement this property.")
-
-    def get_prompt(self, eos_token: Optional[str] = None, with_plan: bool = True,  cot_examples:set[Task] = set()) -> str:
-        try:
-            is_cot = len(cot_examples) > 0
-            prompt = ""
-            prompt += self._domain_description_in_natural_language
-            if is_cot:
-                assert len(cot_examples) > 0, "is_cot is True but no examples provided."
-                prompt += "## Examples.\n\n"
-                for i, example in enumerate(cot_examples):
-                    # assert the subclasses are the same
-                    assert type(example) == type(self), f"Example task {example._id} is not of the same type as the current task {self._id}."
-                    prompt += f"### Example {i+1}/{len(cot_examples)}.\n\n"
-                    prompt += f"#### Example {i+1} Instance.\n\n"
-                    prompt += example.convert_pddl_instance_to_natural_language(example.read_instance())
-                    prompt += f"#### Example {i+1} Plan.\n\n"
-                    if example._plan:
-                        prompt += example._plan
-                    else:
-                        raise ValueError(f"Example {i+1} -- {example._id} -- does not have a plan.")
-                    prompt += "\n\n"
-            prompt += "## Instance.\n\n"
-            prompt += self.convert_pddl_instance_to_natural_language(self.read_instance())
-            prompt += "## Plan.\n\n"
-            if eos_token:
-                prompt += eos_token
-            if with_plan and self._plan:
-                prompt += self._plan
-            return prompt
-        except NotImplementedError as e:
-            raise NotImplementedError(f"Method not implemented: {e}")
-        except Exception as e:
-            raise Exception(f"An error occurred while building the prompt: {e}")
-
-
-
-    @property
-    def _id(self):
-        return f"{self._domain_file_path} - {self._instance_file_path}"
-
-    def add_plan(self, model_name: str, prompt_type: PlanManager.PromptType, plan : str):
-        plan_manager = next((pm for pm in self._plan_managers if pm._model_name == model_name), None)
-        if not plan_manager:
-            plan_manager = PlanManager(model_name)
-            # Changed config.log to logger.info
-            logger.info(f"Plan Manager for model {model_name} not found... Creating one for prompt type {prompt_type}.")
-            self._plan_managers.add(plan_manager) # Ensure the new manager is added
-        plan_manager.add_plan(prompt_type, plan)
-        # Changed config.log to logger.info
-        logger.info(f"Plan added to Plan Manager of model {model_name} with prompt type {prompt_type}.")
-
-    def to_json(self):
-        try:
-            # Serialize plan_managers
-            # It is stored on the json as a list of dictionaries
-            # In the class plan_managers is a set of PlanManager
-            plan_manager_list_json = [plan_manager.to_json() for plan_manager in self._plan_managers]
-            data = {
-                "domain_file_path": self._domain_file_path,
-                "instance_file_path": self._instance_file_path,
-                "instance": self._instance,
-                "status": self._status.value if self._status else None,
-                "plan": self._plan,
-                "error_message": self._error_message,
-                "domain": self._domain,
-                "is_longer_plan": self._is_longer_plan,
-                "type": self._type.value if self._type else None,
-                "plan_managers": plan_manager_list_json,
-            }
-        except (NotImplementedError, AssertionError, Exception) as e:
-            # Changed config.log to logger.error
-            logger.error(f"Error generating prompt for task {self._id}: {e}")
-            raise e
-
-        return json.dumps(data, ensure_ascii=False)
+        if self._domain == "blocksworld":
+            self._converter : Task.LanguageConverter = BlocksworldLanguageConverter()
+        else:
+            raise ValueError(f"Unknown domain: {self._domain}. Supported domains are: blocksworld.")
 
     def __lt__(self, other):
         if not isinstance(other, Task):
             return NotImplemented
+
+        if self._domain != other._domain:
+            return self._domain < other._domain
 
         if self._is_longer_plan != other._is_longer_plan:
             return not self._is_longer_plan
@@ -243,9 +79,10 @@ class Task(abc.ABC):
         else:
             return self._instance_file_path < other._instance_file_path
 
-
     def __str__(self):
-        return f"{self._id} : {self._status}, {self._type}"
+        long_part = ", long" if self._is_longer_plan else ""
+        type_part = f": {self._type.value}" if self._type else ""
+        return f"Task {self._domain}, {self._id}{long_part}{type_part}"
 
     def __hash__(self):
         return hash((self._domain_file_path, self._instance_file_path))
@@ -255,67 +92,101 @@ class Task(abc.ABC):
             return NotImplemented
         return self._instance_file_path == other._instance_file_path and self._domain_file_path == other._domain_file_path
 
+    def get_prompt(self, eos_token: Optional[str] = None, with_plan: bool = True,  cot_examples:set[Task] = set()) -> str:
+        try:
+            is_cot = len(cot_examples) > 0
+            prompt = ""
+            prompt += self._domain_description_in_natural_language
+            # if is_cot:
+            #     assert len(cot_examples) > 0, "is_cot is True but no examples provided."
+            #     prompt += "## Examples.\n\n"
+            #     for i, example in enumerate(cot_examples):
+            #         # assert the subclasses are the same
+            #         assert type(example) == type(self), f"Example task {example._id} is not of the same type as the current task {self._id}."
+            #         prompt += f"### Example {i+1}/{len(cot_examples)}.\n\n"
+            #         prompt += f"#### Example {i+1} Instance.\n\n"
+            #         prompt += example.convert_pddl_instance_to_natural_language(example.read_instance())
+            #         prompt += f"#### Example {i+1} Plan.\n\n"
+            #         if example._plan:
+            #             prompt += example._plan
+            #         else:
+            #             raise ValueError(f"Example {i+1} -- {example._id} -- does not have a plan.")
+            #         prompt += "\n\n"
+            prompt += self._converter.pddl_instance_to_natural_language(pddl_instance=self.read_instance())
+            if eos_token:
+                prompt += eos_token
+            if with_plan and self._pddl_plan:
+                prompt += "<PLAN>\n"
+                prompt += self._converter.pddl_plan_to_natural_language(pddl_plan=self._pddl_plan)
+                prompt += "</PLAN>\n"
+            return prompt
+        except Exception as e:
+            raise Exception(f"An error occurred while building the prompt: {e}")
+
+    def to_json(self):
+        try:
+            data = {
+                "domain": self._domain,
+                "id": self._id,
+                "domain_file_path": self._domain_file_path,
+                "instance_file_path": self._instance_file_path,
+                "paas_status": self._paas_status.value if self._paas_status else None,
+                "pddl_plan": self._pddl_plan,
+                "is_longer_plan": self._is_longer_plan,
+                "type": self._type.value if self._type else None,
+            }
+        except (NotImplementedError, AssertionError, Exception) as e:
+            logger.error(f"Error generating prompt for task {self._id}: {e}")
+            raise e
+
+        return json.dumps(data, ensure_ascii=False)
+
+
     def from_json(self, json_obj):
-        # Deserialize enums
-        for field_name, enum_type in [("status", Task.TaskStatus), ("type", Task.TaskType)]:
-            json_value = json_obj.get(field_name)
+        # --- Basic Fields ---
+        # id is derived in __init__, but we can load it from JSON if present
+        json_id = json_obj.get("id")
+        if json_id is not None:
+            try:
+                self._id = int(json_id)
+            except (ValueError, TypeError):
+                logger.error(f"Invalid id value in JSON: '{json_id}'. Expected integer.")
+                # Decide if this should raise an error or just log
+                raise ValueError(f"Invalid id value in JSON: '{json_id}'")
+
+        # --- Optional Fields ---
+        self._pddl_plan = json_obj.get("pddl_plan", None)
+
+        # --- Enum Fields ---
+        # Use correct internal field names (_pddl_status, _type)
+        for field_name, json_key, enum_type in [
+            ("_paas_status", "paas_status", Task.PlanningAsAServiceStatus),
+            ("_type", "type", Task.Type)
+        ]:
+            json_value = json_obj.get(json_key)
             if json_value is not None:
                 if not isinstance(json_value, str):
-                     msg = f"Expected string for {field_name}, but got {type(json_value)}"
-                     # Changed config.log to logger.error
-                     logger.error(msg)
-                     continue
-                try:
-                    setattr(self, f"_{field_name}", enum_type(json_value.strip()))
-                except (ValueError, KeyError):
-                    msg = f"Invalid {field_name} value in JSON: '{json_value}'"
-                    # Changed config.log to logger.error
+                    msg = f"Expected string for {json_key}, but got {type(json_value)}"
                     logger.error(msg)
                     raise ValueError(msg)
-
-        # Deserialize simple string fields
-        for field_name in ["plan", "error_message"]:
-            value = json_obj.get(field_name)
-            if value is not None:
-                if not isinstance(value, str):
-                   raise TypeError(f"{field_name} must be a string or null, but got {type(value)}")
-                setattr(self, f"_{field_name}", value)
-
-        # Deserialize plan_managers
-        # It is stored on the json as a list of dictionaries
-        # In the class plan_managers is a set of PlanManager
-        plan_manager_list_json = json_obj.get("plan_managers")
-        self._plan_managers = set()
-        if plan_manager_list_json is not None:
-            if not isinstance(plan_manager_list_json, list):
-                raise TypeError(f"plan_managers must be a list or null, but got {type(plan_manager_list_json)}")
-
-            for plan_manager_json in plan_manager_list_json:
-                if not isinstance(plan_manager_json, dict):
-                    raise TypeError(f"Elements in plan_managers must be dictionaries, but got {type(plan_manager_json)}")
-
                 try:
-                    plan_manager = PlanManager()
-                    plan_manager.from_json(plan_manager_json)
-                    self._plan_managers.add(plan_manager)
-                except Exception as e:
-                    # Changed config.log to logger.error
-                    logger.error(f"Error deserializing PlanManager: {e}")
-                    raise e
+                    setattr(self, field_name, enum_type(json_value.strip()))
+                except (ValueError, KeyError):
+                    msg = f"Invalid {json_key} value in JSON: '{json_value}'"
+                    logger.error(msg)
+                    raise ValueError(msg)
+                    
+            else:
+                setattr(self, field_name, None)
 
-
-    def update_status(self, response):
+    def process_paas_response(self, response):
+        plan = ""
         status = response.get("status", "error")
         if status == "ok":
-            plan_text = response["result"]["output"]["sas_plan"]
-            plain_text_plan = self.convert_pddl_plan_to_natural_language(plan_text) if plan_text else ""
-            err_msg = ""
-        else:
-            plain_text_plan = ""
-            err_msg = response.get("error", "Missing plan details or planning failed.")
-        self._status = Task.TaskStatus(status) if status in [e.value for e in Task.TaskStatus] else None
-        self._plan = plain_text_plan
-        self._error_message = err_msg
+            plan = response["result"]["output"]["sas_plan"]
+        
+        self._paas_status = Task.PlanningAsAServiceStatus(status) if status in [e.value for e in Task.PlanningAsAServiceStatus] else None
+        self._pddl_plan = plan
 
     def read_instance(self):
         with lock and open(self._instance_file_path, "r", encoding='utf-8') as f:
@@ -328,308 +199,337 @@ class Task(abc.ABC):
         return domain_content
 
 
-class BlocksworldTask(Task):
-    def __init__(self, domain_file_path, instance_file_path):
-        super().__init__("blocksworld", domain_file_path, instance_file_path)
+class BlocksworldLanguageConverter(Task.LanguageConverter):
+        def __init__(self):
+            self._color_map = {
+            "a": "red",
+            "b": "blue",
+            "c": "yellow",
+            "d": "orange",
+            "e": "green",
+            "f": "purple",
+            "g": "pink",
+            "h": "brown",
+            "i": "gray",
+            "j": "cyan",
+            "k": "magenta",
+            "l": "lime",
+            "m": "navy",
+            "n": "teal",
+            "o": "coral",
+            "p": "salmon",
+            "q": "gold",
+            "r": "khaki",
+            "s": "lavender",
+            "t": "plum",
+            "u": "peach",
+            "v": "tan",
+            "w": "beige",
+            "x": "ivory",
+            "y": "mint",
+            "z": "pearl",
+        }
 
-    def fact_to_natural_language(self, fact:str) -> str:
-        """
-            fact : str - a line of PDDL representing a fact
-        """
-        fact = fact.strip()
-        if not fact: return ""
-        fact = fact.strip("()")
-        tokens = fact.split()
-        if tokens[0] == "handempty":
-            return "your hand is empty."
-        elif tokens[0] == "holding":
-            return f"you are holding {tokens[1]}."
-        elif tokens[0] == "clear":
-            return f"{tokens[1]} is clear."
-        elif tokens[0] == "ontable":
-            return f"{tokens[1]} is on the table."
-        elif tokens[0] == "on":
-            return f"{tokens[1]} is on {tokens[2]}."
-        else:
-            raise ValueError(f"Unknown fact: {fact}")
+        def fact_to_natural_language(self, pddl_fact:str) -> str:
+            """
+                Converts a PDDL fact into natural language, using color mapping.
 
+                Args:
+                    fact: str - a line of PDDL representing a fact (e.g., "(on a b)", "(clear c)").
 
-    def convert_pddl_instance_to_natural_language(self, instance:str):
-        """
-            Example:
-            instance: str - PDDL instance
+                Returns:
+                    str - The natural language representation of the fact.
 
-            (define (problem BW-rand-6)
-            (:domain blocksworld-4ops)
-            (:objects a b c d e f )
-            (:init
-            (handempty)
-            (ontable a)
-            (on b d)
-            (on c a)
-            (on d c)
-            (on e f)
-            (on f b)
-            (clear e)
-            )
-            (:goal
-            (and
-            (on a b)
-            (on d f)
-            (on e d)
-            (on f c))
-            )
-            )
+                Raises:
+                    ValueError: If the fact format is unknown or if a block identifier
+                                cannot be mapped to a color using self._color_map.
+            """
+            # print(f"fact: @{fact}@")
+            if not pddl_fact:
+                return ""
 
-            should be converted to:
+            # Regex patterns for different fact types
+            patterns = {
+                "handempty": re.compile(r"^\(\s*handempty\s*\)$"),
+                "holding": re.compile(r"^\(\s*holding\s+(\w+)\s*\)$"),
+                "clear": re.compile(r"^\(\s*clear\s+(\w+)\s*\)$"),
+                "ontable": re.compile(r"^\(\s*ontable\s+(\w+)\s*\)$"),
+                "on": re.compile(r"^\(\s*on\s+(\w+)\s+(\w+)\s*\)$"),
+            }
 
-            blocks: a, b, c, d, e, f.
+            match = patterns["handempty"].match(pddl_fact)
+            if match:
+                return "the hand is empty"
 
-            initial state:
-            your hand is empty.
-            a is on the table.
-            b is on d.
-            c is on a.
-            d is on c.
-            e is on f.
-            f is on b.
-            e is clear.
+            match = patterns["holding"].match(pddl_fact)
+            if match:
+                block = match.group(1)
+                if block not in self._color_map:
+                    raise ValueError(f"Unknown block '{block}' in fact: {pddl_fact}")
+                return f"you are holding the {self._color_map[block]} block"
 
-            goal state:
-            a is on b.
-            d is on f.
-            e is on d.
-            f is on c.
-        """
-        # Use regex to extract the relevant parts of the PDDL instance
+            match = patterns["clear"].match(pddl_fact)
+            if match:
+                block = match.group(1)
+                if block not in self._color_map:
+                    raise ValueError(f"Unknown block '{block}' in fact: {pddl_fact}")
+                return f"the {self._color_map[block]} block is clear"
 
-        objects_match = re.search(r"\(:objects\s+(.+?)\s+\)", instance, re.DOTALL)
-        init_match = re.search(r"\(:init\s+(.+?)\s+\)", instance, re.DOTALL)
-        goal_match = re.search(r"\(:goal\s+\(and\s+(.*?)\)\s*\)", instance, re.DOTALL)
+            match = patterns["ontable"].match(pddl_fact)
+            if match:
+                block = match.group(1)
+                if block not in self._color_map:
+                    raise ValueError(f"Unknown block '{block}' in fact: {pddl_fact}")
+                return f"the {self._color_map[block]} block is on the table"
 
-        if not (objects_match and init_match and goal_match):
-            raise ValueError("Invalid PDDL instance format.")
+            match = patterns["on"].match(pddl_fact)
+            if match:
+                block1 = match.group(1)
+                block2 = match.group(2)
+                if block1 not in self._color_map:
+                    raise ValueError(f"Unknown block '{block1}' in fact: {pddl_fact}")
+                if block2 not in self._color_map:
+                    raise ValueError(f"Unknown block '{block2}' in fact: {pddl_fact}")
+                return f"the {self._color_map[block1]} block is on top of the {self._color_map[block2]} block"
+            # If none of the patterns matched
+            raise ValueError(f"Unknown or malformed fact format: {pddl_fact}")
 
-        objects = objects_match.group(1).strip().split()
-        init_facts = init_match.group(1).strip().split("\n")
-        goal_facts = goal_match.group(1).strip().split("\n")
-
-        if objects == [] or init_facts == [] or goal_facts == []:
-            raise ValueError("Empty objects, init, or goal in PDDL instance.")
-
-        # Process objects
-        objects = [obj.strip() for obj in objects if obj.strip()]
-        objects_str = "blocks: " + ", ".join(objects) + "."
-
-        # Process initial state
-        init_facts = [self.fact_to_natural_language(fact) for fact in init_facts if fact.strip()]
-        init_facts_str = "initial state:\n" + "\n".join(init_facts)
-
-        # Process goal state
-        goal_facts = [self.fact_to_natural_language(fact) for fact in goal_facts if fact.strip()]
-        goal_facts_str = "goal state:\n" + "\n".join(goal_facts)
-
-        return f"{objects_str}\n\n{init_facts_str}\n\n{goal_facts_str}\n\n"
-
-
-
-    def convert_pddl_plan_to_natural_language(self, plan:str) -> str:
-        """
-            plan: str - actions in PDDL format, each action in a new line
-        """
-        actions = plan.split(";")[0].strip().split("\n")
-        nl_plan = ""
-        for action in actions:
-            action = action.strip()
-            if action.startswith("(") and action.endswith(")"):
-                action = action[1:-1].strip()
-                parts = action.split()
-                if parts[0] == "unstack":
-                    nl_plan += f"unstack {parts[1]} from {parts[2]};\n"
-                elif parts[0] == "pick-up":
-                    nl_plan += f"pick up {parts[1]};\n"
-                elif parts[0] == "stack":
-                    nl_plan += f"stack {parts[1]} on {parts[2]};\n"
-                elif parts[0] == "put-down":
-                    nl_plan += f"put down {parts[1]};\n"
-                else:
-                    raise ValueError(f"Unknown action: {action}")
-        return nl_plan
-
-    def convert_natural_language_plan_to_pddl(self, plan:str) -> str:
-        """
-        Converts a natural language plan into PDDL format.
-
-        Args:
-            plan: A string containing actions in natural language, separated by newlines or semicolons.
-
-        Returns:
-            A string representing the plan in PDDL format.
-
-        Raises:
-            ValueError: If an unknown or malformed action is encountered.
-        """
-        pddl_actions = []
-        # Normalize line endings and split, handling potential semicolons
-        lines = plan.replace(";", "\n").strip().split("\n")
-
-        for line in lines:
-            nl_a = line.lower().replace("block", "").strip()
-            if not nl_a: # Skip empty lines
-                continue
-
-            action_found = False
-            if nl_a.startswith("unstack"):
-                match = re.search(r"unstack\s+(\w+)\s+from\s+(\w+)", nl_a)
+        def pddl_instance_to_natural_language(self, pdddl_instance: str) -> str:
+            """
+            Converts a PDDL instance into natural language format.
+            (Implementation with corrected regex for section extraction)
+            """
+            # --- Helper function to extract section content ---
+            def get_section_content(section_name: str, text: str) -> str | None:
+                # Pattern explanation:
+                # \(:section_name\s+   : Match the keyword (e.g., :init) followed by whitespace
+                # (.*?)                : Non-greedily capture the content (re.DOTALL makes '.' match newline)
+                # (?=\s+\(:|\s*\)\s*$) : Positive lookahead assertion:
+                #    \s+\(:            : Ensure the match is followed by whitespace and the start of another section '(:...'
+                #    |                 : OR
+                #    \s*\)\s*$         : Ensure the match is followed by the final closing parenthesis of the define block
+                #                       (allowing for potential whitespace)
+                pattern = r"\({}\s+(.*?)(?=\s+\(:|\s*\)\s*$)".format(re.escape(section_name))
+                match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
                 if match:
-                    pddl_actions.append(f"(unstack {match.group(1)} {match.group(2)})")
-                    action_found = True
-            elif nl_a.startswith("pick up"):
-                match = re.search(r"pick up\s+(\w+)", nl_a)
-                if match:
-                    pddl_actions.append(f"(pick-up {match.group(1)})")
-                    action_found = True
-            elif nl_a.startswith("stack"):
-                match = re.search(r"stack\s+(\w+)\s+on\s+(\w+)", nl_a)
-                if match:
-                    pddl_actions.append(f"(stack {match.group(1)} {match.group(2)})")
-                    action_found = True
-            elif nl_a.startswith("put down"):
-                match = re.search(r"put down\s+(\w+)", nl_a)
-                if match:
-                    pddl_actions.append(f"(put-down {match.group(1)})")
-                    action_found = True
+                    return match.group(1).strip() # Return the stripped content
+                return None
+            # --- End of helper function ---
 
-            if not action_found:
-                # Raise error only if the line was not empty and didn't match any known pattern
-                raise ValueError(f"Unknown or malformed action: '{nl_a}'")
+            objects_match = re.search(r"\(:objects\s+(.*?)\s*\)", pdddl_instance, re.DOTALL | re.IGNORECASE)
+            objects_str = objects_match.group(1).strip() if objects_match else None
+            init_content = get_section_content(":init", pdddl_instance)
+            goal_content = get_section_content(":goal", pdddl_instance)
 
-        return "\n".join(pddl_actions) + "\n" if pddl_actions else ""
+            if objects_str is None:
+                raise ValueError("Invalid PDDL instance format: Could not find :objects section content.")
+            if init_content is None:
+                raise ValueError("Invalid PDDL instance format: Could not find :init section content.")
+            if goal_content is None:
+                raise ValueError("Invalid PDDL instance format: Could not find :goal section content.")
 
-    @property
-    def _domain_description_in_natural_language(self) -> str:
-        return (
-            "# Goal.\n\n"
-            "Using only the available actions described below, create a plan (sequence of actions) that transforms the initial state into the goal state.\n\n"
-            "# Output Format.\n\n"
-            "Your response must contain *only* the plan.\n"
-            "List each action on a new line.\n"
-            "Use the exact action format shown in the examples.\n"
-            "Do not add any explanations, comments, or introductory text.\n\n"
-            "# Warnings.\n\n"
-            "An action can only be applied if all its preconditions are true in the current state.\n"
-            "When an action is applied, its effects update the current state by adding and removing facts.\n"
-            "The goal is reached when all facts in the goal state are present in the current state.\n"
-            "A valid plan must transform the initial state into the goal state using only applicable actions.\n"
-            "Starting from the initial state, choose an applicable action, apply it, and repeat this process until the goal is reached.\n"
-            "If no sequence of actions can reach the goal, return nothing.\n\n"
-            "# Context.\n\n"
-            "## Available actions.\n\n"
-            "### Action: pick up block.\n"
-            "preconditions:\n"
-            "block is on the table.\n"
-            "block is clear.\n"
-            "your hand is empty.\n\n"
-            "effects:\n"
-            "you are holding block.\n"
-            "your hand is not empty.\n"
-            "block is not on the table.\n"
-            "block is not clear.\n\n"
-            "### Action: put down block.\n"
-            "preconditions:\n"
-            "you are holding block.\n\n"
-            "effects:\n"
-            "block is on the table.\n"
-            "block is clear.\n"
-            "your hand is empty.\n"
-            "you are not holding block.\n\n"
-            "### Action: stack block1 on block2.\n"
-            "preconditions:\n"
-            "you are holding block1.\n"
-            "block2 is clear.\n\n"
-            "effects:\n"
-            "your hand is empty.\n"
-            "block1 is clear.\n"
-            "block2 is not clear.\n"
-            "you are not holding block1.\n"
-            "block1 is on block2.\n\n"
-            "### Action: unstack block1 from block2.\n"
-            "preconditions:\n"
-            "block1 is clear.\n"
-            "block1 is on block2.\n"
-            "your hand is empty.\n\n"
-            "effects:\n"
-            "you are holding block1.\n"
-            "your hand is not empty.\n"
-            "block2 is clear.\n"
-            "block1 is not clear.\n"
-            "block1 is not on block2.\n\n"
-        )
+            fact_pattern = r"\(\s*[\w-]+\s*[\w\s-]*\)"
 
-def get_task_from_domain(domain, domain_file_path, instance_file_path):
-    if domain == "blocksworld":
-        task = BlocksworldTask(domain_file_path, instance_file_path)
-    else:
-        raise ValueError(f"Unknown domain: {domain}")
-    return task
+            objects = objects_str.split()
+            init_facts_raw = re.findall(fact_pattern, init_content)
+            goal_facts_raw = []
+            and_match = re.search(r"^\(and\s+(.*)\s*\)$", goal_content, re.DOTALL | re.IGNORECASE)
+            if and_match:
+                and_content = and_match.group(1).strip()
+                goal_facts_raw = re.findall(fact_pattern, and_content)
+            else:
+                stripped_goal_content = goal_content.strip()
+                if stripped_goal_content and re.fullmatch(fact_pattern, stripped_goal_content):
+                    goal_facts_raw = [stripped_goal_content]
+                elif not stripped_goal_content:
+                    pass # Goal is empty
 
-def get_task_from_json(json_obj):
-    domain = json_obj.get("domain", None)
-    instance_file_path = json_obj.get("instance_file_path", None)
-    domain_file_path = json_obj.get("domain_file_path", None)
-    assert domain, "Domain is not specified in the JSON object."
-    assert instance_file_path, "Instance file path is not specified in the JSON object."
-    assert domain_file_path, "Domain file path is not specified in the JSON object."
-    task = get_task_from_domain(
-        domain,
-        domain_file_path,
-        instance_file_path
-    )
-    task.from_json(json_obj)
-    return task
+            # --- Fact Cleaning (Remains the same) ---
+            init_facts_pddl = [re.sub(r"\s+", " ", fact).strip() for fact in init_facts_raw if fact.strip()]
+            goal_facts_pddl = [re.sub(r"\s+", " ", fact).strip() for fact in goal_facts_raw if fact.strip()]
 
-def get_tasks_from_jsonl(jsonl_file_path):
-    tasks = set()
-    with open(jsonl_file_path, "r", encoding='utf-8') as f:
-        for line in f:
-            try:
-                json_obj = json.loads(line)
-                task = get_task_from_json(json_obj)
-                tasks.add(task)
-            except json.JSONDecodeError as e:
-                m = f"Error decoding JSONL {jsonl_file_path}: {e}"
-                # Changed config.log to logger.error
-                logger.error(m)
-                raise e
-            except Exception as e:
-                m = f"Error processing task from file {jsonl_file_path}: {e}"
-                # Changed config.log to logger.error
-                logger.error(m)
-                raise e
-    return tasks
+            # --- Validation and NL Conversion (Remains the same) ---
+            if not objects:
+                raise ValueError("Empty objects list in PDDL instance.")
 
-def save_tasks_to_jsonl(tasks:set[Task], jsonl_file_path:str):
-    with open(jsonl_file_path, "w", encoding='utf-8') as f:
-        for task in sorted(tasks):
-            try:
-                json_str = task.to_json() # Get the JSON string representation
-                f.write(json_str + "\n") # Write the JSON string followed by a newline
-            except Exception as e:
-                m = f"Error saving task to file {jsonl_file_path}: {e}"
-                # Changed config.log to logger.error
-                logger.error(m)
-                raise e
+            for obj in objects:
+                if not hasattr(self, '_color_map') or obj not in self._color_map:
+                    raise ValueError(f"Unknown object '{obj}' found in :objects section or missing in color map.")
 
-from typing import Union, Set
+            init_facts_nl = []
+            for fact in init_facts_pddl:
+                try:
+                    init_facts_nl.append(self.fact_to_natural_language(fact))
+                except ValueError as e:
+                    logger.warning(f"Skipping initial fact due to conversion error: {e} (Fact: '{fact}')")
+            init_facts_str = "As initial conditions I have that: " + (", ".join(init_facts_nl) if init_facts_nl else "nothing specific")
+
+            goal_facts_nl = []
+            for fact in goal_facts_pddl:
+                try:
+                    goal_facts_nl.append(self.fact_to_natural_language(fact))
+                except ValueError as e:
+                    logger.warning(f"Skipping goal fact due to conversion error: {e} (Fact: '{fact}')")
+            goal_facts_str = "My goal is to have that: " + (", ".join(goal_facts_nl) if goal_facts_nl else "nothing specific")
+
+            nl_output = f"{init_facts_str}.\n{goal_facts_str}."
+            return nl_output
+
+        def pddl_plan_to_natural_language(self, pddl_plan:str) -> str:
+            """
+            Converts a PDDL plan into natural language, using color mapping.
+
+            Args:
+                plan: str - PDDL plan string, with actions potentially separated by newlines or semicolons.
+
+            Returns:
+                str - The natural language representation of the plan, with actions separated by newlines.
+
+            Raises:
+                ValueError: If an action format is unknown or if a block identifier
+                    cannot be mapped to a color using self._color_map.
+            """
+            nl_actions = []
+            # Regex to capture action name and arguments (1 or 2 blocks)
+            action_pattern = re.compile(r"^\(\s*([\w-]+)\s+(\w+)(?:\s+(\w+))?\s*\)$")
+
+            action_templates = {
+                "unstack": "unstack the {color1} block from the {color2} block",
+                "pick-up": "pick up the {color1} block",
+                "stack": "stack the {color1} block on top of the {color2} block",
+                "put-down": "put down the {color1} block",
+            }
+
+            # Normalize line endings, remove comments, split into lines
+            lines = pddl_plan.split(";")[0].replace("\r\n", "\n").strip().split("\n")
+
+            for line in lines:
+                action_str = line.strip().lower()
+                if not action_str:
+                    continue # Skip empty lines
+
+                match = action_pattern.match(action_str)
+                if not match:
+                    raise ValueError(f"Unknown or malformed action format: {action_str}")
+
+                action_name, block1_id, block2_id = match.groups() # block2_id might be None
+
+                if action_name not in action_templates:
+                    raise ValueError(f"Unknown action type '{action_name}' in action: {action_str}")
+
+                # Validate and map block IDs to colors
+                if block1_id not in self._color_map:
+                    raise ValueError(f"Unknown block '{block1_id}' in action: {action_str}")
+                color1 = self._color_map[block1_id]
+
+                format_args = {"color1": color1}
+
+                # Handle actions requiring two blocks ("unstack", "stack")
+                if action_name in ["unstack", "stack"]:
+                    if not block2_id: # Error: Missing second block
+                        raise ValueError(f"Action '{action_name}' requires two blocks, but found only one in: {action_str}")
+                    # Second block exists, validate and add it
+                    if block2_id not in self._color_map:
+                        raise ValueError(f"Unknown block '{block2_id}' in action: {action_str}")
+                    format_args["color2"] = self._color_map[block2_id]
+
+                # Handle actions requiring one block ("pick-up", "put-down")
+                elif action_name in ["pick-up", "put-down"]:
+                    if block2_id: # Error: Unexpected second block
+                        raise ValueError(f"Action '{action_name}' requires one block, but found two in: {action_str}")
+                    # Correct case for one-block actions: block2_id is None, nothing else needed.
+
+
+                try:
+                    nl_action = action_templates[action_name].format(**format_args)
+                    nl_actions.append(nl_action)
+                except KeyError as e:
+                # This might happen if the template expects color2 but it wasn't provided
+                    raise ValueError(f"Formatting error for action '{action_name}'. Missing argument: {e}. Action: {action_str}")
+
+
+            return "\n".join(nl_actions)
+
+        def natural_language_plan_to_pddl(self, nl_plan:str) -> str:
+            """
+            Converts a natural language plan into PDDL format.
+
+            Args:
+                plan: A string containing actions in natural language, separated by newlines or semicolons.
+
+            Returns:
+                A string representing the plan in PDDL format.
+
+            Raises:
+                ValueError: If an unknown or malformed action is encountered.
+            """
+            pddl_actions = []
+            # Normalize line endings and split, handling potential semicolons
+            lines = nl_plan.replace(";", "\n").strip().split("\n")
+            for line in lines:
+                nl_a = line.lower().replace("block", "").strip()
+                if not nl_a: # Skip empty lines
+                    continue
+
+                action_found = False
+                if nl_a.startswith("unstack"):
+                    match = re.search(r"unstack\s+(\w+)\s+from\s+(\w+)", nl_a)
+                    if match:
+                        pddl_actions.append(f"(unstack {match.group(1)} {match.group(2)})")
+                        action_found = True
+                elif nl_a.startswith("pick up"):
+                    match = re.search(r"pick up\s+(\w+)", nl_a)
+                    if match:
+                        pddl_actions.append(f"(pick-up {match.group(1)})")
+                        action_found = True
+                elif nl_a.startswith("stack"):
+                    match = re.search(r"stack\s+(\w+)\s+on\s+(\w+)", nl_a)
+                    if match:
+                        pddl_actions.append(f"(stack {match.group(1)} {match.group(2)})")
+                        action_found = True
+                elif nl_a.startswith("put down"):
+                    match = re.search(r"put down\s+(\w+)", nl_a)
+                    if match:
+                        pddl_actions.append(f"(put-down {match.group(1)})")
+                        action_found = True
+
+                if not action_found:
+                    # Raise error only if the line was not empty and didn't match any known pattern
+                    raise ValueError(f"Unknown or malformed action: '{nl_a}'")
+
+            return "\n".join(pddl_actions) + "\n" if pddl_actions else ""
+
+        @property
+        def _domain_description_in_natural_language(self) -> str:
+
+            return """I am playing with a set of blocks where I need to arrange the blocks into stacks.
+    Here are the actions that can be performed:
+    Pick up a block
+    Unstack a block from on top of another block
+    Put down a block
+    Stack a block on top of another block
+    The following are the restrictions on the actions:
+    I can only pick up or unstack one block at a time.
+    I can only pick up or unstack a block if my hand is empty.
+    I can only pick up a block if the block is on the table and the block is clear. A block is clear if the block has no other blocks on top of it and if the block is not picked up.
+    I can only unstack a block from on top of another block if the block I am unstacking was really on top of the other block.
+    I can only unstack a block from on top of another block if the block I am unstacking is clear.
+    Once I pick up or unstack a block, I am holding the block.
+    I can only put down a block that I am holding.
+    I can only stack a block on top of another block if I am holding the block being stacked.
+    I can only stack a block on top of another block if the block onto which I am stacking is clear.
+    Once I put down or stack a block, my hand becomes empty.
+    Once you stack a block on top of a second block, the second block is no longer clear.\n"""
+
+
 # Removed unused import 'Dataset'
 # from datasets import Dataset
-def get_tasks_from_domain_directory(domain: str, number_of_problems_per_domain: Union[str, int] = "all") -> Set[Task]:
+def get_tasks_from_domain_directory(domain: str) -> set[Task]:
     """
     Get tasks from a domain directory.
 
     Args:
         domain: Domain name
-        number_of_problems_per_domain: "all", "basic", "long", or a positive integer
 
     Returns:
         Set of Task objects
@@ -638,34 +538,119 @@ def get_tasks_from_domain_directory(domain: str, number_of_problems_per_domain: 
     domain_file_path = os.path.join(config.RAW_DIR, domain, config.DOMAIN_FILE_NAME)
 
     # Determine which instance directories to include
-    instance_dirs = []
-    # Corrected variable name here
-    if number_of_problems_per_domain in ("basic", "all") or isinstance(number_of_problems_per_domain, int):
-        instance_dirs.append(os.path.join(config.RAW_DIR, domain, config.BASIC_INSTANCES))
-    if number_of_problems_per_domain in ("long", "all") or isinstance(number_of_problems_per_domain, int):
-        instance_dirs.append(os.path.join(config.RAW_DIR, domain, config.LONG_INSTANCES))
-
+    instance_dirs = [
+        os.path.join(config.RAW_DIR, domain, config.BASIC_INSTANCES), # training, validation, test instances
+        os.path.join(config.RAW_DIR, domain, config.LONG_INSTANCES) # out of distribution instances
+    ]
     # Collect tasks
-    tasks = []
+    tasks:set[Task] = set()
     for instance_dir in instance_dirs:
         if not os.path.exists(instance_dir):
             raise ValueError(f"Instance directory not found: {instance_dir}")
 
-        # Get tasks from this directory using list comprehension
-        tasks.extend([
-            get_task_from_domain(domain, domain_file_path, os.path.join(instance_dir, file_name))
-            for file_name in os.listdir(instance_dir)
-            if instance_pattern.search(file_name)
-        ])
+        for file_name in os.listdir(instance_dir):
+            if instance_pattern.search(file_name):
+                tasks.add(
+                    Task(
+                        domain=domain,
+                        domain_file_path=domain_file_path,
+                        instance_file_path=os.path.join(instance_dir, file_name)
+                    )
+                )
 
-    # Sort tasks
-    tasks.sort()
+    return tasks
 
-    # Limit number of tasks if specified
-    if isinstance(number_of_problems_per_domain, int):
-        if number_of_problems_per_domain <= 0:
-            raise ValueError(f"Number of problems per domain must be positive")
-        elif number_of_problems_per_domain < len(tasks):
-            tasks = tasks[:number_of_problems_per_domain]
+DATASET: set[Task] = set()
+def get_dataset() -> set[Task]:
+    """
+    Get the dataset of tasks.
 
-    return set(tasks)
+    Returns:
+        Set of Task objects
+    """
+    global DATASET
+    if not DATASET:
+        raise ValueError("Dataset is empty. Please load the dataset first.")
+    return DATASET
+
+def load() -> None:
+    jsonl_file_path = config.TASKS_DATASET_FILE_PATH
+    global DATASET
+    if not os.path.exists(jsonl_file_path):
+        raise ValueError(f"JSONL file not found: {jsonl_file_path}")
+    tasks = set()
+    with open(jsonl_file_path, "r", encoding='utf-8') as f:
+        for line in f:
+            try:
+                json_obj = json.loads(line)
+                domain = json_obj.get("domain", None)
+                instance_file_path = json_obj.get("instance_file_path", None)
+                domain_file_path = json_obj.get("domain_file_path", None)
+                assert domain, "Domain is not specified in the JSON object."
+                assert instance_file_path, "Instance file path is not specified in the JSON object."
+                assert domain_file_path, "Domain file path is not specified in the JSON object."
+                task = Task(
+                    domain,
+                    domain_file_path,
+                    instance_file_path
+                )
+                task.from_json(json_obj)
+                tasks.add(task)
+            except Exception as e:
+                m = f"Error processing task from file {jsonl_file_path}: {e}"
+                # Changed config.log to logger.error
+                logger.error(m)
+                raise e
+    DATASET = tasks
+    logger.info(f"Loaded {len(DATASET)} tasks from {jsonl_file_path}.")
+    
+
+def get_tasks(filter_by_domain: Optional[str] = None,  filter_by_type: Optional[Task.Type] = None, is_longer_plan:Optional[bool] = None, number_of_instances: Optional[int] = None) -> set[Task]:
+    global DATASET
+    if not DATASET:
+        raise ValueError("Dataset is empty. Please load the dataset first.")
+    tasks = DATASET
+    # --- Filter by domain and type ---
+    if filter_by_domain:
+        tasks = {t for t in tasks if t._domain == filter_by_domain}
+        if len(tasks) == 0:
+            raise ValueError(f"No tasks found for domain '{filter_by_domain}'.")
+    if filter_by_type:
+        tasks = {t for t in tasks if t._type == filter_by_type}
+        if len(tasks) == 0:
+            raise ValueError(f"No tasks found for type '{filter_by_type}'.")
+    # --- Filter by basic or long tasks ---
+    if is_longer_plan is not None:
+        tasks = {t for t in tasks if t._is_longer_plan == is_longer_plan}
+        if len(tasks) == 0:
+            raise ValueError(f"No tasks found with is_longer_plan={is_longer_plan}.")
+    # --- Limit number of instances ---
+    if number_of_instances is not None and isinstance(number_of_instances, int):
+        tasks = set(sorted(tasks)[:min(number_of_instances, len(tasks))])
+        if len(tasks) == 0:
+            raise ValueError(f"No tasks found after filtering.")
+    return tasks
+
+def save()-> None:
+    """
+    Save the dataset to a JSONL file.
+
+    Args:
+        jsonl_file_path: Path to the JSONL file
+    """
+    jsonl_file_path = config.TASKS_DATASET_FILE_PATH
+    global DATASET
+    if not DATASET:
+        raise ValueError("Dataset is empty. Please load the dataset first.")
+    logger.info(f"Saving {len(DATASET)} tasks to {jsonl_file_path}.")
+    with open(jsonl_file_path, "w", encoding='utf-8') as f:
+        for task in sorted(DATASET):
+            try:
+                json_str = task.to_json() # Get the JSON string representation
+                f.write(json_str + "\n") # Write the JSON string followed by a newline
+            except Exception as e:
+                m = f"Error saving task to file {jsonl_file_path}: {e}"
+                # Changed config.log to logger.error
+                logger.error(m)
+                raise e
+    logger.info(f"Saved {len(DATASET)} tasks to {jsonl_file_path}.")

@@ -7,10 +7,13 @@ import datetime
 from sklearn.model_selection import train_test_split
 logger = config.get_logger(__name__)
 
-async def get_plan_from_paas(domain_content, instance_content, instance_name, solver_url="http://localhost:5001/package/lama-first/solve", max_retries=3):
+async def get_plan_from_paas(task:task.Task, solver_url="http://localhost:5001/package/lama-first/solve", max_retries=2):
+    domain_content = task.read_domain()
+    instance_content = task.read_instance()
+
     req_body = {"domain": domain_content, "problem": instance_content}
     async with aiohttp.ClientSession() as session:
-        for attempt in range(1, max_retries + 1):
+        for attempt in range(1, max_retries + 2): # 1 to max_retries + 1
             try:
                 async with session.post(solver_url, json=req_body) as resp:
                     solve_response = await resp.json()
@@ -25,19 +28,19 @@ async def get_plan_from_paas(domain_content, instance_content, instance_name, so
                         output = result_data.get("result", {}).get("output", {})
                         stderr = result_data.get("result", {}).get("stderr", "")
                         if output.get("sas_plan") and stderr.strip() == "":
-                            logger.info(f"Instance {instance_name} -- Attempt {attempt} -- Success!")
+                            logger.info(f"Instance {task} -- Attempt {attempt} -- Success!")
                             return result_data
                     break
             except Exception as e:
-                logger.warning(f"Instance {instance_name} -- Attempt {attempt} -- Error during planning request: {e}")
-            logger.info(f"Instance {instance_name} -- Attempt {attempt} -- Retrying...")
+                logger.warning(f"Instance {task} -- Attempt {attempt} -- Error during planning request: {e}")
+            logger.info(f"Instance {task} -- Attempt {attempt} -- Retrying...")
             await asyncio.sleep(2)
-        logger.warning(f"Instance {instance_name} -- Attempt {attempt} -- Exceeded max retries.")
+        logger.warning(f"Instance {task} -- Attempt {attempt} -- Exceeded max retries.")
         return {"status": "error", "error": "Max retries exceeded or no valid plan returned."}
 
 async def call_paas(
-    tasks: set[task.Task],
-    max_retries=3,
+    domain: str,
+    max_retries=2,
     num_workers=4
 ):
     logger.info(f"Starting call to planning as a service at {datetime.datetime.now()}.")
@@ -45,33 +48,26 @@ async def call_paas(
         async with semaphore:
             try:
                 response = await get_plan_from_paas(
-                    domain_content=t.read_domain(),
-                    instance_content=t.read_instance(),
-                    instance_name=t._instance,
+                    task=t,
                     max_retries=max_retries
                 )
-                t.update_status(response)
+                t.process_paas_response(response)
             except Exception as e:
                 raise e
 
-    processed_tasks = set()
-    data_file_path = config.PROCESSED_DATA_FILE_PATH
-    print(f"Data file path: {data_file_path}")
-    if os.path.exists(data_file_path):
-        logger.info(f"Loading existing dataset at {data_file_path}. Skipping recalculation for already processed tasks.")
-        processed_tasks = task.get_tasks_from_jsonl(data_file_path)
-        processed_tasks = {t for t in processed_tasks if t._status == task.Task.TaskStatus.OK}
-        tasks = tasks - processed_tasks
+    try:
+        logger.info(f"Domain {domain} already exists. Loading tasks from dataset.")
+        tasks_to_process = {t for t in task.get_tasks(filter_by_domain=domain) if t._status == task.Task.PlanningAsAServiceStatus.ERROR}
+    except Exception as e:
+        logger.error(f"Error loading tasks from dataset: {e}", exc_info=True)
+        logger.info(f"Creating new tasks for domain: {domain}.")
+        tasks_to_process = task.get_tasks_from_domain_directory(domain=domain)
     
-    logger.info(f"Must process {len(tasks)} tasks.")
+    logger.info(f"Must process {len(tasks_to_process)} tasks.")
     semaphore = asyncio.Semaphore(num_workers)
-    await asyncio.gather(*[process_instance(t) for t in tasks])
+    await asyncio.gather(*[process_instance(t) for t in tasks_to_process])
 
-    processed_tasks.update(tasks)
-    config.create_necessary_dirs(data_file_path)
-    task.save_tasks_to_jsonl(processed_tasks, data_file_path)
-    logger.info(f"Finished writing to {data_file_path}.")
-
+    task.save()
     logger.info(f"Finished call to planning as a service at {datetime.datetime.now()}.")
 
 
@@ -79,15 +75,15 @@ def split_dataset(
     random_seed=42
 ):
     logger.info(f"Starting to build finetuning dataset at {datetime.datetime.now()}.")
-    data_file_path = config.PROCESSED_DATA_FILE_PATH
-    if not os.path.exists(data_file_path):
-        e = f"Data file not found: {data_file_path}"
-        logger.error(e)
-        raise ValueError(e)
 
-    tasks = task.get_tasks_from_jsonl(data_file_path)
-    
-    valid_tasks:set[task.Task] = {t for t in tasks if t._status == task.Task.TaskStatus.OK}
+    try:
+        tasks = task.get_dataset()
+        assert len(tasks) > 0, f"No tasks found in file {config.TASKS_DATASET_FILE_PATH}."
+    except Exception as e:
+        logger.error(f"No tasks found in file {config.TASKS_DATASET_FILE_PATH}.", exc_info=True)
+        raise e
+
+    valid_tasks:set[task.Task] = {t for t in tasks if t._status == task.Task.PlanningAsAServiceStatus.OK}
     domains:set[str] = {t._domain for t in valid_tasks}
     tasks_per_domain = {d: [t for t in valid_tasks if t._domain == d] for d in domains}
 
@@ -112,19 +108,15 @@ def split_dataset(
         )
         test_tasks = longer_tasks + basic_test_tasks
         for t in train_tasks:
-            t._type = task.Task.TaskType.TRAIN
+            t._type = task.Task.Type.TRAIN
         for t in validation_tasks:
-            t._type = task.Task.TaskType.VALIDATION
+            t._type = task.Task.Type.VALIDATION
         for t in test_tasks:
-            t._type = task.Task.TaskType.TEST
+            t._type = task.Task.Type.TEST
         
-        # Concatenate all tasks
-        divided_tasks = train_tasks + validation_tasks + test_tasks
-        
-        tasks.update(divided_tasks)
         # Save the final dataset
         logger.info(f"Writing {len(tasks)} tasks to {data_file_path}.")
-        task.save_tasks_to_jsonl(tasks, data_file_path)
+        task.save(data_file_path)
         logger.info(f"Finished writing {len(tasks)} tasks to {data_file_path}.")
         logger.info(f"Finished splitting tasks in domain: {d}.")
     logger.info(f"Finished building finetuning dataset at {datetime.datetime.now()}.")
