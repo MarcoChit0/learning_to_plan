@@ -1,12 +1,12 @@
 {
     "model_name": "Qwen/Qwen2.5-7B-Instruct",
-    "max_seq_length": 1024,
-    "max_new_tokens": 1024,
+    "max_seq_length": 512,
+    "max_new_tokens": 512,
     "bf16": true,
     "load_in_8bit": false,
     "do_sample": true,
     "generate_batch_size": 1,
-    "num_return_sequences": 3,
+    "num_return_sequences": 1,
     "top_k": 50,
     "top_p": 0.93
 }

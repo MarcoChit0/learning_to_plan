@@ -98,27 +98,14 @@ class Task(abc.ABC):
             domain_description = self._converter._domain_description_in_natural_language
             instance_nl = self._converter.pddl_instance_to_natural_language(pddl_instance=self.read_instance())
             
-            # Standard prompt format
-            if not as_chat_template:
-                prompt = ""
-                prompt += domain_description
-                prompt += instance_nl
-                if with_plan and self._pddl_plan:
-                    prompt += config.START_OF_PLAN_TOKEN + "\n"
-                    prompt += self._converter.pddl_plan_to_natural_language(pddl_plan=self._pddl_plan)
-                    prompt += config.END_OF_PLAN_TOKEN
-                return prompt
-            
-            # Chat template format as a list of dictionaries
-            else:
-                messages = [{"role": "user", "content": f"{domain_description}\n\n{instance_nl}"}]
-                
-                if with_plan and self._pddl_plan:
-                    # Include plan as assistant's response
-                    plan_nl = self._converter.pddl_plan_to_natural_language(pddl_plan=self._pddl_plan)
-                    messages.append({"role": "assistant", "content": plan_nl})
-                
-                return messages
+            prompt = ""
+            prompt += domain_description
+            prompt += instance_nl
+            if with_plan and self._pddl_plan:
+                prompt += config.START_OF_PLAN_TOKEN + "\n"
+                prompt += self._converter.pddl_plan_to_natural_language(pddl_plan=self._pddl_plan)
+                prompt += config.END_OF_PLAN_TOKEN
+            return prompt
                     
         except Exception as e:
             raise Exception(f"An error occurred while building the prompt: {e}")

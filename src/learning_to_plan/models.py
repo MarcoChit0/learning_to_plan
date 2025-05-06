@@ -340,21 +340,6 @@ class HuggingFaceModel(Model):
         """
         logger.debug("Generating with Hugging Face model.")
 
-        # Ensure model is in evaluation mode
-        self._model.eval()
-
-        device = next(self._model.parameters()).device
-
-        inputs = self._tokenizer(
-            prompt,
-            return_tensors="pt",
-            padding=False,
-            truncation=True,
-            max_length= generation_kwargs.get("max_new_tokens", 512),
-        ).to(device)
-
-        input_length = inputs.input_ids.shape[1]
-
         # --- Generation Configuration ---
         gen_kwargs = {
             "max_new_tokens": generation_kwargs.get("max_new_tokens", 512),
@@ -365,9 +350,25 @@ class HuggingFaceModel(Model):
             "eos_token_id": self._tokenizer.eos_token_id,
             "pad_token_id": self._tokenizer.pad_token_id,
             "num_return_sequences": generation_kwargs.get("num_return_sequences", 1),
+            "max_seq_length": generation_kwargs.get("max_seq_length", 512),
         }
         gen_kwargs = {k: v for k, v in gen_kwargs.items() if v is not None}
         logger.debug(f"Generation parameters: {gen_kwargs}")
+
+        # Ensure model is in evaluation mode
+        self._model.eval()
+
+        device = next(self._model.parameters()).device
+
+        inputs = self._tokenizer(
+            prompt,
+            padding="max_length",
+            truncation=True,
+            add_special_tokens=False,
+            max_length=gen_kwargs.get("max_seq_length", 512),
+        ).to(device)
+
+        input_length = inputs.input_ids.shape[1]
 
         # --- Perform Generation ---
         with torch.no_grad():
@@ -378,28 +379,41 @@ class HuggingFaceModel(Model):
                     **inputs,
                     **gen_kwargs
                 )
+        
+        # --- print input & output tokens ids and respective text ---
+        logger.debug(f"Input IDs: {inputs.input_ids}...")
+        logger.debug(f"Input Text: {self.decode(inputs.input_ids[0], skip_special_tokens=False)}...")  
+        logger.debug(f"Input Length: {inputs.input_ids.shape[1]} tokens.")
 
+        logger.debug(f"Output IDs: {outputs}...")
+        logger.debug(f"Output Text: {self.decode(outputs[0], skip_special_tokens=False)}...")
+        logger.debug(f"Output Length: {outputs.shape[1]} tokens.")
+        logger.debug(f"Output Text (after input length): {self.decode(outputs[0][input_length:], skip_special_tokens=False)}...")
         # --- Process Outputs ---
         generated_texts = []
         for output_sequence in outputs:
-            generated_tokens = output_sequence[input_length:] if output_sequence.shape[0] >  input_length else torch.tensor([], dtype=torch.long, device=device)
-            # --- get the plan ---
+            generated_tokens = (output_sequence[input_length:] if output_sequence.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device))
+            
+            # --- Identify the indices for plan boundaries ---
             plan_start_idx = next((i for i, token in enumerate(generated_tokens) if token == self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)), None)
             if plan_start_idx is None:
                 generated_texts.append(f"Generation Error: {config.START_OF_PLAN_TOKEN} not found.")
                 continue
-            plan_end_idx = next((i for i, token in enumerate(generated_tokens) if token == self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)), None)
+
+            plan_end_idx = next(
+            (i for i, token in enumerate(generated_tokens) if token == self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)),None,)
             if plan_end_idx is None:
                 generated_texts.append(f"Generation Error: {config.END_OF_PLAN_TOKEN} not found.")
                 continue
-            plan = generated_tokens[plan_start_idx + 1 : plan_end_idx]
-            if plan.shape[0] == 0:
-                generated_texts.append(f"Generation Error: Empty plan generated.")
+
+            # --- Remove everything between (and including) the special tokens ---
+            remaining_tokens = torch.cat((generated_tokens[:plan_start_idx], generated_tokens[plan_end_idx + 1:]))
+            if remaining_tokens.shape[0] == 0:
+                generated_texts.append("Generation Error: No text left after removing plan.")
                 continue
-            # Decode the plan
-            plan_decoded = self.decode(plan, skip_special_tokens=True)
-            # Remove trailing <|plan_end|> token if it exists
-            generated_texts.append(plan_decoded.strip())
+
+            decoded_text = self.decode(remaining_tokens, skip_special_tokens=True)
+            generated_texts.append(decoded_text.strip())
         
         if not generated_texts:
             raise RuntimeError("No valid generated texts found.")
