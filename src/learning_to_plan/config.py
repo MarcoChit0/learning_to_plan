@@ -40,6 +40,8 @@ LONG_INSTANCES = "generated_basic_longer_plan_len"
 TASKS_DATASET_FILE_NAME = "tasks.jsonl"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
+START_OF_PLAN_TOKEN = "<|plan_start|>"
+END_OF_PLAN_TOKEN = "<|plan_end|>"
 # --- End Constants ---
 
 
@@ -101,7 +103,7 @@ def initialize(
     from learning_to_plan import task
     if os.path.exists(TASKS_DATASET_FILE_PATH):
         try:
-            task.load(jsonl_file_path=TASKS_DATASET_FILE_PATH)
+            task.load()
             logger.info(f"Task dataset loaded from {TASKS_DATASET_FILE_PATH}.")
         except Exception as e:
             logger.error(f"Failed to load task dataset from {TASKS_DATASET_FILE_PATH}: {e}", exc_info=True)

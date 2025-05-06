@@ -1,10 +1,10 @@
 {
-    "model_name": "Qwen/Qwen2.5-7B-Instruct",
+    "model_name": "Qwen/Qwen2.5-0.5B-Instruct",
     "max_seq_length": 1024,
     "max_new_tokens": 1024,
     "report_to": "none",
     "batch_size": 1,
-    "gradient_accumulation_steps": 1,
+    "gradient_accumulation_steps": 8,
     "eval_strategy": "epoch",
     "eval_batch_size": 1,
     "learning_rate": 1.0e-5,
@@ -14,11 +14,11 @@
     "optimizer": "adamw_8bit",
     "logging_steps": 400,
     "logging_strategy": "steps",
-    "save_steps": 800,
-    "save_strategy": "steps",
-    "save_total_limit": 1,
+    "save_strategy": "epoch",
+    "save_total_limit": 2,
     "bf16": true,
     "load_in_8bit": false,
-    "load_in_4bit": false,
-    "lora_r": 8
+    "lora_r": 8,
+    "load_the_best_model_at_end": true,
+    "eval_on_start": false
 }

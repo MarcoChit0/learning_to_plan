@@ -57,7 +57,7 @@ async def call_paas(
 
     try:
         logger.info(f"Domain {domain} already exists. Loading tasks from dataset.")
-        tasks_to_process = {t for t in task.get_tasks(filter_by_domain=domain) if t._status == task.Task.PlanningAsAServiceStatus.ERROR}
+        tasks_to_process = {t for t in task.get_tasks(filter_by_domain=domain) if t._paas_status == task.Task.PlanningAsAServiceStatus.ERROR}
     except Exception as e:
         logger.error(f"Error loading tasks from dataset: {e}", exc_info=True)
         logger.info(f"Creating new tasks for domain: {domain}.")
@@ -83,7 +83,7 @@ def split_dataset(
         logger.error(f"No tasks found in file {config.TASKS_DATASET_FILE_PATH}.", exc_info=True)
         raise e
 
-    valid_tasks:set[task.Task] = {t for t in tasks if t._status == task.Task.PlanningAsAServiceStatus.OK}
+    valid_tasks:set[task.Task] = {t for t in tasks if t._paas_status == task.Task.PlanningAsAServiceStatus.OK}
     domains:set[str] = {t._domain for t in valid_tasks}
     tasks_per_domain = {d: [t for t in valid_tasks if t._domain == d] for d in domains}
 
@@ -115,8 +115,5 @@ def split_dataset(
             t._type = task.Task.Type.TEST
         
         # Save the final dataset
-        logger.info(f"Writing {len(tasks)} tasks to {data_file_path}.")
-        task.save(data_file_path)
-        logger.info(f"Finished writing {len(tasks)} tasks to {data_file_path}.")
-        logger.info(f"Finished splitting tasks in domain: {d}.")
+        task.save()
     logger.info(f"Finished building finetuning dataset at {datetime.datetime.now()}.")

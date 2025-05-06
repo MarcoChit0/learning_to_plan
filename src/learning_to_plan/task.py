@@ -30,15 +30,15 @@ class Task(abc.ABC):
             raise NotImplementedError("Subclasses must implement this method.")
 
         @abc.abstractmethod
-        def pddl_instance_to_natural_language(self, pddl_instance) -> str:
+        def pddl_instance_to_natural_language(self, pddl_instance: str) -> str:
             raise NotImplementedError("Subclasses must implement this method.")
 
         @abc.abstractmethod
-        def pddl_plan_to_natural_language(self, pddl_plan) -> str:
+        def pddl_plan_to_natural_language(self, pddl_plan: str) -> str:
             raise NotImplementedError("Subclasses must implement this method.")
         
         @abc.abstractmethod
-        def natural_language_plan_to_pddl(self, nl_plan) -> str:
+        def natural_language_plan_to_pddl(self, nl_plan: str) -> str:
             raise NotImplementedError("Subclasses must implement this method.")
         
         @property
@@ -92,36 +92,44 @@ class Task(abc.ABC):
             return NotImplemented
         return self._instance_file_path == other._instance_file_path and self._domain_file_path == other._domain_file_path
 
-    def get_prompt(self, eos_token: Optional[str] = None, with_plan: bool = True,  cot_examples:set[Task] = set()) -> str:
+    def get_prompt(self, with_plan: bool = True,  cot_examples:set[Task] = set(), as_chat_template:bool = False) -> str:
         try:
             is_cot = len(cot_examples) > 0
-            prompt = ""
-            prompt += self._domain_description_in_natural_language
-            # if is_cot:
-            #     assert len(cot_examples) > 0, "is_cot is True but no examples provided."
-            #     prompt += "## Examples.\n\n"
-            #     for i, example in enumerate(cot_examples):
-            #         # assert the subclasses are the same
-            #         assert type(example) == type(self), f"Example task {example._id} is not of the same type as the current task {self._id}."
-            #         prompt += f"### Example {i+1}/{len(cot_examples)}.\n\n"
-            #         prompt += f"#### Example {i+1} Instance.\n\n"
-            #         prompt += example.convert_pddl_instance_to_natural_language(example.read_instance())
-            #         prompt += f"#### Example {i+1} Plan.\n\n"
-            #         if example._plan:
-            #             prompt += example._plan
-            #         else:
-            #             raise ValueError(f"Example {i+1} -- {example._id} -- does not have a plan.")
-            #         prompt += "\n\n"
-            prompt += self._converter.pddl_instance_to_natural_language(pddl_instance=self.read_instance())
-            if eos_token:
-                prompt += eos_token
-            if with_plan and self._pddl_plan:
-                prompt += "<PLAN>\n"
-                prompt += self._converter.pddl_plan_to_natural_language(pddl_plan=self._pddl_plan)
-                prompt += "</PLAN>\n"
-            return prompt
+            domain_description = self._converter._domain_description_in_natural_language
+            instance_nl = self._converter.pddl_instance_to_natural_language(pddl_instance=self.read_instance())
+            
+            # Standard prompt format
+            if not as_chat_template:
+                prompt = ""
+                prompt += domain_description
+                prompt += instance_nl
+                if with_plan and self._pddl_plan:
+                    prompt += config.START_OF_PLAN_TOKEN + "\n"
+                    prompt += self._converter.pddl_plan_to_natural_language(pddl_plan=self._pddl_plan)
+                    prompt += config.END_OF_PLAN_TOKEN
+                return prompt
+            
+            # Chat template format as a list of dictionaries
+            else:
+                messages = [{"role": "user", "content": f"{domain_description}\n\n{instance_nl}"}]
+                
+                if with_plan and self._pddl_plan:
+                    # Include plan as assistant's response
+                    plan_nl = self._converter.pddl_plan_to_natural_language(pddl_plan=self._pddl_plan)
+                    messages.append({"role": "assistant", "content": plan_nl})
+                
+                return messages
+                    
         except Exception as e:
             raise Exception(f"An error occurred while building the prompt: {e}")
+
+    def get_conversation(self, with_plan: bool = True) -> list[dict[str, str]]:
+        conversation = []
+        prompt = self._converter._domain_description_in_natural_language + self._converter.pddl_instance_to_natural_language(pddl_instance=self.read_instance())
+        conversation.append({"role": "user", "content": prompt})
+        if with_plan and self._pddl_plan:
+            conversation.append({"role": "assistant", "content": config.START_OF_PLAN_TOKEN + "\n" + self._converter.pddl_plan_to_natural_language(pddl_plan=self._pddl_plan) + config.END_OF_PLAN_TOKEN})
+        return conversation
 
     def to_json(self):
         try:
@@ -294,7 +302,7 @@ class BlocksworldLanguageConverter(Task.LanguageConverter):
             # If none of the patterns matched
             raise ValueError(f"Unknown or malformed fact format: {pddl_fact}")
 
-        def pddl_instance_to_natural_language(self, pdddl_instance: str) -> str:
+        def pddl_instance_to_natural_language(self, pddl_instance: str) -> str:
             """
             Converts a PDDL instance into natural language format.
             (Implementation with corrected regex for section extraction)
@@ -316,10 +324,10 @@ class BlocksworldLanguageConverter(Task.LanguageConverter):
                 return None
             # --- End of helper function ---
 
-            objects_match = re.search(r"\(:objects\s+(.*?)\s*\)", pdddl_instance, re.DOTALL | re.IGNORECASE)
+            objects_match = re.search(r"\(:objects\s+(.*?)\s*\)", pddl_instance, re.DOTALL | re.IGNORECASE)
             objects_str = objects_match.group(1).strip() if objects_match else None
-            init_content = get_section_content(":init", pdddl_instance)
-            goal_content = get_section_content(":goal", pdddl_instance)
+            init_content = get_section_content(":init", pddl_instance)
+            goal_content = get_section_content(":goal", pddl_instance)
 
             if objects_str is None:
                 raise ValueError("Invalid PDDL instance format: Could not find :objects section content.")
@@ -503,37 +511,28 @@ class BlocksworldLanguageConverter(Task.LanguageConverter):
         def _domain_description_in_natural_language(self) -> str:
 
             return """I am playing with a set of blocks where I need to arrange the blocks into stacks.
-    Here are the actions that can be performed:
-    Pick up a block
-    Unstack a block from on top of another block
-    Put down a block
-    Stack a block on top of another block
-    The following are the restrictions on the actions:
-    I can only pick up or unstack one block at a time.
-    I can only pick up or unstack a block if my hand is empty.
-    I can only pick up a block if the block is on the table and the block is clear. A block is clear if the block has no other blocks on top of it and if the block is not picked up.
-    I can only unstack a block from on top of another block if the block I am unstacking was really on top of the other block.
-    I can only unstack a block from on top of another block if the block I am unstacking is clear.
-    Once I pick up or unstack a block, I am holding the block.
-    I can only put down a block that I am holding.
-    I can only stack a block on top of another block if I am holding the block being stacked.
-    I can only stack a block on top of another block if the block onto which I am stacking is clear.
-    Once I put down or stack a block, my hand becomes empty.
-    Once you stack a block on top of a second block, the second block is no longer clear.\n"""
+Here are the actions that can be performed:
+Pick up a block
+Unstack a block from on top of another block
+Put down a block
+Stack a block on top of another block
+The following are the restrictions on the actions:
+I can only pick up or unstack one block at a time.
+I can only pick up or unstack a block if my hand is empty.
+I can only pick up a block if the block is on the table and the block is clear. A block is clear if the block has no other blocks on top of it and if the block is not picked up.
+I can only unstack a block from on top of another block if the block I am unstacking was really on top of the other block.
+I can only unstack a block from on top of another block if the block I am unstacking is clear.
+Once I pick up or unstack a block, I am holding the block.
+I can only put down a block that I am holding.
+I can only stack a block on top of another block if I am holding the block being stacked.
+I can only stack a block on top of another block if the block onto which I am stacking is clear.
+Once I put down or stack a block, my hand becomes empty.
+Once you stack a block on top of a second block, the second block is no longer clear.\n"""
 
 
 # Removed unused import 'Dataset'
 # from datasets import Dataset
 def get_tasks_from_domain_directory(domain: str) -> set[Task]:
-    """
-    Get tasks from a domain directory.
-
-    Args:
-        domain: Domain name
-
-    Returns:
-        Set of Task objects
-    """
     # Assuming config.RAW_DIR, config.DOMAIN_FILE_NAME, config.BASIC_INSTANCES, config.LONG_INSTANCES are defined
     domain_file_path = os.path.join(config.RAW_DIR, domain, config.DOMAIN_FILE_NAME)
 
@@ -562,12 +561,6 @@ def get_tasks_from_domain_directory(domain: str) -> set[Task]:
 
 DATASET: set[Task] = set()
 def get_dataset() -> set[Task]:
-    """
-    Get the dataset of tasks.
-
-    Returns:
-        Set of Task objects
-    """
     global DATASET
     if not DATASET:
         raise ValueError("Dataset is empty. Please load the dataset first.")
@@ -579,6 +572,7 @@ def load() -> None:
     if not os.path.exists(jsonl_file_path):
         raise ValueError(f"JSONL file not found: {jsonl_file_path}")
     tasks = set()
+    logger.info(f"Loading tasks from {jsonl_file_path}.")
     with open(jsonl_file_path, "r", encoding='utf-8') as f:
         for line in f:
             try:
@@ -632,12 +626,6 @@ def get_tasks(filter_by_domain: Optional[str] = None,  filter_by_type: Optional[
     return tasks
 
 def save()-> None:
-    """
-    Save the dataset to a JSONL file.
-
-    Args:
-        jsonl_file_path: Path to the JSONL file
-    """
     jsonl_file_path = config.TASKS_DATASET_FILE_PATH
     global DATASET
     if not DATASET:

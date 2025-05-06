@@ -14,7 +14,7 @@ def run_training_procedure(model_name, domain,  **train_kwargs):
     config.create_necessary_dirs(model_checkpoint_dir)
     logger.info(f"Checkpoints will be saved to: {model_checkpoint_dir}")
     try:
-        model = models.get_model(model_name=model_name, checkpoint_dir=model_checkpoint_dir)
+        model = models.get_model(model_name=model_name, **train_kwargs)
     except Exception as e:
         logger.error(f"Error loading model {model_name}: {e}", exc_info=True)
         raise e
@@ -23,24 +23,19 @@ def run_training_procedure(model_name, domain,  **train_kwargs):
     try:
         from learning_to_plan import task
         logger.info(f"Loading training and validation datasets for domain: {domain}.")
-        train_tasks:set[task.Task] = task.get_tasks(domain=domain, type=task.Task.Type.TRAIN)
-        validation_tasks:set[task.Task] = task.get_tasks(domain=domain, type=task.Task.Type.VALIDATION)
+        train_tasks:set[task.Task] = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.TRAIN)
+        validation_tasks:set[task.Task] = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.VALIDATION)
 
         # TODO: REMOVE THIS LATER
-        train_tasks = set(sorted(train_tasks)[:100])
+        train_tasks = set(sorted(train_tasks)[:10])
 
-        # Make the prompts that will be used for training and validation
-        eos_token = None
-        if hasattr(model, "tokenizer"):
-            try:
-                eos_token = model.tokenizer.eos_token
-            except AttributeError:
-                logger.warning(f"Model {model_name} does not have an EOS token. Using None.")
-        
         # Convert the tasks to prompts
-        training_prompts : list[str]  = [t.get_prompt(eos_token=eos_token, with_plan=True) for t in train_tasks]
+        training_prompts : list[str]  = [t.get_prompt(with_plan=True) for t in train_tasks]
+        with open(os.path.join(model_checkpoint_dir, "training_prompts.txt"), "w") as f:
+            for prompt in training_prompts:
+                f.write(prompt + "\n")
         logger.info(f"Training prompts created with {len(training_prompts)} examples.")
-        validation_prompts : list[str]  = [t.get_prompt(eos_token=eos_token, with_plan=True) for t in validation_tasks]
+        validation_prompts : list[str]  = [t.get_prompt(with_plan=True) for t in validation_tasks]
         logger.info(f"Validation prompts created with {len(validation_prompts)} examples.")
 
         # Create datasets.Dataset objects
@@ -72,12 +67,48 @@ def run_training_procedure(model_name, domain,  **train_kwargs):
         logger.error(f"Error loading dataset: {e}", exc_info=True)
         raise e
 
+    # --- Tokenize and Process Dataset ---
+    try:
+        tokenized_train_dataset = dataset['train'].map(
+            model.tokenize,
+            batched=True,
+            remove_columns=["text"],
+            desc="Processing training dataset",
+        )
+        tokenized_eval_dataset = dataset['validation'].map(
+            model.tokenize,
+            batched=True,
+            remove_columns=["text"],
+            desc="Processing validation dataset",
+        )
+        logger.info("Dataset tokenization and processing complete.")
+        logger.info(f"Processed Training Dataset Features: {tokenized_train_dataset.features}")
+        logger.info(f"Processed Validation Dataset Features: {tokenized_eval_dataset.features}")
+        if len(tokenized_train_dataset) > 0:
+            sample_idx = 0
+            logger.debug(f"--- Sample {sample_idx} (Processed) ---")
+            logger.debug(f"Input IDs: {tokenized_train_dataset[sample_idx]['input_ids'][:50]}...") # Log a snippet
+            logger.debug(f"Labels:    {tokenized_train_dataset[sample_idx]['labels'][:50]}...")    # Log a snippet
+            decoded_input = model.decode(tokenized_train_dataset[sample_idx]['input_ids'], skip_special_tokens=False)
+            labeled_tokens = [
+                model.decode([tok_id]) if label_id != -100 else "[-]"
+                for tok_id, label_id in zip(tokenized_train_dataset[sample_idx]['input_ids'], tokenized_train_dataset[sample_idx]['labels'])
+            ]
+            logger.debug(f"Decoded Input (first 300 chars): {decoded_input[:300]}...")
+            logger.debug(f"Labeled Tokens (first 50): {' '.join(labeled_tokens[:50])}...")
+        else: 
+            raise ValueError("Tokenized training dataset is empty despite non-empty input. Check processing logic and data.")
+    except Exception as e:
+        logger.error(f"Error during dataset processing: {e}", exc_info=True)
+        raise e
+
+
     # --- Train ---
     try:
-        model.train(checkpoint_dir=model_checkpoint_dir, dataset=dataset, **train_kwargs)
+        logger.info("Calling model.train() at %s", datetime.datetime.now())
+        model.train(checkpoint_dir=model_checkpoint_dir, tokenized_train_dataset=tokenized_train_dataset, tokenized_eval_dataset=tokenized_eval_dataset, **train_kwargs)
         end_time = datetime.datetime.now()
-        end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
-        logger.info(f"Training completed at {end_time_str}")
+        logger.info(f"Training completed at {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
     except Exception as e:
         logger.error(f"Error when training model {model_name}: {e}", exc_info=True)
         raise e

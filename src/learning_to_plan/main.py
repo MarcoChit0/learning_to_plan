@@ -87,11 +87,18 @@ def parse_args():
         default=None,
         help="Path to the tasks dataset file (e.g., 'data/tasks.jsonl'). Defaults to './data/tasks.jsonl'."
     )
+    def number_of_instances_type(value):
+        if value.isdigit():
+            return int(value)
+        elif value in ["all", "long", "basic"]:
+            return value
+        else:
+            raise argparse.ArgumentTypeError(f"Invalid value for number_of_instances: {value}. Must be 'all', 'long', 'basic', or a positive integer.")
     parser.add_argument(
         "-n", "--number_of_instances",
-        type=str,
+        type=number_of_instances_type,
         default="all",
-        help="Number of problems per domain: positive integer or 'all', 'long', 'basic'"
+        help="Number of instances to generate plans for. Can be 'all', 'long', 'basic', or a positive integer."
     )
     # --- Generate Specific ---
     parser.add_argument(
@@ -189,7 +196,7 @@ if __name__ == "__main__":
         domains = get_selected_domains(args=args, is_file=True)
         for domain in domains:
             logger.info(f"Starting training for domain: {domain}")
-            train.run_training_procedure(model_name=train_kwargs["model_name"], domain=domain, **train_kwargs)
+            train.run_training_procedure(domain=domain, **train_kwargs)
             logger.info(f"Finished training for domain: {domain}")
         logger.info("--- Finished All Training ---")
 
@@ -202,7 +209,7 @@ if __name__ == "__main__":
         for domain in domains:
             logger.info(f"Starting generation for domain: {domain}")
             checkpoint_dir = config.get_checkpoint_dir(domain, generate_kwargs["model_name"]) if not args.dont_use_checkpoint else None
-            generate.generate_batch(model_name=generate_kwargs["model_name"], domain=domain, number_of_instances=args.number_of_instances, random_seed=args.random_seed, number_of_cot_examples=args.cot, checkpoint_dir=checkpoint_dir, **generate_kwargs)
+            generate.generate_batch(domain=domain, number_of_instances=args.number_of_instances, random_seed=args.random_seed, number_of_cot_examples=args.cot, checkpoint_dir=checkpoint_dir, **generate_kwargs)
             logger.info(f"Finished generation for domain: {domain}")
         logger.info("--- Finished All Generation ---")
 

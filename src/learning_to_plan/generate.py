@@ -35,13 +35,16 @@ def generate_batch(
    # --- Get tasks from dataset ---
     try:
         if number_of_instances == "all":
-            tasks = task.get_tasks(domain=domain, type=task.Task.Type.TEST)
+            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.TEST)
         elif number_of_instances == "basic":
-            tasks = task.get_tasks(domain=domain, type=task.Task.Type.TEST, is_longer_plan=False)
+            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.TEST, is_longer_plan=False)
         elif number_of_instances == "long":
-            tasks = task.get_tasks(domain=domain, type=task.Task.Type.TEST, is_longer_plan=True)
+            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.TEST, is_longer_plan=True)
         elif isinstance(number_of_instances, int):
-            tasks = task.get_tasks(domain=domain, type=task.Task.Type.TEST, number_of_instances=number_of_instances)
+            # TODO: UNCOMMENT THIS LATER
+            # tasks = task.get_tasks(domain=domain, type=task.Task.Type.TEST, number_of_instances=number_of_instances)
+            # TODO: REMOVE THIS LATER
+            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.TRAIN, number_of_instances=number_of_instances)
         else:
             raise ValueError(f"Invalid value for number_of_instances: {number_of_instances}. Must be 'all', 'basic', 'long', or a positive integer.")
         assert len(tasks) > 0, f"No tasks found for generation."
@@ -64,6 +67,7 @@ def generate_batch(
     # --- Generate Plans ---
     logger.info("Starting plan generation loop...") # Use logger
     for t in tqdm(tasks, total=len(tasks), desc="Generating plans"):
+        cot_examples = set()
         if number_of_cot_examples > 0:
             cot_examples = set(
                 rng.choice(
@@ -73,19 +77,14 @@ def generate_batch(
                 )
             )
         try:
-            eos_token = None
-            if hasattr(model, "tokenizer"):
-                try:
-                    eos_token = model.tokenizer.eos_token
-                except AttributeError:
-                    logger.warning(f"Model {model_name} does not have an EOS token. Using None.")
-            prompt = t.get_prompt(eos_token=eos_token, with_plan=False, cot_examples=cot_examples)
+            prompt = t.get_prompt(with_plan=False, cot_examples=cot_examples)
             generated_plans = model.generate(prompt, **generation_kwargs)
             # TODO: FOR NOW, JUST PRINT. LATER, ADD THE GENERATED PLAN TO THE MODEL
             # (MODEL, TASK, PROMPT_TYPE) -> LIST OF PLANS
             print("\n----------------")
             print(prompt)
             if len(generated_plans) > 0:
+                print("\n----------------")
                 print(generated_plans[0])
         except Exception as e:
             logger.error(f"Error generating plan for task {t._id} with model {model_name}: {e}", exc_info=True) # Use logger
@@ -93,7 +92,7 @@ def generate_batch(
 
         
 
-    logger.info(f"Plan generation loop completed for {len(task)} instances.")
+    logger.info(f"Plan generation loop completed for {len(tasks)} instances.")
 
     
     end_time = datetime.datetime.now()

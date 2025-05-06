@@ -6,7 +6,7 @@
     "load_in_8bit": false,
     "do_sample": true,
     "generate_batch_size": 1,
-    "num_return_sequences": 1,
+    "num_return_sequences": 3,
     "top_k": 50,
     "top_p": 0.93
 }

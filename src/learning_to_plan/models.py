@@ -1,25 +1,21 @@
-# Import necessary HF classes
 import datetime
 import time
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
     BitsAndBytesConfig,
-    PreTrainedModel,
-    PreTrainedTokenizer,
     TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling,
 )
 import os
 from transformers.trainer_utils import get_last_checkpoint
-# Import PEFT components
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
 from learning_to_plan import config
-from learning_to_plan import task
 import torch
 import datasets
+import numpy as np
 
 logger = config.get_logger(__name__)
 
@@ -35,9 +31,23 @@ class Model:
         """
         raise NotImplementedError("Subclasses should implement this method.")
 
-    def train(self, dataset:datasets.Dataset, **train_kwargs) -> None:
+    def train(self, train_dataset: datasets.DatasetDict, eval_dataset: datasets.DatasetDict,  **train_kwargs) -> None: # Changed type hint
         """
         Trains the model on the provided data.
+        This is a placeholder method and should be implemented in subclasses.
+        """
+        raise NotImplementedError("Subclasses should implement this method.")
+
+    def tokenize(self, examples: List[str], max_length: int = 1024) -> Dict[str, Any]:
+        """
+        Tokenizes the input examples.
+        This is a placeholder method and should be implemented in subclasses.
+        """
+        raise NotImplementedError("Subclasses should implement this method.")
+
+    def decode(self, input_ids: List[int], skip_special_tokens: bool = True) -> str:
+        """
+        Decodes the input IDs to a string.
         This is a placeholder method and should be implemented in subclasses.
         """
         raise NotImplementedError("Subclasses should implement this method.")
@@ -48,105 +58,197 @@ class HuggingFaceModel(Model):
         assert config.HUGGINGFACE_TOKEN, "Hugging Face token is required for model loading."
 
         model_source = model_name
+        last_checkpoint = None
         if checkpoint_dir:
-            last_checkpoint = None
             last_checkpoint = get_last_checkpoint(checkpoint_dir)
 
-            if last_checkpoint:
-                model_source = last_checkpoint
+        if last_checkpoint:
+            model_source = last_checkpoint
 
-        logger.info(f"Determined model source: {model_source} ({'Checkpoint' if last_checkpoint else 'Base Model'})")
+        if last_checkpoint:
+            logger.info(f"Loading model {model_name} -- checkpoint: {last_checkpoint}.")
+        else:
+            logger.info(f"Loading model {model_name} -- base model from Hugging Face Hub.")
 
-        assert config.HUGGINGFACE_TOKEN, "Hugging Face token is required for model loading."
-        self._tokenizer = AutoTokenizer.from_pretrained(model_source, trust_remote_code=True, token=config.HUGGINGFACE_TOKEN)
-        # if get_config("load_in_8bit"):
-        #     model = AutoModelForCausalLM.from_pretrained(
-        #         model_source,
-        #         trust_remote_code=True,
-        #         device_map="auto",
-        #         quantization_config=BitsAndBytesConfig(load_in_8bit=True),
-        #         token=HUGGINGFACE_TOKEN,
-        #     )
-        #     lora_r = get_config("lora_r", 8)
-        #     # attach LoRA adapter so the model becomes trainable
-        #     lora_cfg = LoraConfig(
-        #         r=lora_r,
-        #         lora_alpha=get_config("lora_alpha", lora_r*4),
-        #         target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-        #                         "up_proj", "down_proj", "gate_proj"],
-        #         lora_dropout=get_config("lora_dropout", 0.05),
-        #         bias=get_config("lora_bias", "none"),
-        #         task_type="CAUSAL_LM",
-        #     )
-        #     model = get_peft_model(model, lora_cfg)
-        #     model.print_trainable_parameters()
-        self._model = AutoModelForCausalLM.from_pretrained(
+        # --- Tokenizer Setup ---
+        try:
+            self._tokenizer = AutoTokenizer.from_pretrained(
                 model_source,
                 trust_remote_code=True,
-                torch_dtype=torch.bfloat16 if self.__dict__.get("bf16", None) else torch.float16,
                 token=config.HUGGINGFACE_TOKEN,
+                # Add padding settings for Causal LM
+                pad_token=kwargs.get("pad_token", "<|endoftext|>"),
+                padding_side=kwargs.get("padding_side", "left")
             )
-    
-    # --- Training Arguments ---
-    # training_args = TrainingArguments(
-    #     output_dir=model_checkpoint_dir,
-    #     run_name=f"{config.get_config('model_name')}-{os.path.basename(model_checkpoint_dir)}-{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}",
-    #     report_to=config.get_config("report_to", "none"),
-    #     num_train_epochs=config.get_config("num_train_epochs", 2),
-    #     per_device_train_batch_size=config.get_config("batch_size", 1),
-    #     per_device_eval_batch_size=config.get_config("per_device_eval_batch_size", 1),
-    #     gradient_accumulation_steps=config.get_config("gradient_accumulation_steps", 1),
-    #     fp16=not config.get_config("bf16", False),
-    #     bf16=config.get_config("bf16", False),
-    #     learning_rate=config.get_config("learning_rate", 1.0e-5),
-    #     lr_scheduler_type=config.get_config("lr_scheduler_type", "cosine"),
-    #     weight_decay=config.get_config("weight_decay", 0.02),
-    #     save_strategy=config.get_config("save_strategy", "steps"),
-    #     save_steps=config.get_config("save_steps", 800),
-    #     save_total_limit=config.get_config("save_total_limit", 1),
-    #     logging_strategy=config.get_config("logging_strategy", "steps"),
-    #     logging_steps=config.get_config("logging_steps", 400),
-    #     eval_strategy=config.get_config("eval_strategy", "epoch"),
-    #     optim=config.get_config("optimizer", "adamw_8bit"),
-    # )
-    def train(self, checkpoint_dir, dataset:datasets.Dataset, **train_kwargs) -> None:
-        assert "train" in dataset, "Training dataset is required for training."
-        assert "validation" in dataset, "Validation dataset is required for training."
-        
-        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+            # Explicitly set pad_token if it's None or not set by default
+            if self._tokenizer.pad_token is None:
+                logger.warning(f"Tokenizer for {model_source} does not have a default pad token. Setting pad_token to eos_token ({self._tokenizer.eos_token}).")
+                self._tokenizer.pad_token = self._tokenizer.eos_token
+
+            # --- Add special tokens IF they don't exist ---
+            special_tokens_to_add = []
+            for separator in [config.START_OF_PLAN_TOKEN, config.END_OF_PLAN_TOKEN]:
+                if separator not in self._tokenizer.get_vocab():
+                    special_tokens_to_add.append(separator)
+
+            if special_tokens_to_add:
+                num_added_tokens = self._tokenizer.add_tokens(special_tokens_to_add, special_tokens=True)
+                logger.info(f"Added {num_added_tokens} special tokens to tokenizer: {special_tokens_to_add}")
+
+            logger.info(f"Tokenizer loaded. Pad token: {self._tokenizer.pad_token}, Padding side: {self._tokenizer.padding_side}")
+            # Store token IDs for easy access later
+            PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
+            PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
+            logger.info(f"Plan Start Token ID: {PLAN_START_TOKEN_ID}, Plan End Token ID: {PLAN_END_TOKEN_ID}")
+            if PLAN_START_TOKEN_ID == self._tokenizer.unk_token_id or PLAN_END_TOKEN_ID == self._tokenizer.unk_token_id:
+                logger.error("One or both special plan tokens were not found in the tokenizer vocabulary after attempting to add them. Check token strings and tokenizer setup.")
+                raise ValueError("Special plan tokens could not be resolved to IDs.")
+
+        except Exception as e:
+            logger.error(f"Error loading or setting up tokenizer from {model_source}: {e}", exc_info=True)
+            raise e
+
+        # --- Model Loading ---
+        try:
+            quantization_config = BitsAndBytesConfig(load_in_8bit=True)  if self.__dict__.get("load_in_8bit", False) else None
+            torch_dtype = torch.bfloat16 if self.__dict__.get("bf16", False) else torch.float16
+
+            logger.info(f"Loading model with dtype: {torch_dtype}{', 8 bit quantization.' if quantization_config else '.'}")
+
+            self._model = AutoModelForCausalLM.from_pretrained(
+                model_source,
+                trust_remote_code=True,
+                torch_dtype=torch_dtype,
+                token=config.HUGGINGFACE_TOKEN,
+                device_map="auto",
+                quantization_config=quantization_config,
+            )
+            logger.info(f"Model loaded successfully from {model_source}.")
+
+            # --- Resize embeddings if tokens were added ---
+            if special_tokens_to_add:
+                logger.info(f"Resizing model token embeddings to match tokenizer size: {len(self._tokenizer)}")
+                self._model.resize_token_embeddings(len(self._tokenizer))
+                logger.info("Model token embeddings resized successfully.")
+
+        except Exception as e:
+            logger.error(f"Error loading model from {model_source} or resizing embeddings: {e}", exc_info=True)
+            raise e
+    def decode(self, input_ids: List[int], skip_special_tokens: bool = True) -> str:
+        return self._tokenizer.decode(
+            input_ids,
+            skip_special_tokens=skip_special_tokens,
+        )
+    def tokenize(self, examples: List[str], max_length: int = 1024) -> Dict[str, Any]:
+            PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
+            PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
+            if PLAN_START_TOKEN_ID == self._tokenizer.unk_token_id or PLAN_END_TOKEN_ID == self._tokenizer.unk_token_id:
+                raise ValueError("Special plan tokens could not be resolved to IDs. Check token strings and tokenizer setup.")
+
+            batch_input_ids = []
+            batch_labels = []
+            batch_attention_mask = []
+
+            for text_instance in examples["text"]:
+                tokenized_output = self._tokenizer(
+                    text_instance + self._tokenizer.eos_token, # Add EOS token at the end
+                    max_length=max_length,
+                    padding="max_length",
+                    truncation=True,
+                    return_tensors=None,
+                    add_special_tokens=False, # We are handling special plan tokens manually
+                    return_attention_mask=True
+                )
+
+                input_ids_padded = tokenized_output["input_ids"]
+                attention_mask_padded = tokenized_output["attention_mask"]
+
+                try:
+                    plan_start_idx = input_ids_padded.index(PLAN_START_TOKEN_ID)
+                except ValueError:
+                    # Log more context for debugging
+                    logger.error(f"PLAN_START_TOKEN_ID {PLAN_START_TOKEN_ID} ('{config.START_OF_PLAN_TOKEN}') not found in input_ids. Input text (first 200 chars): {text_instance[:200]}...")
+                    logger.error(f"Input IDs (first 20): {input_ids_padded[:20]}")
+                    raise ValueError(f"PLAN_START_TOKEN_ID {PLAN_START_TOKEN_ID} not found.")
+
+                try:
+                    # Search for plan_end_idx *after* plan_start_idx
+                    plan_end_idx = input_ids_padded.index(PLAN_END_TOKEN_ID, plan_start_idx)
+                except ValueError:
+                    logger.error(f"PLAN_END_TOKEN_ID {PLAN_END_TOKEN_ID} ('{config.END_OF_PLAN_TOKEN}') not found after plan_start_idx in input_ids. Input text (first 200 chars): {text_instance[:200]}...")
+                    logger.error(f"Input IDs (segment around plan_start_idx): {input_ids_padded[max(0, plan_start_idx-10):plan_start_idx+20]}")
+                    raise ValueError(f"PLAN_END_TOKEN_ID {PLAN_END_TOKEN_ID} not found after plan_start_idx.")
+
+                labels = [-100] * len(input_ids_padded)
+                # Labels include the plan_start and plan_end tokens
+                labels[plan_start_idx : plan_end_idx + 1] = input_ids_padded[plan_start_idx : plan_end_idx + 1]
+
+                batch_input_ids.append(input_ids_padded)
+                batch_labels.append(labels)
+                batch_attention_mask.append(attention_mask_padded)
+
+            return {
+                "input_ids": batch_input_ids,
+                "labels": batch_labels,
+                "attention_mask": batch_attention_mask,
+            }
+
+    def train(self, checkpoint_dir: str, tokenized_train_dataset: datasets.DatasetDict, tokenized_eval_dataset: datasets.DatasetDict, **train_kwargs: Dict[str, Any]) -> None:
+        """
+        Fine-tunes the Hugging Face model using the provided dataset and training arguments.
+
+        Args:
+            checkpoint_dir (str): Directory to save checkpoints and final model.
+            dataset (datasets.DatasetDict): A dictionary containing 'train' and 'validation' datasets.
+                                           Each dataset is expected to have a 'text' column formatted as:
+                                           PROMPT + PLAN_START_TOKEN + PLAN + PLAN_END_TOKEN
+            **train_kwargs (Dict[str, Any]): Dictionary of training configuration parameters
+                                              (e.g., learning_rate, batch_size, num_train_epochs, lora_r, etc.)
+                                              and tokenizer/model settings (e.g., max_seq_length, fp16, bf16).
+        """
+        os.environ["TOKENIZERS_PARALLELISM"] = "false" # Already present, good for avoiding issues.
         start_timer = datetime.datetime.now()
         logger.info(f"Training started at {start_timer}.")
 
-        def tokenize_fn(examples):
-            return self._tokenizer(
-                examples["text"],
-                truncation=True,
-                padding=False,
-                max_length=train_kwargs.get("max_length", 512)
+        # --- LoRA Setup ---
+        if not isinstance(self._model, PeftModel):
+            logger.info("Applying LoRA configuration to the base model.")
+            lora_r = train_kwargs.get("lora_r", 512) # Default LoRA r
+            lora_cfg = LoraConfig(
+                r=lora_r,
+                lora_alpha=train_kwargs.get("lora_alpha", lora_r * 2), # Default LoRA alpha
+                target_modules=train_kwargs.get("target_modules", ["q_proj", "k_proj", "v_proj", "o_proj", "up_proj", "down_proj", "gate_proj"]),
+                lora_dropout=train_kwargs.get("lora_dropout", 0.05), # Default LoRA dropout
+                bias=train_kwargs.get("lora_bias", "none"), # Default LoRA bias
+                task_type="CAUSAL_LM",
             )
+            if train_kwargs.get("load_in_8bit", False): # Check if 8-bit loading was used
+                logger.info("Preparing model for K-bit training (as load_in_8bit was True).")
+                self._model = prepare_model_for_kbit_training(self._model, use_gradient_checkpointing=train_kwargs.get("gradient_checkpointing", False)) # Default gradient checkpointing
+            
+            self._model = get_peft_model(self._model, lora_cfg)
+        else:
+            logger.info("Model is already a PeftModel (likely loaded from checkpoint). Skipping LoRA application.")
+        self._model.print_trainable_parameters()
 
-        try:
-            train_dataset = dataset['train'].map(
-                tokenize_fn,
-                batched=True,
-                remove_columns=["text"],
-                desc="Tokenizing training dataset",
-            )
-            eval_dataset = dataset['validation'].map(
-                tokenize_fn,
-                batched=True,
-                remove_columns=["text"],
-                desc="Tokenizing validation dataset",
-            )
-        except Exception as e:
-            logger.error(f"Error during dataset tokenization: {e}")
-            raise e
+        collator = DataCollatorForLanguageModeling(tokenizer=self._tokenizer, mlm=False)
 
-        collator = DataCollatorForLanguageModeling(
-            tokenizer=self._tokenizer,
-            mlm=False,
-        )
+        # --- Print GPU Information ---
+        logger.info(f"PyTorch version: {torch.__version__}")
+        is_cuda_available = torch.cuda.is_available()
+        logger.info(f"CUDA available: {is_cuda_available}")
 
+        if not is_cuda_available:
+            raise RuntimeError("CUDA is not available. Training requires a GPU.")
+
+        gpu_stats = torch.cuda.get_device_properties(0)
+        start_gpu_memory = round(torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024, 3)
+        max_memory = round(gpu_stats.total_memory / 1024 / 1024 / 1024, 3)
+        logger.info(f"GPU: {gpu_stats.name}, Total Memory: {max_memory} GB")
+        logger.info(f"Initial Reserved Memory: {start_gpu_memory} GB")
+            
+
+        # --- Training Arguments ---
         training_args = TrainingArguments(
             output_dir=checkpoint_dir,
             run_name=f"{self._model_name}-{os.path.basename(checkpoint_dir)}-{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}-debug",
@@ -164,162 +266,288 @@ class HuggingFaceModel(Model):
             logging_strategy=train_kwargs.get("logging_strategy", "epoch"),
             eval_strategy=train_kwargs.get("eval_strategy", "epoch"),
             optim=train_kwargs.get("optimizer", "adamw_8bit"),
+            load_best_model_at_end=train_kwargs.get("load_best_model_at_end", True),
+            eval_on_start=train_kwargs.get("eval_on_start", False),
         )
 
-        logger.info(f"Training arguments: {training_args}")
+        logger.debug(f"Final TrainingArguments: {training_args.to_dict()}")
+        # --- Trainer Initialization ---
+        trainer = Trainer(
+            model=self._model,
+            args=training_args,
+            data_collator=collator,
+            train_dataset=tokenized_train_dataset,
+            eval_dataset=tokenized_eval_dataset,
+            tokenizer=self._tokenizer,
+        )
+
+        # --- Start Training ---
+        last_checkpoint = get_last_checkpoint(training_args.output_dir)
+        resume_from_checkpoint = last_checkpoint if last_checkpoint else None
+        if resume_from_checkpoint:
+            logger.info(f"Resuming training from checkpoint: {resume_from_checkpoint}")
+        else:
+            logger.info("No valid checkpoint found in output directory. Starting training from scratch or loaded model.")
+        
         try:
-            trainer = Trainer(
-                model=self._model,
-                args=training_args,
-                data_collator=collator,
-                train_dataset=train_dataset,
-                eval_dataset=eval_dataset,
-            )
-            trainer.train()
-            trainer.save_model(checkpoint_dir)
+            logger.info("Starting trainer.train()...")
+            train_result = trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+            logger.info("trainer.train() finished.")
+        except Exception as e:
+            logger.error(f"Error during trainer.train(): {e}", exc_info=True) # Log full traceback
+            raise ValueError(f"Error during training: {e}") from e # Re-raise with context
+        
+        try:
+            logger.info(f"Saving final model and trainer state to {checkpoint_dir}")
+            # Ensure the PeftModel is saved correctly. trainer.save_model() handles this for PeftModel.
+            self._model.save_pretrained(checkpoint_dir) # Recommended for PEFT models
+            self._tokenizer.save_pretrained(checkpoint_dir) # Save tokenizer explicitly
+            # trainer.save_model(checkpoint_dir) # This also works and saves adapter for PEFT
+            trainer.save_state()
+            logger.info(f"Model, tokenizer and trainer state saved successfully to {checkpoint_dir}.")
+        except Exception as e:
+            logger.error(f"Error saving model and state: {e}", exc_info=True)
+            raise e # Re-raise after logging
+        
+        try:
+            metrics = train_result.metrics
+            metrics["train_samples"] = len(tokenized_train_dataset) # Add number of train samples
+            trainer.log_metrics("train", metrics)
+            trainer.save_metrics("train", metrics) # Save metrics to a file
+
             end_timer = datetime.datetime.now()
             logger.info(f"Training completed at {end_timer}. Duration: {end_timer - start_timer}")
-        except Exception as e:
-            logger.error(f"Error during training: {e}")
-            raise e
+            
+            if is_cuda_available: # Log memory usage only if CUDA was used
+                end_gpu_memory = round(torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024, 3) 
+                used_memory_for_train = round(end_gpu_memory - start_gpu_memory, 3)
+                logger.info(f"Max Reserved Memory during training: {end_gpu_memory} GB.")
+                if max_memory > 0: # Avoid division by zero if max_memory wasn't set (e.g., error getting props)
+                    used_memory_ratio = round(end_gpu_memory / max_memory, 3)
+                    logger.info(f"Max Reserved Memory Ratio: {used_memory_ratio*100:.2f}%")
+                    logger.info(f"Memory increase during training: {used_memory_for_train} GB.")
+            try:
+                # Calculate checkpoint size robustly
+                checkpoint_size_gb = 0
+                if os.path.exists(checkpoint_dir):
+                    checkpoint_size_bytes = sum(
+                        os.path.getsize(os.path.join(root, f))
+                        for root, _, files in os.walk(checkpoint_dir)
+                        for f in files
+                    )
+                    checkpoint_size_gb = checkpoint_size_bytes / (1024 ** 3)
+                logger.info(f"Final checkpoint size: {checkpoint_size_gb:.3f} GB at {checkpoint_dir}.")
+            except Exception as size_e:
+                logger.warning(f"Could not calculate checkpoint size: {size_e}")
+
+        except Exception as e: # Catch errors in metrics logging as well
+            logger.error(f"Error during training metrics logging or final summary: {e}", exc_info=True)
+            # Don't re-raise here if training itself was successful.
 
     def generate(self, prompt: str, **generation_kwargs) -> list[str]:
         """
         Generates text based on a prompt using the Hugging Face model.
 
         Parameters:
-            prompt: The input prompt text.
-            **gen_kwargs_input: Keyword arguments for generation control (e.g., max_new_tokens, temperature).
+            prompt: The input prompt text (should end before <|plan_start|>).
+            **generation_kwargs: Keyword arguments for generation control (e.g., max_new_tokens, temperature).
 
         Returns:
-            The generated text, excluding the prompt.
+            A list containing the generated plan(s), stopping at <|plan_end|> or max_new_tokens.
         """
         logger.debug("Generating with Hugging Face model.")
 
         if not hasattr(self, '_model') or not hasattr(self, '_tokenizer'):
              raise RuntimeError("Model or tokenizer not initialized.")
 
+        # Ensure model is in evaluation mode
+        self._model.eval()
+
         device = next(self._model.parameters()).device
-        dtype = self._model.dtype # Get model's dtype directly
+        # Ensure tokenizer has pad token set for generation
+        if self._tokenizer.pad_token is None:
+            logger.warning("Tokenizer pad token is None during generate. Setting to EOS token.")
+            self._tokenizer.pad_token = self._tokenizer.eos_token
+
+        # --- Prepare prompt for generation ---
+        # The prompt should end right before the model needs to generate <|plan_start|>
+        # Usually, this means the prompt includes the text up to the point where the plan should begin.
+        # If the prompt doesn't naturally lead to <|plan_start|>, you might need to append it.
+        # Example: prompt = user_prompt + PLAN_START_TOKEN
+        # For this example, let's assume the passed 'prompt' is ready to be fed.
 
         inputs = self._tokenizer(
             prompt,
             return_tensors="pt",
-            padding=False,
+            padding=False, # No padding for single prompt generation
             truncation=True,
-            max_length=generation_kwargs.get("max_length", 512),
+            # Adjust max_length calculation if needed based on typical prompt length
+            max_length=generation_kwargs.get("max_length", 1024) - generation_kwargs.get("max_new_tokens", 512),
         ).to(device)
+
         input_length = inputs.input_ids.shape[1]
 
-        # Build generation kwargs dictionary using values from gen_kwargs_input or defaults
+        # --- Generation Configuration ---
+        # Use PLAN_END_TOKEN as the stopping criterion
+        eos_token_id_list = [self._tokenizer.eos_token_id, self._PLAN_END_TOKEN_ID]
+        logger.debug(f"Using EOS token IDs for generation: {eos_token_id_list}")
+
         gen_kwargs = {
             "max_new_tokens": generation_kwargs.get("max_new_tokens", 512),
             "do_sample": generation_kwargs.get("do_sample", True),
             "temperature": generation_kwargs.get("temperature", 0.7),
             "top_p": generation_kwargs.get("top_p", 0.93),
             "top_k": generation_kwargs.get("top_k", 50),
-            "eos_token_id": self._tokenizer.eos_token_id,
-            "pad_token_id": self._tokenizer.eos_token_id, # Use EOS for padding during generation
-            "num_return_sequences": 1, # Required for single string output
+            "eos_token_id": eos_token_id_list, # Stop on EOS or plan_end
+            "pad_token_id": self._tokenizer.pad_token_id,
+            "num_return_sequences": generation_kwargs.get("num_return_sequences", 1),
         }
-        # Filter out None values if defaults could be None and shouldn't be passed
         gen_kwargs = {k: v for k, v in gen_kwargs.items() if v is not None}
+        logger.debug(f"Generation parameters: {gen_kwargs}")
 
-        # Check for quantization
-        is_quantized = getattr(self._model, 'is_loaded_in_8bit', False) 
-        use_autocast = (device.type == 'cuda') and not is_quantized
-
-        with torch.no_grad():
-            # Use autocast context manager for mixed precision if applicable
-            with torch.autocast(device_type=device.type, dtype=dtype, enabled=use_autocast):
-                outputs = self._model.generate(
-                    **inputs,
-                    **gen_kwargs
-                )
-
+        # --- Perform Generation ---
         generated_texts = []
-        input_length = inputs.input_ids.shape[1]
-        for output_sequence in outputs:
-            generated_tokens = output_sequence[input_length:] if output_sequence.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device)
-            decoded_text = self._tokenizer.decode(generated_tokens, skip_special_tokens=True)
-            generated_texts.append(decoded_text.strip())
-
-        if not generated_texts:
-            raise RuntimeError("No valid generated texts found.")
-
-        return generated_texts
-
-
-import google.generativeai as genai
-class GeminiModel(Model):
-    def __init__(self, model_name, **kwargs):
-        super().__init__(model_name, **kwargs)
-        assert config.GOOGLE_API_KEY, "Google API Key is required for Gemini model."
         try:
-            genai.configure(api_key=config.GOOGLE_API_KEY)
-        except Exception as e:
-            raise RuntimeError(f"Failed to configure Gemini model: {e}")
-        
-    def train(self, dataset:datasets.Dataset, **train_kwargs) -> None:
-        """
-        Training is not applicable for Gemini model as it is a hosted service.
-        """
-        raise NotImplementedError("Training is not applicable for Gemini model.")
+            with torch.no_grad():
+                is_quantized = getattr(self._model, 'is_loaded_in_8bit', False) or getattr(self._model, 'is_loaded_in_4bit', False)
+                dtype = getattr(self._model, 'dtype', torch.float16)
+                use_autocast = (device.type == 'cuda') and not is_quantized and dtype in [torch.float16, torch.bfloat16]
 
-    def generate(
-            self,
-            prompt_text: str,
-            **generation_kwargs
-        ) -> list[str]:
-        logger.debug(f"Generating with Gemini model {self._model_name}.")
+                logger.debug(f"Generation - Device: {device}, Dtype: {dtype}, Quantized: {is_quantized}, Use Autocast: {use_autocast}")
 
-        generation_config = {
-            "temperature": generation_kwargs.get("temperature", 0.7),
-            "top_p": generation_kwargs.get("top_p", 0.93), # Ensure top_p is included
-            "top_k": generation_kwargs.get("top_k", 50), # Optional: top-k sampling
-            "max_output_tokens": generation_kwargs.get("max_new_tokens", 2048), # Optional: max output tokens
-            "candidate_count": generation_kwargs.get("candidate_count", 1), # Optional: number of candidates
-        }
+                with torch.autocast(device_type=device.type, dtype=dtype, enabled=use_autocast):
+                    outputs = self._model.generate(
+                        **inputs,
+                        **gen_kwargs
+                    )
 
-        try:
-            model = genai.GenerativeModel(
-                self._model_name,
-                generation_config=generation_config,
-            )
-        except Exception as e:
-            raise RuntimeError(f"Failed to initialize Gemini model '{self._model_name}': {e}") from e
+            # Decode generated sequences, removing the prompt part
+            for output_sequence in outputs:
+                generated_tokens = output_sequence[input_length:]
+                # Decode, potentially stopping decode early if PLAN_END_TOKEN is hit but not skipped
+                decoded_text = self._tokenizer.decode(generated_tokens, skip_special_tokens=True) # Skip special tokens like padding/eos
 
-        try:
-            # Gemini free tier accepts 4 requests per minute. Introducing a wait time of 20 seconds to avoid throttling.
-            wait_time = generation_kwargs.get("wait_time", 20)
-            if wait_time > 0:
-                logger.info(f"Waiting for {wait_time} seconds to avoid throttling.")
-                time.sleep(wait_time)
-            generated_texts = []
-            response = model.generate(prompt_text)
-            if response and hasattr(response, 'candidates'):
-                for candidate in response.candidates:
-                    if candidate.content and candidate.content.parts: 
-                        text = ""
-                        for part in candidate.content.parts:
-                            text += part.text
-                        generated_texts.append(text.strip())
-                    else:
-                        raise RuntimeError(f"Candidate content is empty or malformed: {candidate}.")
-            else:
-                raise RuntimeError(f"Response from Gemini model is empty or malformed: {response}.")
+                # Optional: Clean up PLAN_START/END tokens if they remain after skip_special_tokens
+                # decoded_text = decoded_text.replace(PLAN_START_TOKEN, "").replace(PLAN_END_TOKEN, "")
+
+                generated_texts.append(decoded_text.strip())
+
             if not generated_texts:
-                raise RuntimeError("No valid generated texts found.")
+                 logger.warning("Generation produced no output sequences.")
+                 return []
+
+            logger.debug(f"Generated {len(generated_texts)} sequences.")
             return generated_texts
+
         except Exception as e:
-            raise RuntimeError(f"Failed to generate text with Gemini model '{self._model_name}': {e}") from e
-        
+            logger.error(f"Error during generation: {e}", exc_info=True)
+            raise RuntimeError(f"Failed to generate text with Hugging Face model: {e}") from e
+
+
+# # --- Gemini Model (Remains unchanged from previous version) ---
+# import google.generativeai as genai
+# class GeminiModel(Model):
+#     def __init__(self, model_name, **kwargs):
+#         super().__init__(model_name, **kwargs)
+#         assert config.GOOGLE_API_KEY, "Google API Key is required for Gemini model."
+#         try:
+#             genai.configure(api_key=config.GOOGLE_API_KEY)
+#             logger.info("Gemini API configured successfully.")
+#         except Exception as e:
+#             logger.error(f"Failed to configure Gemini model: {e}", exc_info=True)
+#             raise RuntimeError(f"Failed to configure Gemini model: {e}")
+
+#     def train(self, dataset:datasets.DatasetDict, **train_kwargs) -> None: # Changed type hint
+#         """
+#         Training is not applicable for Gemini model as it is a hosted service.
+#         """
+#         logger.warning("Training is not applicable for Gemini models.")
+#         raise NotImplementedError("Training is not applicable for Gemini model.")
+
+#     def generate(
+#             self,
+#             prompt_text: str,
+#             **generation_kwargs
+#         ) -> list[str]:
+#         logger.debug(f"Generating with Gemini model {self._model_name}.")
+
+#         generation_config = genai.types.GenerationConfig( # Use GenerationConfig object
+#             temperature=generation_kwargs.get("temperature", 0.7),
+#             top_p=generation_kwargs.get("top_p", 0.93),
+#             top_k=generation_kwargs.get("top_k", 50),
+#             max_output_tokens=generation_kwargs.get("max_new_tokens", 2048),
+#             candidate_count=generation_kwargs.get("num_return_sequences", 1), # Map num_return_sequences
+#             stop_sequences=[PLAN_END_TOKEN] # Add plan end token as stop sequence
+#         )
+#         logger.debug(f"Gemini generation config: {generation_config}")
+
+
+#         try:
+#             model = genai.GenerativeModel(
+#                 self._model_name,
+#                 generation_config=generation_config,
+#                 # safety_settings= # Add safety settings if needed
+#             )
+#         except Exception as e:
+#             logger.error(f"Failed to initialize Gemini model '{self._model_name}': {e}", exc_info=True)
+#             raise RuntimeError(f"Failed to initialize Gemini model '{self._model_name}': {e}") from e
+
+#         try:
+#             wait_time = generation_kwargs.get("wait_time", 0) # Default to 0 wait time unless specified
+#             if wait_time > 0:
+#                 logger.info(f"Waiting for {wait_time} seconds before Gemini API call.")
+#                 time.sleep(wait_time)
+
+#             logger.debug("Calling Gemini model.generate_content...")
+#             # The prompt should ideally include PLAN_START_TOKEN if Gemini needs it to trigger plan generation
+#             # Example: prompt_text_full = prompt_text + PLAN_START_TOKEN
+#             response = model.generate_content(prompt_text) # Use original prompt_text for now
+#             logger.debug("Gemini API call completed.")
+
+
+#             generated_texts = []
+#             if response and response.candidates:
+#                 for candidate in response.candidates:
+#                     if candidate.content and candidate.content.parts:
+#                         text = "".join(part.text for part in candidate.content.parts if hasattr(part, 'text'))
+#                         # Remove potential trailing PLAN_END_TOKEN if stop sequence worked
+#                         if text.endswith(PLAN_END_TOKEN):
+#                              text = text[:-len(PLAN_END_TOKEN)]
+#                         generated_texts.append(text.strip())
+#                     elif candidate.content and not candidate.content.parts:
+#                          logger.warning(f"Gemini candidate content has no parts: {candidate.content}")
+#                     else:
+#                          logger.warning(f"Gemini candidate has no content: {candidate}")
+
+#             if hasattr(response, 'prompt_feedback') and response.prompt_feedback.block_reason:
+#                  logger.error(f"Gemini request blocked. Reason: {response.prompt_feedback.block_reason}")
+#                  raise RuntimeError(f"Gemini request blocked. Reason: {response.prompt_feedback.block_reason}")
+#             if not generated_texts and response.candidates:
+#                  finish_reasons = [c.finish_reason for c in response.candidates]
+#                  logger.warning(f"No text extracted from Gemini response. Finish reasons: {finish_reasons}")
+
+
+#             if not generated_texts:
+#                 logger.error(f"No valid generated texts found in Gemini response. Response: {response}")
+#                 raise RuntimeError("No valid generated texts found in Gemini response.")
+
+#             logger.debug(f"Generated {len(generated_texts)} sequences from Gemini.")
+#             return generated_texts
+
+#         except Exception as e:
+#             logger.error(f"Failed to generate text with Gemini model '{self._model_name}': {e}", exc_info=True)
+#             raise RuntimeError(f"Failed to generate text with Gemini model '{self._model_name}': {e}") from e
+
+# --- get_model function (Remains unchanged) ---
 def get_model(model_name: str, **kwargs) -> Model:
     """
     Factory function to get the appropriate model based on the model name.
     """
-    if model_name.lower().startswith("gemini"):
-        return GeminiModel(model_name, **kwargs)
-    else:
-        return HuggingFaceModel(model_name, **kwargs)
-    
+    # logger.info(f"Creating model instance for: {model_name}")
+    # if model_name.lower().startswith("gemini"):
+    #     logger.info("Identified as Gemini model.")
+    #     return GeminiModel(model_name, **kwargs)
+    # else:
+    logger.info("Identified as Hugging Face model.")
+    checkpoint_dir = kwargs.pop('checkpoint_dir', None)
+    return HuggingFaceModel(model_name, checkpoint_dir=checkpoint_dir, **kwargs)
