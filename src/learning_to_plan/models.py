@@ -331,48 +331,29 @@ class HuggingFaceModel(Model):
         """
         logger.debug("Generating with Hugging Face model.")
 
-        if not hasattr(self, '_model') or not hasattr(self, '_tokenizer'):
-             raise RuntimeError("Model or tokenizer not initialized.")
-
         # Ensure model is in evaluation mode
         self._model.eval()
 
         device = next(self._model.parameters()).device
-        # Ensure tokenizer has pad token set for generation
-        if self._tokenizer.pad_token is None:
-            logger.warning("Tokenizer pad token is None during generate. Setting to EOS token.")
-            self._tokenizer.pad_token = self._tokenizer.eos_token
-
-        # --- Prepare prompt for generation ---
-        # The prompt should end right before the model needs to generate <|plan_start|>
-        # Usually, this means the prompt includes the text up to the point where the plan should begin.
-        # If the prompt doesn't naturally lead to <|plan_start|>, you might need to append it.
-        # Example: prompt = user_prompt + PLAN_START_TOKEN
-        # For this example, let's assume the passed 'prompt' is ready to be fed.
 
         inputs = self._tokenizer(
             prompt,
             return_tensors="pt",
-            padding=False, # No padding for single prompt generation
+            padding=False,
             truncation=True,
-            # Adjust max_length calculation if needed based on typical prompt length
-            max_length=generation_kwargs.get("max_length", 1024) - generation_kwargs.get("max_new_tokens", 512),
+            max_length= generation_kwargs.get("max_new_tokens", 512),
         ).to(device)
 
         input_length = inputs.input_ids.shape[1]
 
         # --- Generation Configuration ---
-        # Use PLAN_END_TOKEN as the stopping criterion
-        eos_token_id_list = [self._tokenizer.eos_token_id, self._PLAN_END_TOKEN_ID]
-        logger.debug(f"Using EOS token IDs for generation: {eos_token_id_list}")
-
         gen_kwargs = {
             "max_new_tokens": generation_kwargs.get("max_new_tokens", 512),
             "do_sample": generation_kwargs.get("do_sample", True),
             "temperature": generation_kwargs.get("temperature", 0.7),
             "top_p": generation_kwargs.get("top_p", 0.93),
             "top_k": generation_kwargs.get("top_k", 50),
-            "eos_token_id": eos_token_id_list, # Stop on EOS or plan_end
+            "eos_token_id": self._tokenizer.eos_token_id,
             "pad_token_id": self._tokenizer.pad_token_id,
             "num_return_sequences": generation_kwargs.get("num_return_sequences", 1),
         }
@@ -380,42 +361,26 @@ class HuggingFaceModel(Model):
         logger.debug(f"Generation parameters: {gen_kwargs}")
 
         # --- Perform Generation ---
+        with torch.no_grad():
+            dtype = getattr(self._model, 'dtype', torch.float16)
+            use_autocast = (device.type == 'cuda') and dtype in [torch.float16, torch.bfloat16]
+            with torch.autocast(device_type=device.type, dtype=dtype, enabled=use_autocast):
+                outputs = self._model.generate(
+                    **inputs,
+                    **gen_kwargs
+                )
+
+        # --- Process Outputs ---
         generated_texts = []
-        try:
-            with torch.no_grad():
-                is_quantized = getattr(self._model, 'is_loaded_in_8bit', False) or getattr(self._model, 'is_loaded_in_4bit', False)
-                dtype = getattr(self._model, 'dtype', torch.float16)
-                use_autocast = (device.type == 'cuda') and not is_quantized and dtype in [torch.float16, torch.bfloat16]
+        for output_sequence in outputs:
+            generated_tokens = output_sequence[input_length:] if output_sequence.shape[0] >  input_length else torch.tensor([], dtype=torch.long, device=device)
+            decoded_text = self._tokenizer.decode(generated_tokens, skip_special_tokens=True)
+            generated_texts.append(decoded_text.strip())
+        
+        if not generated_texts:
+            raise RuntimeError("No valid generated texts found.")
 
-                logger.debug(f"Generation - Device: {device}, Dtype: {dtype}, Quantized: {is_quantized}, Use Autocast: {use_autocast}")
-
-                with torch.autocast(device_type=device.type, dtype=dtype, enabled=use_autocast):
-                    outputs = self._model.generate(
-                        **inputs,
-                        **gen_kwargs
-                    )
-
-            # Decode generated sequences, removing the prompt part
-            for output_sequence in outputs:
-                generated_tokens = output_sequence[input_length:]
-                # Decode, potentially stopping decode early if PLAN_END_TOKEN is hit but not skipped
-                decoded_text = self._tokenizer.decode(generated_tokens, skip_special_tokens=True) # Skip special tokens like padding/eos
-
-                # Optional: Clean up PLAN_START/END tokens if they remain after skip_special_tokens
-                # decoded_text = decoded_text.replace(PLAN_START_TOKEN, "").replace(PLAN_END_TOKEN, "")
-
-                generated_texts.append(decoded_text.strip())
-
-            if not generated_texts:
-                 logger.warning("Generation produced no output sequences.")
-                 return []
-
-            logger.debug(f"Generated {len(generated_texts)} sequences.")
-            return generated_texts
-
-        except Exception as e:
-            logger.error(f"Error during generation: {e}", exc_info=True)
-            raise RuntimeError(f"Failed to generate text with Hugging Face model: {e}") from e
+        return generated_texts
 
 
 # # --- Gemini Model (Remains unchanged from previous version) ---
