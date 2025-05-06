@@ -105,7 +105,7 @@ class HuggingFaceModel(Model):
             torch_dtype = torch.bfloat16 if self.__dict__.get("bf16", False) else torch.float16
 
             self._model = AutoModelForCausalLM.from_pretrained(
-                pretrained_model_name_or_path=model_source,
+                pretrained_model_name_or_path=model_name,
                 trust_remote_code=True,
                 torch_dtype=torch_dtype,
                 token=config.HUGGINGFACE_TOKEN,
@@ -117,6 +117,15 @@ class HuggingFaceModel(Model):
                 logger.info(f"Resizing model token embeddings to match tokenizer size: {len(self._tokenizer)}")
                 self._model.resize_token_embeddings(len(self._tokenizer))
                 logger.info("Model token embeddings resized successfully.")
+            
+            if last_checkpoint:
+                logger.info(f"Loading model state from checkpoint: {last_checkpoint}")
+                self._model = PeftModel.from_pretrained(
+                    self._model,
+                    last_checkpoint,
+                    token=config.HUGGINGFACE_TOKEN,
+                )
+                logger.info(f"Model state loaded from checkpoint: {last_checkpoint}")
 
         except Exception as e:
             logger.error(f"Error loading model from {model_source} or resizing embeddings: {e}", exc_info=True)
