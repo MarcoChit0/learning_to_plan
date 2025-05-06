@@ -45,7 +45,7 @@ class Model:
         """
         raise NotImplementedError("Subclasses should implement this method.")
 
-    def decode(self, input_ids: List[int], skip_special_tokens: bool = True) -> str:
+    def decode(self, input_ids: List[int], skip_special_tokens: bool = False) -> str:
         """
         Decodes the input IDs to a string.
         This is a placeholder method and should be implemented in subclasses.
@@ -113,7 +113,7 @@ class HuggingFaceModel(Model):
             logger.info(f"Model loaded successfully from {model_source}.")
 
             # --- Resize embeddings if tokens were added ---
-            if special_tokens_to_add:
+            if self._tokenizer.vocab_size != self._model.get_input_embeddings().weight.shape[0]:
                 logger.info(f"Resizing model token embeddings to match tokenizer size: {len(self._tokenizer)}")
                 self._model.resize_token_embeddings(len(self._tokenizer))
                 logger.info("Model token embeddings resized successfully.")
@@ -131,10 +131,10 @@ class HuggingFaceModel(Model):
             logger.error(f"Error loading model from {model_source} or resizing embeddings: {e}", exc_info=True)
             raise e
 
-    def decode(self, input_ids: List[int], skip_special_tokens: bool = True) -> str:
+    def decode(self, input_ids: List[int], skip_special_tokens: bool = False) -> str:
         return self._tokenizer.decode(
             input_ids,
-            skip_special_tokens=skip_special_tokens,
+            skip_special_tokens=skip_special_tokens
         )
 
     def tokenize(self, examples: List[str], max_length: int = 1024) -> Dict[str, Any]:
@@ -383,8 +383,23 @@ class HuggingFaceModel(Model):
         generated_texts = []
         for output_sequence in outputs:
             generated_tokens = output_sequence[input_length:] if output_sequence.shape[0] >  input_length else torch.tensor([], dtype=torch.long, device=device)
-            decoded_text = self._tokenizer.decode(generated_tokens, skip_special_tokens=True)
-            generated_texts.append(decoded_text.strip())
+            # --- get the plan ---
+            plan_start_idx = next((i for i, token in enumerate(generated_tokens) if token == self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)), None)
+            if plan_start_idx is None:
+                generated_texts.append(f"Generation Error: {config.START_OF_PLAN_TOKEN} not found.")
+                continue
+            plan_end_idx = next((i for i, token in enumerate(generated_tokens) if token == self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)), None)
+            if plan_end_idx is None:
+                generated_texts.append(f"Generation Error: {config.END_OF_PLAN_TOKEN} not found.")
+                continue
+            plan = generated_tokens[plan_start_idx + 1 : plan_end_idx]
+            if plan.shape[0] == 0:
+                generated_texts.append(f"Generation Error: Empty plan generated.")
+                continue
+            # Decode the plan
+            plan_decoded = self.decode(plan, skip_special_tokens=True)
+            # Remove trailing <|plan_end|> token if it exists
+            generated_texts.append(plan_decoded.strip())
         
         if not generated_texts:
             raise RuntimeError("No valid generated texts found.")
