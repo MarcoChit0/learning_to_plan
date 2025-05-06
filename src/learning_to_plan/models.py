@@ -75,15 +75,8 @@ class HuggingFaceModel(Model):
             self._tokenizer = AutoTokenizer.from_pretrained(
                 model_source,
                 trust_remote_code=True,
-                token=config.HUGGINGFACE_TOKEN,
-                # Add padding settings for Causal LM
-                pad_token=kwargs.get("pad_token", "<|endoftext|>"),
-                padding_side=kwargs.get("padding_side", "left")
+                token=config.HUGGINGFACE_TOKEN
             )
-            # Explicitly set pad_token if it's None or not set by default
-            if self._tokenizer.pad_token is None:
-                logger.warning(f"Tokenizer for {model_source} does not have a default pad token. Setting pad_token to eos_token ({self._tokenizer.eos_token}).")
-                self._tokenizer.pad_token = self._tokenizer.eos_token
 
             # --- Add special tokens IF they don't exist ---
             special_tokens_to_add = []
@@ -96,7 +89,6 @@ class HuggingFaceModel(Model):
                 logger.info(f"Added {num_added_tokens} special tokens to tokenizer: {special_tokens_to_add}")
 
             logger.info(f"Tokenizer loaded. Pad token: {self._tokenizer.pad_token}, Padding side: {self._tokenizer.padding_side}")
-            # Store token IDs for easy access later
             PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
             PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
             logger.info(f"Plan Start Token ID: {PLAN_START_TOKEN_ID}, Plan End Token ID: {PLAN_END_TOKEN_ID}")
@@ -110,18 +102,13 @@ class HuggingFaceModel(Model):
 
         # --- Model Loading ---
         try:
-            quantization_config = BitsAndBytesConfig(load_in_8bit=True)  if self.__dict__.get("load_in_8bit", False) else None
             torch_dtype = torch.bfloat16 if self.__dict__.get("bf16", False) else torch.float16
 
-            logger.info(f"Loading model with dtype: {torch_dtype}{', 8 bit quantization.' if quantization_config else '.'}")
-
             self._model = AutoModelForCausalLM.from_pretrained(
-                model_source,
+                pretrained_model_name_or_path=model_source,
                 trust_remote_code=True,
                 torch_dtype=torch_dtype,
                 token=config.HUGGINGFACE_TOKEN,
-                device_map="auto",
-                quantization_config=quantization_config,
             )
             logger.info(f"Model loaded successfully from {model_source}.")
 
@@ -134,11 +121,13 @@ class HuggingFaceModel(Model):
         except Exception as e:
             logger.error(f"Error loading model from {model_source} or resizing embeddings: {e}", exc_info=True)
             raise e
+
     def decode(self, input_ids: List[int], skip_special_tokens: bool = True) -> str:
         return self._tokenizer.decode(
             input_ids,
             skip_special_tokens=skip_special_tokens,
         )
+
     def tokenize(self, examples: List[str], max_length: int = 1024) -> Dict[str, Any]:
             PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
             PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
@@ -194,19 +183,8 @@ class HuggingFaceModel(Model):
             }
 
     def train(self, checkpoint_dir: str, tokenized_train_dataset: datasets.DatasetDict, tokenized_eval_dataset: datasets.DatasetDict, **train_kwargs: Dict[str, Any]) -> None:
-        """
-        Fine-tunes the Hugging Face model using the provided dataset and training arguments.
 
-        Args:
-            checkpoint_dir (str): Directory to save checkpoints and final model.
-            dataset (datasets.DatasetDict): A dictionary containing 'train' and 'validation' datasets.
-                                           Each dataset is expected to have a 'text' column formatted as:
-                                           PROMPT + PLAN_START_TOKEN + PLAN + PLAN_END_TOKEN
-            **train_kwargs (Dict[str, Any]): Dictionary of training configuration parameters
-                                              (e.g., learning_rate, batch_size, num_train_epochs, lora_r, etc.)
-                                              and tokenizer/model settings (e.g., max_seq_length, fp16, bf16).
-        """
-        os.environ["TOKENIZERS_PARALLELISM"] = "false" # Already present, good for avoiding issues.
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
         start_timer = datetime.datetime.now()
         logger.info(f"Training started at {start_timer}.")
 
@@ -222,10 +200,6 @@ class HuggingFaceModel(Model):
                 bias=train_kwargs.get("lora_bias", "none"), # Default LoRA bias
                 task_type="CAUSAL_LM",
             )
-            if train_kwargs.get("load_in_8bit", False): # Check if 8-bit loading was used
-                logger.info("Preparing model for K-bit training (as load_in_8bit was True).")
-                self._model = prepare_model_for_kbit_training(self._model, use_gradient_checkpointing=train_kwargs.get("gradient_checkpointing", False)) # Default gradient checkpointing
-            
             self._model = get_peft_model(self._model, lora_cfg)
         else:
             logger.info("Model is already a PeftModel (likely loaded from checkpoint). Skipping LoRA application.")
@@ -266,11 +240,11 @@ class HuggingFaceModel(Model):
             logging_strategy=train_kwargs.get("logging_strategy", "epoch"),
             eval_strategy=train_kwargs.get("eval_strategy", "epoch"),
             optim=train_kwargs.get("optimizer", "adamw_8bit"),
-            load_best_model_at_end=train_kwargs.get("load_best_model_at_end", True),
-            eval_on_start=train_kwargs.get("eval_on_start", False),
+            # load_best_model_at_end=train_kwargs.get("load_best_model_at_end", True),
+            # eval_on_start=train_kwargs.get("eval_on_start", False),
         )
-
         logger.debug(f"Final TrainingArguments: {training_args.to_dict()}")
+
         # --- Trainer Initialization ---
         trainer = Trainer(
             model=self._model,
@@ -278,7 +252,7 @@ class HuggingFaceModel(Model):
             data_collator=collator,
             train_dataset=tokenized_train_dataset,
             eval_dataset=tokenized_eval_dataset,
-            tokenizer=self._tokenizer,
+            # tokenizer=self._tokenizer,
         )
 
         # --- Start Training ---
