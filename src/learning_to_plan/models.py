@@ -366,6 +366,7 @@ class HuggingFaceModel(Model):
             truncation=True,
             add_special_tokens=False,
             max_length=gen_kwargs.get("max_seq_length", 512),
+            return_tensors="pt",
         ).to(device)
 
         input_length = inputs.input_ids.shape[1]
