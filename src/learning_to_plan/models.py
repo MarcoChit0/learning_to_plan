@@ -249,6 +249,7 @@ class HuggingFaceModel(Model):
             logging_strategy=train_kwargs.get("logging_strategy", "epoch"),
             eval_strategy=train_kwargs.get("eval_strategy", "epoch"),
             optim=train_kwargs.get("optimizer", "adamw_8bit"),
+            gradient_checkpointing=train_kwargs.get("gradient_checkpointing", True),
             # load_best_model_at_end=train_kwargs.get("load_best_model_at_end", True),
             # eval_on_start=train_kwargs.get("eval_on_start", False),
         )
@@ -261,7 +262,6 @@ class HuggingFaceModel(Model):
             data_collator=collator,
             train_dataset=tokenized_train_dataset,
             eval_dataset=tokenized_eval_dataset,
-            # tokenizer=self._tokenizer,
         )
 
         # --- Start Training ---
