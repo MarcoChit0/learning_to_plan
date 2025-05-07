@@ -505,16 +505,25 @@ class HuggingFaceModel(Model):
         device = next(self._model.parameters()).device
 
         prompt_type = "cot" if len(cot_examples) > 0 else "io"
-        prompt = task.get_prompt(with_plan=False, cot_examples=cot_examples)
-
-        inputs = self._tokenizer(
-            prompt,
-            padding="max_length",
-            truncation=True,
-            add_special_tokens=False,
-            max_length=generation_kwargs.get("max_seq_length", 512),
-            return_tensors="pt",
-        ).to(device)
+        # prompt = task.get_prompt(with_plan=False, cot_examples=cot_examples)
+        # TODO: Add the cot_examples to the prompt
+        prompt_components = task.get_prompt_componenets()
+        generation_messages: list[dict[str, str]] = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt_components["instruction"] + "\n" + prompt_components["input"]}
+        ]
+        
+        try:
+            inputs = self._tokenizer.apply_chat_template(
+                generation_messages,
+                add_generation_prompt=True,
+                padding=False,
+                truncation=True,
+                max_length=generation_kwargs.get("max_seq_length", 512),
+                return_tensors="pt"
+            ).to(device)
+        except Exception as e:
+            raise ValueError(f"Error tokenizing input for generation of task {task}: {e}") from e
 
         input_length = inputs.input_ids.shape[1]
 

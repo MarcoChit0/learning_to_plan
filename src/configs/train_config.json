@@ -22,5 +22,5 @@
     "lora_alpha": 1024,
     "load_the_best_model_at_end": true,
     "eval_on_start": false,
-    "lora_dropout": 0.2
+    "lora_dropout": 0.1
 }
