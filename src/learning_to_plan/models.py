@@ -287,10 +287,13 @@ class HuggingFaceModel(Model):
         # Convert tensors to lists for subsequent Python logic
         # This ensures tokenized_outputs is a dictionary with list values
         processed_tokenized_outputs = {
-            "input_ids": tokenized_encoding_batch["input_ids"].tolist(),
-            "attention_mask": tokenized_encoding_batch["attention_mask"].tolist()
+            "input_ids": [],
+            "attention_mask": [],
+            "labels": []
         }
 
+        attention_mask_batch = []
+        input_ids_batch = []
         labels_batch = []
         for i in range(dataset_len): # Iterate using dataset_len or len(processed_tokenized_outputs["input_ids"])
             # Tokenize just the user part (system + user messages) to find its length
@@ -329,8 +332,12 @@ class HuggingFaceModel(Model):
                         instance_labels[j] = -100
             
             labels_batch.append(instance_labels)
+            input_ids_batch.append(current_example_input_ids)
+            attention_mask_batch.append(tokenized_encoding_batch["attention_mask"][i])
         
         processed_tokenized_outputs["labels"] = labels_batch
+        processed_tokenized_outputs["input_ids"] = input_ids_batch
+        processed_tokenized_outputs["attention_mask"] = attention_mask_batch
         return processed_tokenized_outputs
 
     def find_all_linear_names(self):
