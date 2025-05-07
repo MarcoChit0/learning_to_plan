@@ -276,13 +276,16 @@ class HuggingFaceModel(Model):
         # Force PyTorch tensor output to ensure BatchEncoding (dict-like) is returned
         tokenized_encoding_batch = self._tokenizer.apply_chat_template(
             batch_messages,
-            add_generation_prompt=False,  # Important for training: assistant part is part of the input
+            add_generation_prompt=False,
             padding="max_length",
             max_length=max_seq_length,
             truncation=True,
-            return_tensors="pt",  # CHANGED: Force PyTorch tensor output
+            return_tensors="pt",
             return_attention_mask=True
         )
+        print(f"Tokenized encoding batch: {tokenized_encoding_batch}")
+        print(type(tokenized_encoding_batch))
+        print(tokenized_encoding_batch.shape)
 
         # Convert tensors to lists for subsequent Python logic
         # This ensures tokenized_outputs is a dictionary with list values
