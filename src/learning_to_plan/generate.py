@@ -77,23 +77,17 @@ def generate_batch(
                 )
             )
         try:
-            prompt = t.get_prompt(with_plan=False, cot_examples=cot_examples)
-            generated_plans = model.generate(prompt, **generation_kwargs)
-            # TODO: FOR NOW, JUST PRINT. LATER, ADD THE GENERATED PLAN TO THE MODEL
-            # (MODEL, TASK, PROMPT_TYPE) -> LIST OF PLANS
-            print("\n----------------")
-            print(prompt)
-            if len(generated_plans) > 0:
-                print("\n----------------")
-                print(generated_plans[0])
+            model.generate(
+                task=t,
+                cot_examples=cot_examples,
+                **generation_kwargs
+            )
+            logger.info(f"Task prompt:\n{t.get_prompt(with_plan=False, cot_examples=cot_examples)}")
+            logger.info(f"Model plans:\n{model._generated_plans}")
         except Exception as e:
             logger.error(f"Error generating plan for task {t._id} with model {model_name}: {e}", exc_info=True) # Use logger
-            generated_plans = [f"Generation Error: {e}"]
-
-        
 
     logger.info(f"Plan generation loop completed for {len(tasks)} instances.")
 
-    
     end_time = datetime.datetime.now()
     logger.info(f"Generation batch finished at {end_time.strftime('%Y-%m-%d %H:%M:%S')}. Total time: {end_time - start_time}") # Use logger

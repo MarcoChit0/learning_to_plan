@@ -27,7 +27,8 @@ def run_training_procedure(model_name, domain,  **train_kwargs):
         validation_tasks:set[task.Task] = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.VALIDATION)
 
         # TODO: REMOVE THIS LATER
-        train_tasks = set(sorted(train_tasks)[:10])
+        train_tasks = set(sorted(train_tasks)[:1000])
+        validation_tasks = set(sorted(validation_tasks)[:100])
 
         # Convert the tasks to prompts
         training_prompts : list[str]  = [t.get_prompt(with_plan=True) for t in train_tasks]
@@ -49,15 +50,9 @@ def run_training_procedure(model_name, domain,  **train_kwargs):
 
 
         # Create DatasetDict
-        # TODO: UNCOMMENT THIS LATER
-        # dataset = datasets.DatasetDict({
-        #     'train': train_dataset,
-        #     'validation': validation_dataset
-        # })
-        # logger.info(f"Number of validation examples: {len(dataset['validation'])}")
         dataset = datasets.DatasetDict({
             'train': train_dataset,
-            'validation': train_dataset # TODO: REMOVE THIS LATER
+            'validation': validation_dataset
         })
         logger.info(f"Dataset converted to DatasetDict successfully: {dataset}")
         logger.info(f"Number of training examples: {len(dataset['train'])}")

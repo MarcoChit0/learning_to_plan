@@ -12,7 +12,7 @@ from transformers import (
 import os
 from transformers.trainer_utils import get_last_checkpoint
 from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
-from learning_to_plan import config
+from learning_to_plan import config, task
 import torch
 import datasets
 import numpy as np
@@ -20,11 +20,44 @@ import numpy as np
 logger = config.get_logger(__name__)
 
 class Model:
+    VALID_PROMPT_TYPES = ["io", "cot"]
     def __init__(self, model_name, **kwargs):
         self._model_name = model_name
         self.__dict__.update(kwargs)
+        """
+        task:task.Task : { # Task object for which the plan was generated
+            prompt_type:str : { # Prompt type used for generation, e.g., "io", "cot", ...
+                "raw" : list[str], # List of raw generated plans
+                "processed" : list[str] # List of processed generated plans
+            }
+        }
+        """
+        self._generated_plans:dict[task.Task, dict[str, Any]] = {}
+    
+    def add_generated_plans(self, task: task.Task, prompt_type: str, raw_plans:list[str], processed_plans:list[str]=[]) -> None:
+        """
+            Adds generated plans to the internal dictionary.
+            This method is called after generating plans for a task.
 
-    def generate(self, prompt: str, **generation_kwargs) -> str:
+            Parameters:
+                task: The task object for which the plans were generated.
+                prompt_type: The type of prompt used for generation (e.g., "io", "cot").
+                outputs: The generated outputs from the model.
+                input_length: The length of the input tokens.
+                device: The device on which the model is running (e.g., "cuda", "cpu").
+        """
+        if task not in self._generated_plans:
+            self._generated_plans[task] = {}
+
+        if prompt_type not in self.VALID_PROMPT_TYPES:
+            raise ValueError(f"Invalid prompt type: {prompt_type}. Must be in [{', '.join(self.VALID_PROMPT_TYPES)}].")
+        self._generated_plans[task][prompt_type] = {
+            "raw": raw_plans,
+            "processed": processed_plans,
+        }
+       
+
+    def generate(self, task:task.Task, cot_examples:set[task.Task]=set(), **generation_kwargs) -> None:
         """
         Generates a plan based on the provided prompt.
         This is a placeholder method and should be implemented in subclasses.
@@ -51,6 +84,7 @@ class Model:
         This is a placeholder method and should be implemented in subclasses.
         """
         raise NotImplementedError("Subclasses should implement this method.")
+    
 
 class HuggingFaceModel(Model):
     def __init__(self, model_name, checkpoint_dir: Optional[str] = None, **kwargs):
@@ -326,7 +360,7 @@ class HuggingFaceModel(Model):
             logger.error(f"Error during training metrics logging or final summary: {e}", exc_info=True)
             # Don't re-raise here if training itself was successful.
 
-    def generate(self, prompt: str, **generation_kwargs) -> list[str]:
+    def generate(self, task: task.Task, cot_examples:set[task.Task]=set(), **generation_kwargs) -> None:
         """
         Generates text based on a prompt using the Hugging Face model.
 
@@ -358,6 +392,9 @@ class HuggingFaceModel(Model):
 
         device = next(self._model.parameters()).device
 
+        prompt_type = "cot" if len(cot_examples) > 0 else "io"
+        prompt = task.get_prompt(with_plan=False, cot_examples=cot_examples)
+
         inputs = self._tokenizer(
             prompt,
             padding="max_length",
@@ -379,45 +416,35 @@ class HuggingFaceModel(Model):
                     **gen_kwargs
                 )
         
-        # --- print input & output tokens ids and respective text ---
-        logger.debug(f"Input IDs: {inputs.input_ids}...")
-        logger.debug(f"Input Text: {self.decode(inputs.input_ids[0], skip_special_tokens=False)}...")  
-        logger.debug(f"Input Length: {inputs.input_ids.shape[1]} tokens.")
-
-        logger.debug(f"Output IDs: {outputs}...")
-        logger.debug(f"Output Text: {self.decode(outputs[0], skip_special_tokens=False)}...")
-        logger.debug(f"Output Length: {outputs.shape[1]} tokens.")
-        logger.debug(f"Output Text (after input length): {self.decode(outputs[0][input_length:], skip_special_tokens=False)}...")
         # --- Process Outputs ---
-        generated_texts = []
-        for output_sequence in outputs:
-            generated_tokens = (output_sequence[input_length:] if output_sequence.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device))
+        processed_outputs = []
+        raw_outputs = []
+        for output in outputs:
+            generated_tokens = (output[input_length:] if output.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device))
+            generated_text = self._tokenizer.decode(generated_tokens, skip_special_tokens=True)
+            raw_outputs.append(generated_text)
+            logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: {generated_text}")
+
+            # --- Process Plan ---
+            START_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
+            END_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
             
-            # --- Identify the indices for plan boundaries ---
-            plan_start_idx = next((i for i, token in enumerate(generated_tokens) if token == self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)), None)
-            if plan_start_idx is None:
-                generated_texts.append(f"Generation Error: {config.START_OF_PLAN_TOKEN} not found.")
-                continue
-
-            plan_end_idx = next(
-            (i for i, token in enumerate(generated_tokens) if token == self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)),None,)
-            if plan_end_idx is None:
-                generated_texts.append(f"Generation Error: {config.END_OF_PLAN_TOKEN} not found.")
-                continue
-
-            # --- Remove everything between (and including) the special tokens ---
-            remaining_tokens = torch.cat((generated_tokens[:plan_start_idx], generated_tokens[plan_end_idx + 1:]))
-            if remaining_tokens.shape[0] == 0:
-                generated_texts.append("Generation Error: No text left after removing plan.")
-                continue
-
-            decoded_text = self.decode(remaining_tokens, skip_special_tokens=True)
-            generated_texts.append(decoded_text.strip())
-        
-        if not generated_texts:
-            raise RuntimeError("No valid generated texts found.")
-
-        return generated_texts
+            start_of_plan_idx = next((i for i, token in enumerate(generated_tokens) if token == START_OF_PLAN_TOKEN_ID), None)
+            if start_of_plan_idx:
+                end_of_plan_idx = next((i for i, token in enumerate(generated_tokens[start_of_plan_idx:]) if token == END_OF_PLAN_TOKEN_ID), None)
+                if end_of_plan_idx:
+                    plan_tokens = generated_tokens[start_of_plan_idx:end_of_plan_idx + 1]
+                    plan_text = self._tokenizer.decode(plan_tokens, skip_special_tokens=True)
+                    processed_outputs.append(plan_text)
+                    logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: {plan_text}")
+                else:
+                    processed_outputs.append("Generation Error: No end of plan token found.")
+                    logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: No end of plan token found in output tokens [{generated_tokens[:50]}...]")
+            else:
+                processed_outputs.append("Generation Error: No start of plan token found.")
+                logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: No start of plan token found in output tokens [{generated_tokens[:50]}...]")
+        self.add_generated_plans(task, prompt_type, raw_outputs, processed_outputs)
+        logger.info(f"Generated {len(processed_outputs)} plans for task {task._id} with prompt type {prompt_type}.")
 
 
 # # --- Gemini Model (Remains unchanged from previous version) ---
