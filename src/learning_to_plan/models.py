@@ -232,64 +232,106 @@ class HuggingFaceModel(Model):
                 "attention_mask": batch_attention_mask,
             }
 
-    def tokenize_chat(self, examples, max_seq_length: int = 1024) -> Dict[str, Any]:
+    def tokenize_chat(self, examples: Dict[str, List[str]], max_seq_length: int = 1024) -> Dict[str, Any]:
         """
-        Parameters:
-            examples: A list of strings to be tokenized.
-
-            Should have instruction, input and output
+        Tokenizes a batch of examples using the chat template.
+        'examples' is a dictionary where keys like "instruction", "input", "output"
+        hold lists of strings (one string per example in the batch).
         """
         dataset_len = len(examples["instruction"])
-        assert dataset_len == len(examples["input"]) == len(examples["output"]), f"Dataset length mismatch: {dataset_len} != {len(examples['input'])} != {len(examples['output'])}"
-        batch_messages:list[list[dict[any, any]]] = []
-        batch_user_part_messages:list[list[dict[any, any]]] = []
-        batch_assistant_part_messages:list[list[dict[any, any]]] = []
-        for i in range(dataset_len):
-            batch_user_part_messages.append([
-                {"role":"system", "content": "You are a helpful assistant."},
-                {"role":"user", "content": examples["instruction"][i] + "\n" + examples["input"][i]},                
-            ])
-
-            batch_assistant_part_messages.append([
-                {"role":"assistant", "content": examples["output"][i]},
-            ])
-            batch_messages.append(batch_user_part_messages[-1] + batch_assistant_part_messages[-1])
+        if not (dataset_len == len(examples["input"]) == len(examples["output"])):
+            logger.error(f"Dataset length mismatch: instruction({len(examples['instruction'])}) != input({len(examples['input'])}) != output({len(examples['output'])})")
+            # Optionally, raise an error or handle this case (e.g., by taking the minimum length)
+            # For now, let's assume this is an error condition if lengths don't match.
+            raise ValueError("Instruction, input, and output lists must have the same length.")
         
-        tokenized_outputs = self._tokenizer.apply_chat_template(
+        if dataset_len == 0:
+            logger.warning("tokenize_chat received an empty batch of examples.")
+            return {"input_ids": [], "attention_mask": [], "labels": []}
+
+
+        batch_messages: List[List[Dict[str, str]]] = []
+        batch_user_part_messages_for_len_calc: List[List[Dict[str, str]]] = [] # For length calculation
+
+        for i in range(dataset_len):
+            user_content = examples["instruction"][i] + "\n" + examples["input"][i]
+            assistant_content = examples["output"][i]
+            
+            # For calculating length of user part + system prompt
+            user_part_conversation = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": user_content},
+            ]
+            batch_user_part_messages_for_len_calc.append(user_part_conversation)
+
+            # Full conversation for tokenization
+            full_conversation = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": user_content},
+                {"role": "assistant", "content": assistant_content},
+            ]
+            batch_messages.append(full_conversation)
+        
+        # Tokenize the full conversations for training
+        # Force PyTorch tensor output to ensure BatchEncoding (dict-like) is returned
+        tokenized_encoding_batch = self._tokenizer.apply_chat_template(
             batch_messages,
-            add_generation_prompt=False,
+            add_generation_prompt=False,  # Important for training: assistant part is part of the input
             padding="max_length",
             max_length=max_seq_length,
             truncation=True,
-            return_tensors=None,
+            return_tensors="pt",  # CHANGED: Force PyTorch tensor output
             return_attention_mask=True
         )
 
-        labels = []
-        for i in range(len(tokenized_outputs["input_ids"])):
-            tokenized_user_part_messages = self._tokenizer.apply_chat_template(
-                batch_user_part_messages[i],
-                add_generation_prompt=True,
-                padding=False,
-                truncation=False,
-                return_tensors=None,
-                return_attention_mask=False
+        # Convert tensors to lists for subsequent Python logic
+        # This ensures tokenized_outputs is a dictionary with list values
+        processed_tokenized_outputs = {
+            "input_ids": tokenized_encoding_batch["input_ids"].tolist(),
+            "attention_mask": tokenized_encoding_batch["attention_mask"].tolist()
+        }
+
+        labels_batch = []
+        for i in range(dataset_len): # Iterate using dataset_len or len(processed_tokenized_outputs["input_ids"])
+            # Tokenize just the user part (system + user messages) to find its length
+            # This call returns a list of token IDs directly
+            user_part_token_ids = self._tokenizer.apply_chat_template(
+                batch_user_part_messages_for_len_calc[i], # Process one conversation at a time
+                add_generation_prompt=True, # Crucial: includes the prompt for the assistant
+                padding=False,              # No padding needed for length calculation
+                truncation=False,           # No truncation needed for length calculation
+                return_tensors=None,        # Returns list of IDs
+                return_attention_mask=False # No attention mask needed here
             )
-            tokenized_user_part_messages_len = len(tokenized_user_part_messages["input_ids"])
-            instance_labels = [-100] * len(tokenized_outputs["input_ids"][i])
+            len_user_prompt_and_system = len(user_part_token_ids)
 
-            if tokenized_user_part_messages_len < len(instance_labels):
-                instance_labels[tokenized_user_part_messages_len:] = tokenized_outputs["input_ids"][i][tokenized_user_part_messages_len:]
+            current_example_input_ids = processed_tokenized_outputs["input_ids"][i]
+            instance_labels = [-100] * len(current_example_input_ids) # Initialize all with -100
 
-            if self._tokenizer.pad_token is not None:
-                for j, token_id in enumerate(tokenized_outputs["input_ids"][i]):
+            # Label only the assistant's response part
+            # Make sure not to label beyond the actual sequence length if truncated
+            # and ensure user_part_len doesn't exceed total length
+            if len_user_prompt_and_system < len(current_example_input_ids):
+                start_of_assistant_response = len_user_prompt_and_system
+                # Copy relevant input_ids to labels for the assistant's part
+                for j in range(start_of_assistant_response, len(current_example_input_ids)):
+                    # Only label if it's not a pad token
+                    if current_example_input_ids[j] != self._tokenizer.pad_token_id:
+                         instance_labels[j] = current_example_input_ids[j]
+                    else: # If it's a pad token, ensure label is -100
+                        instance_labels[j] = -100 
+            
+            # Explicitly set labels for pad tokens to -100, even if they fell into assistant part
+            # This is a bit redundant if the above loop handles it, but ensures correctness
+            if self._tokenizer.pad_token_id is not None:
+                for j, token_id in enumerate(current_example_input_ids):
                     if token_id == self._tokenizer.pad_token_id:
                         instance_labels[j] = -100
-
-            labels.append(instance_labels)
+            
+            labels_batch.append(instance_labels)
         
-        tokenized_outputs["labels"] = labels
-        return tokenized_outputs
+        processed_tokenized_outputs["labels"] = labels_batch
+        return processed_tokenized_outputs
 
     def find_all_linear_names(self):
         """
@@ -324,7 +366,7 @@ class HuggingFaceModel(Model):
             lora_cfg = LoraConfig(
                 r=lora_r,
                 lora_alpha=train_kwargs.get("lora_alpha", lora_r * 2), # Default LoRA alpha
-                target_modules=train_kwargs.get("target_modules", self.find_all_linear_names()),
+                # target_modules=train_kwargs.get("target_modules", self.find_all_linear_names()),
                 lora_dropout=train_kwargs.get("lora_dropout", 0.05),
                 bias=train_kwargs.get("lora_bias", "none"),
                 task_type="CAUSAL_LM",
