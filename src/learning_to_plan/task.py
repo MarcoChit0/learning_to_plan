@@ -102,6 +102,7 @@ class Task(abc.ABC):
             prompt += domain_description
             prompt += instance_nl
             if with_plan and self._pddl_plan:
+                prompt += "My plan is as follows:\n"
                 prompt += config.START_OF_PLAN_TOKEN + "\n"
                 prompt += self._converter.pddl_plan_to_natural_language(pddl_plan=self._pddl_plan)
                 prompt += config.END_OF_PLAN_TOKEN
