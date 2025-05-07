@@ -78,6 +78,13 @@ class Model:
         """
         raise NotImplementedError("Subclasses should implement this method.")
 
+    def tokenize_chat(self, examples, max_seq_length: int = 1024) -> Dict[str, Any]:
+        """
+        Tokenizes the input examples for chat-based models.
+        This is a placeholder method and should be implemented in subclasses.
+        """
+        raise NotImplementedError("Subclasses should implement this method.")
+
     def decode(self, input_ids: List[int], skip_special_tokens: bool = False) -> str:
         """
         Decodes the input IDs to a string.
@@ -224,6 +231,66 @@ class HuggingFaceModel(Model):
                 "labels": batch_labels,
                 "attention_mask": batch_attention_mask,
             }
+
+    def tokenize_chat(self, examples, max_seq_length: int = 1024) -> Dict[str, Any]:
+        """
+        Parameters:
+            examples: A list of strings to be tokenized.
+
+            Should have instruction, input and output
+        """
+        dataset_len = len(examples["instruction"])
+        assert dataset_len == len(examples["input"]) == len(examples["output"]), f"Dataset length mismatch: {dataset_len} != {len(examples['input'])} != {len(examples['output'])}"
+        batch_messages:list[list[dict[any, any]]] = []
+        batch_user_part_messages:list[list[dict[any, any]]] = []
+        batch_assistant_part_messages:list[list[dict[any, any]]] = []
+        for i in range(dataset_len):
+            batch_user_part_messages.append([
+                {"role":"system", "content": "You are a helpful assistant."},
+                {"role":"user", "content": examples["instruction"][i] + "\n" + examples["input"][i]},                
+            ])
+
+            batch_assistant_part_messages.append([
+                {"role":"assistant", "content": examples["output"][i]},
+            ])
+            batch_messages.append(batch_user_part_messages[-1] + batch_assistant_part_messages[-1])
+        
+        tokenized_outputs = self._tokenizer.apply_chat_template(
+            batch_messages,
+            add_generation_prompt=False,
+            padding="max_length",
+            max_length=max_seq_length,
+            truncation=True,
+            return_tensors=None,
+            return_attention_mask=True
+        )
+
+        labels = []
+        for i in range(len(tokenized_outputs["input_ids"])):
+            tokenized_user_part_messages = self._tokenizer.apply_chat_template(
+                batch_user_part_messages[i],
+                add_generation_prompt=True,
+                padding=False,
+                truncation=False,
+                return_tensors=None,
+                return_attention_mask=False
+            )
+            tokenized_user_part_messages_len = len(tokenized_user_part_messages["input_ids"])
+            instance_labels = [-100] * len(tokenized_outputs["input_ids"][i])
+
+            if tokenized_user_part_messages_len < len(instance_labels):
+                instance_labels[tokenized_user_part_messages_len:] = tokenized_outputs["input_ids"][i][tokenized_user_part_messages_len:]
+
+            if self._tokenizer.pad_token is not None:
+                for j, token_id in enumerate(tokenized_outputs["input_ids"][i]):
+                    if token_id == self._tokenizer.pad_token_id:
+                        instance_labels[j] = -100
+
+            labels.append(instance_labels)
+        
+        tokenized_outputs["labels"] = labels
+        return tokenized_outputs
+
     def find_all_linear_names(self):
         """
         Finds all linear layer names in the model for use in LoRA training.

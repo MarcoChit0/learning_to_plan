@@ -111,13 +111,14 @@ class Task(abc.ABC):
         except Exception as e:
             raise Exception(f"An error occurred while building the prompt: {e}")
 
-    def get_conversation(self, with_plan: bool = True) -> list[dict[str, str]]:
-        conversation = []
-        prompt = self._converter._domain_description_in_natural_language + self._converter.pddl_instance_to_natural_language(pddl_instance=self.read_instance())
-        conversation.append({"role": "user", "content": prompt})
-        if with_plan and self._pddl_plan:
-            conversation.append({"role": "assistant", "content": config.START_OF_PLAN_TOKEN + "\n" + self._converter.pddl_plan_to_natural_language(pddl_plan=self._pddl_plan) + config.END_OF_PLAN_TOKEN})
-        return conversation
+    def get_prompt_componenets(self) -> dict[str, str]:
+        domain_description = self._converter._domain_description_in_natural_language
+        instance_nl = self._converter.pddl_instance_to_natural_language(pddl_instance=self.read_instance())
+        if self._pddl_plan:
+            plan_nl = self._converter.pddl_plan_to_natural_language(pddl_plan=self._pddl_plan)
+        else: 
+            raise ValueError(f"No plan available to convert to natural language for the task {self}.")
+        return {"instruction": domain_description.strip(), "input": instance_nl.strip(), "output": plan_nl.strip()}
 
     def to_json(self):
         try:

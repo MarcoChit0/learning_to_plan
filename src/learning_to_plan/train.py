@@ -31,23 +31,19 @@ def run_training_procedure(model_name, domain,  **train_kwargs):
         validation_tasks = set(sorted(validation_tasks)[:100])
 
         # Convert the tasks to prompts
-        training_prompts : list[str]  = [t.get_prompt(with_plan=True) for t in train_tasks]
-        with open(os.path.join(model_checkpoint_dir, "training_prompts.txt"), "w") as f:
-            for prompt in training_prompts:
-                f.write(prompt + "\n")
-        logger.info(f"Training prompts created with {len(training_prompts)} examples.")
-        validation_prompts : list[str]  = [t.get_prompt(with_plan=True) for t in validation_tasks]
-        logger.info(f"Validation prompts created with {len(validation_prompts)} examples.")
+        training_chats = [t.get_prompt_componenets() for t in train_tasks]
+        logger.info(f"Training dataset loaded with {len(training_chats)} tasks.")
+        validation_chats = [t.get_prompt_componenets() for t in validation_tasks]
+        logger.info(f"Validation dataset loaded with {len(validation_chats)} tasks.")
 
         # Create datasets.Dataset objects
-        train_dataset = datasets.Dataset.from_dict({"text": training_prompts})
+        train_dataset = datasets.Dataset.from_list(training_chats)
         logger.info(f"Training dataset created with {len(train_dataset)} examples.")
-        validation_dataset = datasets.Dataset.from_dict({"text": validation_prompts})
+        validation_dataset = datasets.Dataset.from_list(validation_chats)
         logger.info(f"Validation dataset created with {len(validation_dataset)} examples.")
         
         # Remove the tasks and prompts from memory
-        del train_tasks, validation_tasks, training_prompts, validation_prompts
-
+        del train_tasks, validation_tasks, training_chats, validation_chats
 
         # Create DatasetDict
         dataset = datasets.DatasetDict({
@@ -65,15 +61,15 @@ def run_training_procedure(model_name, domain,  **train_kwargs):
     # --- Tokenize and Process Dataset ---
     try:
         tokenized_train_dataset = dataset['train'].map(
-            model.tokenize,
+            model.tokenize_chat,
             batched=True,
-            remove_columns=["text"],
+            remove_columns=["instruction", "input", "output"],
             desc="Processing training dataset",
         )
         tokenized_eval_dataset = dataset['validation'].map(
-            model.tokenize,
+            model.tokenize_chat,
             batched=True,
-            remove_columns=["text"],
+            remove_columns=["instruction", "input", "output"],
             desc="Processing validation dataset",
         )
         logger.info("Dataset tokenization and processing complete.")
