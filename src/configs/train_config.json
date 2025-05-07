@@ -20,6 +20,5 @@
     "load_in_8bit": false,
     "lora_r": 8,
     "load_the_best_model_at_end": true,
-    "eval_on_start": false,
-    "gradient_checkpointing": true
+    "eval_on_start": false
 }
