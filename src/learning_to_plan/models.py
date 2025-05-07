@@ -541,9 +541,7 @@ class HuggingFaceModel(Model):
                         **gen_kwargs
                     )
             except Exception as e_generate:
-                logger.error(f"Error during model.generate() for task {task_obj._id}: {e_generate}", exc_info=True)
-                self.add_generated_plans(task_obj, prompt_type, [f"Error: Model generation failed: {e_generate}"], [f"Error: Model generation failed: {e_generate}"])
-                return
+                raise RuntimeError(f"Error during model.generate: {e_generate}") from e_generate
         
         # --- Process Outputs ---
         processed_outputs = []

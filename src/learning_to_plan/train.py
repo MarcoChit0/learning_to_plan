@@ -26,10 +26,6 @@ def run_training_procedure(model_name, domain,  **train_kwargs):
         train_tasks:set[task.Task] = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.TRAIN)
         validation_tasks:set[task.Task] = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.VALIDATION)
 
-        # TODO: REMOVE THIS LATER
-        train_tasks = set(sorted(train_tasks)[:1000])
-        validation_tasks = set(sorted(validation_tasks)[:100])
-
         # Convert the tasks to prompts
         training_chats = [t.get_prompt_componenets() for t in train_tasks]
         logger.info(f"Training dataset loaded with {len(training_chats)} tasks.")

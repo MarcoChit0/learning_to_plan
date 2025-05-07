@@ -19,7 +19,7 @@
     "bf16": true,
     "load_in_8bit": false,
     "lora_r": 256,
-    "lora_alpha": 1024,
+    "lora_alpha": 512,
     "load_the_best_model_at_end": true,
     "eval_on_start": false,
     "lora_dropout": 0.1
