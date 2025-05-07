@@ -224,6 +224,25 @@ class HuggingFaceModel(Model):
                 "labels": batch_labels,
                 "attention_mask": batch_attention_mask,
             }
+    def find_all_linear_names(self):
+        """
+        Finds all linear layer names in the model for use in LoRA training.
+
+        Returns:
+            A list of layer names that are linear layers, excluding the final prediction head ('lm_head').
+        """
+        lora_module_names = set()
+        target_cls = torch.nn.Linear  # Target class for LoRA training
+
+        for name, module in self._model.named_modules():
+            if isinstance(module, target_cls):
+                lora_module_names.add(name)
+
+        # Exclude the final prediction head ('lm_head') if present
+        lora_module_names = {name for name in lora_module_names if 'lm_head' not in name}
+
+        return list(lora_module_names)
+
 
     def train(self, checkpoint_dir: str, tokenized_train_dataset: datasets.DatasetDict, tokenized_eval_dataset: datasets.DatasetDict, **train_kwargs: Dict[str, Any]) -> None:
 
@@ -238,9 +257,9 @@ class HuggingFaceModel(Model):
             lora_cfg = LoraConfig(
                 r=lora_r,
                 lora_alpha=train_kwargs.get("lora_alpha", lora_r * 2), # Default LoRA alpha
-                target_modules=train_kwargs.get("target_modules", ["q_proj", "k_proj", "v_proj", "o_proj", "up_proj", "down_proj", "gate_proj"]),
-                lora_dropout=train_kwargs.get("lora_dropout", 0.05), # Default LoRA dropout
-                bias=train_kwargs.get("lora_bias", "none"), # Default LoRA bias
+                target_modules=train_kwargs.get("target_modules", self.find_all_linear_names()),
+                lora_dropout=train_kwargs.get("lora_dropout", 0.05),
+                bias=train_kwargs.get("lora_bias", "none"),
                 task_type="CAUSAL_LM",
             )
             self._model = get_peft_model(self._model, lora_cfg)
