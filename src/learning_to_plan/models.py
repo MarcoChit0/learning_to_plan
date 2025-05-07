@@ -350,7 +350,6 @@ class HuggingFaceModel(Model):
             "eos_token_id": self._tokenizer.eos_token_id,
             "pad_token_id": self._tokenizer.pad_token_id,
             "num_return_sequences": generation_kwargs.get("num_return_sequences", 1),
-            "max_seq_length": generation_kwargs.get("max_seq_length", 512),
         }
         gen_kwargs = {k: v for k, v in gen_kwargs.items() if v is not None}
         logger.debug(f"Generation parameters: {gen_kwargs}")
@@ -365,7 +364,7 @@ class HuggingFaceModel(Model):
             padding="max_length",
             truncation=True,
             add_special_tokens=False,
-            max_length=gen_kwargs.get("max_seq_length", 512),
+            max_length=generation_kwargs.get("max_seq_length", 512),
             return_tensors="pt",
         ).to(device)
 
