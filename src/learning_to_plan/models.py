@@ -516,26 +516,34 @@ class HuggingFaceModel(Model):
         try:
             inputs = self._tokenizer.apply_chat_template(
                 generation_messages,
-                add_generation_prompt=True,
-                padding=False,
-                truncation=True,
-                max_length=generation_kwargs.get("max_seq_length", 512),
-                return_tensors="pt"
+                add_generation_prompt=True, # IMPORTANT: Adds the prompt for the assistant to start generating
+                padding=False,              # No padding for single instance generation
+                truncation=True,            # Truncate if prompt is too long
+                max_length=generation_kwargs.get("max_prompt_length", 2048), # Max length for the prompt part
+                return_tensors="pt",
+                return_attention_mask=True  # Good practice to return attention mask
             ).to(device)
         except Exception as e:
-            raise ValueError(f"Error tokenizing input for generation of task {task}: {e}") from e
+            raise ValueError(f"Error during tokenizer.apply_chat_template: {e}") from e
 
         input_length = inputs.input_ids.shape[1]
 
         # --- Perform Generation ---
         with torch.no_grad():
-            dtype = getattr(self._model, 'dtype', torch.float16)
+            dtype = getattr(self._model, 'dtype', torch.float16) # Get model's dtype
             use_autocast = (device.type == 'cuda') and dtype in [torch.float16, torch.bfloat16]
-            with torch.autocast(device_type=device.type, dtype=dtype, enabled=use_autocast):
-                outputs = self._model.generate(
-                    **inputs,
-                    **gen_kwargs
-                )
+            
+            try:
+                with torch.autocast(device_type=device.type, dtype=dtype, enabled=use_autocast):
+                    outputs = self._model.generate(
+                        input_ids=inputs.input_ids,
+                        attention_mask=inputs.attention_mask, # Pass attention_mask
+                        **gen_kwargs
+                    )
+            except Exception as e_generate:
+                logger.error(f"Error during model.generate() for task {task_obj._id}: {e_generate}", exc_info=True)
+                self.add_generated_plans(task_obj, prompt_type, [f"Error: Model generation failed: {e_generate}"], [f"Error: Model generation failed: {e_generate}"])
+                return
         
         # --- Process Outputs ---
         processed_outputs = []
