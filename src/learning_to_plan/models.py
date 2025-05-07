@@ -281,66 +281,40 @@ class HuggingFaceModel(Model):
             max_length=max_seq_length,
             truncation=True,
             return_tensors="pt",
-            return_attention_mask=True
+            return_attention_mask=True,
+            return_dict=True
         )
-        print(f"Tokenized encoding batch: {tokenized_encoding_batch}")
-        print(type(tokenized_encoding_batch))
-        print(tokenized_encoding_batch.shape)
 
         # Convert tensors to lists for subsequent Python logic
-        # This ensures tokenized_outputs is a dictionary with list values
         processed_tokenized_outputs = {
-            "input_ids": [],
-            "attention_mask": [],
+            "input_ids": tokenized_encoding_batch["input_ids"].tolist(),
+            "attention_mask": tokenized_encoding_batch["attention_mask"].tolist(),
             "labels": []
         }
 
-        attention_mask_batch = []
-        input_ids_batch = []
         labels_batch = []
-        for i in range(dataset_len): # Iterate using dataset_len or len(processed_tokenized_outputs["input_ids"])
-            # Tokenize just the user part (system + user messages) to find its length
-            # This call returns a list of token IDs directly
-            user_part_token_ids = self._tokenizer.apply_chat_template(
-                batch_user_part_messages_for_len_calc[i], # Process one conversation at a time
-                add_generation_prompt=True, # Crucial: includes the prompt for the assistant
-                padding=False,              # No padding needed for length calculation
-                truncation=False,           # No truncation needed for length calculation
-                return_tensors=None,        # Returns list of IDs
-                return_attention_mask=False # No attention mask needed here
-            )
-            len_user_prompt_and_system = len(user_part_token_ids)
+        PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
+        PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
+        for i in range(dataset_len): 
+            labels = [-100] * len(processed_tokenized_outputs["input_ids"][i])
 
-            current_example_input_ids = processed_tokenized_outputs["input_ids"][i]
-            instance_labels = [-100] * len(current_example_input_ids) # Initialize all with -100
+            plan_start_idx = next((
+                idx for idx, token_id in enumerate(processed_tokenized_outputs["input_ids"][i]) if token_id == PLAN_START_TOKEN_ID), None)
+            
+            if plan_start_idx is None:
+                raise ValueError(f"PLAN_START_TOKEN_ID {PLAN_START_TOKEN_ID} not found in input_ids for example {i}.")
+            
+            plan_end_idx = next((
+                idx for idx, token_id in enumerate(processed_tokenized_outputs["input_ids"][i], start=plan_start_idx) if token_id == PLAN_END_TOKEN_ID), None)
+            
+            if plan_end_idx is None:
+                raise ValueError(f"PLAN_END_TOKEN_ID {PLAN_END_TOKEN_ID} not found in input_ids for example {i} after plan_start_idx.")
+            
+            labels[plan_start_idx:plan_end_idx + 1] = processed_tokenized_outputs["input_ids"][i][plan_start_idx:plan_end_idx + 1]
 
-            # Label only the assistant's response part
-            # Make sure not to label beyond the actual sequence length if truncated
-            # and ensure user_part_len doesn't exceed total length
-            if len_user_prompt_and_system < len(current_example_input_ids):
-                start_of_assistant_response = len_user_prompt_and_system
-                # Copy relevant input_ids to labels for the assistant's part
-                for j in range(start_of_assistant_response, len(current_example_input_ids)):
-                    # Only label if it's not a pad token
-                    if current_example_input_ids[j] != self._tokenizer.pad_token_id:
-                         instance_labels[j] = current_example_input_ids[j]
-                    else: # If it's a pad token, ensure label is -100
-                        instance_labels[j] = -100 
-            
-            # Explicitly set labels for pad tokens to -100, even if they fell into assistant part
-            # This is a bit redundant if the above loop handles it, but ensures correctness
-            if self._tokenizer.pad_token_id is not None:
-                for j, token_id in enumerate(current_example_input_ids):
-                    if token_id == self._tokenizer.pad_token_id:
-                        instance_labels[j] = -100
-            
-            labels_batch.append(instance_labels)
-            input_ids_batch.append(current_example_input_ids)
-            attention_mask_batch.append(tokenized_encoding_batch["attention_mask"][i])
+            labels_batch.append(labels)
         
         processed_tokenized_outputs["labels"] = labels_batch
-        processed_tokenized_outputs["input_ids"] = input_ids_batch
-        processed_tokenized_outputs["attention_mask"] = attention_mask_batch
         return processed_tokenized_outputs
 
     def find_all_linear_names(self):
