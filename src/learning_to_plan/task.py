@@ -464,40 +464,64 @@ class BlocksworldLanguageConverter(Task.LanguageConverter):
                 ValueError: If an unknown or malformed action is encountered.
             """
             pddl_actions = []
-            # Normalize line endings and split, handling potential semicolons
-            lines = nl_plan.replace(";", "\n").strip().split("\n")
-            for line in lines:
-                nl_a = line.lower().replace("block", "").strip()
-                if not nl_a: # Skip empty lines
+            action_mapping = {
+                "pick up": "pick-up",
+                "put down": "put-down",
+                "unstack": "unstack",
+                "stack": "stack"
+            }
+            for line in nl_plan.replace(";", "\n").strip().split("\n"):
+                action_str = line.strip().lower()
+                if not action_str:
                     continue
 
-                action_found = False
-                if nl_a.startswith("unstack"):
-                    match = re.search(r"unstack\s+(\w+)\s+from\s+(\w+)", nl_a)
-                    if match:
-                        pddl_actions.append(f"(unstack {match.group(1)} {match.group(2)})")
-                        action_found = True
-                elif nl_a.startswith("pick up"):
-                    match = re.search(r"pick up\s+(\w+)", nl_a)
-                    if match:
-                        pddl_actions.append(f"(pick-up {match.group(1)})")
-                        action_found = True
-                elif nl_a.startswith("stack"):
-                    match = re.search(r"stack\s+(\w+)\s+on\s+(\w+)", nl_a)
-                    if match:
-                        pddl_actions.append(f"(stack {match.group(1)} {match.group(2)})")
-                        action_found = True
-                elif nl_a.startswith("put down"):
-                    match = re.search(r"put down\s+(\w+)", nl_a)
-                    if match:
-                        pddl_actions.append(f"(put-down {match.group(1)})")
-                        action_found = True
+                # Regex to match action and extract block IDs
+                action_pattern = re.compile(r"^(pick up|put down|unstack|stack) the (\w+) block(?: from the (\w+) block)?(?: on top of the (\w+) block)?$")
+                match = action_pattern.match(action_str)
+                if not match:
+                    logger.warning(f"Skipping action due to unknown format: {action_str}")
+                    continue
+                    # raise ValueError(f"Unknown or malformed action format: {action_str}")
+                
+                action_name, first_block_color, unstack_block_color, stack_block_color = match.groups()
+                if action_name not in action_mapping:
+                    raise ValueError(f"Unknown action type '{action_name}' in action: {action_str}")
+                
+                first_block_color = first_block_color.strip()
+                id_1 = next((k for k, v in self._color_map.items() if v == first_block_color), None)
+                if not id_1:
+                    raise ValueError(f"Unknown block color '{first_block_color}' in action: {action_str}")
+                
+                if action_name in ["pick up", "put down"]:
+                    if unstack_block_color or stack_block_color:
+                        raise ValueError(f"Action '{action_name}' should not have additional block colors: {action_str}")
+                    pddl_actions.append(f"({action_mapping[action_name]} {id_1})")
+                elif action_name == "unstack":
+                    if not unstack_block_color:
+                        raise ValueError(f"Action '{action_name}' requires a second block color: {action_str}")
+                    if stack_block_color:
+                        raise ValueError(f"Action '{action_name}' should not have additional block colors: {action_str}")
+                    unstack_block_color = unstack_block_color.strip()
+                    id_2 = next((k for k, v in self._color_map.items() if v == unstack_block_color), None)
+                    if not id_2:
+                        raise ValueError(f"Unknown block color '{unstack_block_color}' in action: {action_str}")
+                    pddl_actions.append(f"({action_mapping[action_name]} {id_1} {id_2})")
+                elif action_name == "stack":
+                    if not stack_block_color:
+                        raise ValueError(f"Action '{action_name}' requires a second block color: {action_str}")
+                    if unstack_block_color:
+                        raise ValueError(f"Action '{action_name}' should not have additional block colors: {action_str}")
+                    stack_block_color = stack_block_color.strip()
+                    id_2 = next((k for k, v in self._color_map.items() if v == stack_block_color), None)
+                    if not id_2:
+                        raise ValueError(f"Unknown block color '{stack_block_color}' in action: {action_str}")
+                    pddl_actions.append(f"({action_mapping[action_name]} {id_1} {id_2})")
+                else:
+                    raise ValueError(f"Unknown action type '{action_name}' in action: {action_str}")
 
-                if not action_found:
-                    # Raise error only if the line was not empty and didn't match any known pattern
-                    raise ValueError(f"Unknown or malformed action: '{nl_a}'")
-
-            return "\n".join(pddl_actions) + "\n" if pddl_actions else ""
+            # Join actions into a single PDDL string
+            pddl_plan = "\n".join(pddl_actions)
+            return pddl_plan
 
         @property
         def _domain_description_in_natural_language(self) -> str:

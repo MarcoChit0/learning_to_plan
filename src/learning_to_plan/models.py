@@ -451,9 +451,6 @@ class HuggingFaceModel(Model):
             raise ValueError(f"Error during tokenizer.apply_chat_template: {e}") from e
 
         input_length = inputs["input_ids"].shape[1]
-        print("Generation messages:", generation_messages)
-        print("Input IDs:", inputs["input_ids"])
-        print("Attention Mask:", inputs["attention_mask"])
 
         # --- Perform Generation ---
         with torch.no_grad():
@@ -474,35 +471,38 @@ class HuggingFaceModel(Model):
         processed_outputs = []
         raw_outputs = []
         for output in outputs:
-            print(self._tokenizer.decode(output, skip_special_tokens=False))
-            print(self._tokenizer.decode(output, skip_special_tokens=True))
             generated_tokens = (output[input_length:] if output.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device))
-            print(f"Generated tokens: {generated_tokens}")
             generated_text = self._tokenizer.decode(generated_tokens, skip_special_tokens=True)
             raw_outputs.append(generated_text)
-            print(f"Generated text: {generated_text}")
             logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: {generated_text}")
 
-            # --- Process Plan ---
-            START_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
-            END_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
+            # # --- Process Plan ---
+            # TODO: use this in the future when the model knows how to add the plan start and end tokens
+            # START_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
+            # END_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
             
-            start_of_plan_idx = next((i for i, token in enumerate(output) if token == START_OF_PLAN_TOKEN_ID), None)
-            if start_of_plan_idx:
-                end_of_plan_idx = next((i for i, token in enumerate(output[start_of_plan_idx:]) if token == END_OF_PLAN_TOKEN_ID), None)
-                if end_of_plan_idx:
-                    plan_tokens = output[start_of_plan_idx:end_of_plan_idx + 1]
-                    plan_text = self._tokenizer.decode(plan_tokens, skip_special_tokens=True)
-                    processed_outputs.append(plan_text)
-                    logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: {plan_text}")
-                else:
-                    processed_outputs.append("Generation Error: No end of plan token found.")
-                    logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: No end of plan token found in output tokens [{output[:100]}...]")
-            else:
-                processed_outputs.append("Generation Error: No start of plan token found.")
-                logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: No start of plan token found in output tokens [{output[:100]}...]")
+            # start_of_plan_idx = next((i for i, token in enumerate(output) if token == START_OF_PLAN_TOKEN_ID), None)
+            # if start_of_plan_idx:
+            #     end_of_plan_idx = next((i for i, token in enumerate(output[start_of_plan_idx:]) if token == END_OF_PLAN_TOKEN_ID), None)
+            #     if end_of_plan_idx:
+            #         plan_tokens = output[start_of_plan_idx:end_of_plan_idx + 1]
+            #         plan_text = self._tokenizer.decode(plan_tokens, skip_special_tokens=True)
+            #         processed_outputs.append(plan_text)
+            #         logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: {plan_text}")
+            #     else:
+            #         processed_outputs.append("Generation Error: No end of plan token found.")
+            #         logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: No end of plan token found in output tokens [{output[:100]}...]")
+            # else:
+            #     processed_outputs.append("Generation Error: No start of plan token found.")
+            #     logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: No start of plan token found in output tokens [{output[:100]}...]")
+
+            # TODO: remove this when the model knows how to add the plan start and end tokens
+            processed_outputs.append(generated_text)
+            pddl_plan = task._converter.natural_language_plan_to_pddl(generated_text)
+            print(f"Generated PDDL plan:\n{pddl_plan}")
         self.add_generated_plans(task, prompt_type, raw_outputs, processed_outputs)
-        logger.info(f"Generated {len(processed_outputs)} plans for task {task._id} with prompt type {prompt_type}.")
+
+        logger.info(f"Generated {len(processed_outputs)} plans for task {task} with prompt type {prompt_type}.")
 
 
 # # --- Gemini Model (Remains unchanged from previous version) ---
