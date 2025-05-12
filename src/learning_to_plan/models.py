@@ -191,7 +191,7 @@ class HuggingFaceModel(Model):
         batch_user_part_messages_for_len_calc: List[List[Dict[str, str]]] = [] # For length calculation
 
         for i in range(dataset_len):
-            user_content = examples["instruction"][i] + "\n" + examples["input"][i] + "\nMy plan is as follows:"
+            user_content = examples["instruction"][i] + "\n" + examples["input"][i]
             assistant_content = examples["output"][i]
             
             # For calculating length of user part + system prompt
@@ -425,7 +425,7 @@ class HuggingFaceModel(Model):
         prompt_components = task.get_prompt_componenets()
         generation_messages: list[dict[str, str]] = [
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt_components["instruction"] + "\n" + prompt_components["input"] + "\nMy plan is as follows:" },
+            {"role": "user", "content": prompt_components["instruction"] + "\n" + prompt_components["input"]},
         ]
         try:
             # Set add_generation_prompt=False so the model continues from the provided assistant prompt
@@ -466,6 +466,8 @@ class HuggingFaceModel(Model):
         processed_outputs = []
         raw_outputs = []
         for output in outputs:
+            print(self._tokenizer.decode(output, skip_special_tokens=False))
+            print(self._tokenizer.decode(output, skip_special_tokens=True))
             generated_tokens = (output[input_length:] if output.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device))
             print(f"Generated tokens: {generated_tokens}")
             generated_text = self._tokenizer.decode(generated_tokens, skip_special_tokens=True)
