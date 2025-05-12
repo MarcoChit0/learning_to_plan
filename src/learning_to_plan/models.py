@@ -155,11 +155,11 @@ class HuggingFaceModel(Model):
                 embedding_layer = self._model.get_input_embeddings()
                 reference_token = "<|endoftext|>"
                 reference_token_id = self._tokenizer.convert_tokens_to_ids(reference_token)
-                logger.info(f"Token {', '.join} cannot initilize its embedding layer with almost zero values. Setting it to the same as the reference token ID: {reference_token}, {reference_token_id}.")
+                logger.info(f"Token {', '.join(special_tokens_to_add)} cannot initilize its embedding layer with almost zero values. Setting it to the same as the reference token ID: {reference_token}, {reference_token_id}.")
                 for token in special_tokens_to_add:
                     token_id = self._tokenizer.convert_tokens_to_ids(token)
-                    embedding_layer.weight.data[token_id] = embedding_layer.weight.data[reference_token_id]
-            
+                    embedding_layer.weight.data[token_id] = embedding_layer.weight.data[reference_token_id].clone() 
+
             if last_checkpoint:
                 logger.info(f"Loading model state from checkpoint: {last_checkpoint}")
                 self._model = PeftModel.from_pretrained(
@@ -319,8 +319,7 @@ class HuggingFaceModel(Model):
             logging_strategy=train_kwargs.get("logging_strategy", "epoch"),
             eval_strategy=train_kwargs.get("eval_strategy", "epoch"),
             optim=train_kwargs.get("optimizer", "adamw_8bit"),
-            # load_best_model_at_end=train_kwargs.get("load_best_model_at_end", True),
-            # eval_on_start=train_kwargs.get("eval_on_start", False),
+            warmup_ratio=train_kwargs.get("warmup_ratio", 0.1),
         )
         logger.debug(f"Final TrainingArguments: {training_args.to_dict()}")
 

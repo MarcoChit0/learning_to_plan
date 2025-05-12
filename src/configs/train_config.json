@@ -7,7 +7,7 @@
     "gradient_accumulation_steps": 1,
     "eval_strategy": "epoch",
     "eval_batch_size": 1,
-    "learning_rate": 2.0e-4,
+    "learning_rate": 1.0e-5,
     "lr_scheduler_type": "cosine",
     "num_train_epochs": 2,
     "weight_decay": 0.02,
@@ -22,5 +22,6 @@
     "lora_alpha": 512,
     "load_the_best_model_at_end": true,
     "eval_on_start": false,
-    "lora_dropout": 0.1
+    "lora_dropout": 0.1,
+    "warmup_ratio": 0.1
 }
