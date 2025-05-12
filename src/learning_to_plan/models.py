@@ -29,12 +29,13 @@ class Model:
             prompt_type:str : { # Prompt type used for generation, e.g., "io", "cot", ...
                 "raw" : list[str], # List of raw generated plans
                 "processed" : list[str] # List of processed generated plans
+                "pddl" : list[str] # List of PDDL generated plans
             }
         }
         """
         self._generated_plans:dict[task.Task, dict[str, Any]] = {}
     
-    def add_generated_plans(self, task: task.Task, prompt_type: str, raw_plans:list[str], processed_plans:list[str]=[]) -> None:
+    def add_generated_plans(self, task: task.Task, prompt_type: str, raw_plans:list[str], processed_plans:list[str]=[], pddl_plans:list[str]=[]) -> None:
         """
             Adds generated plans to the internal dictionary.
             This method is called after generating plans for a task.
@@ -54,6 +55,7 @@ class Model:
         self._generated_plans[task][prompt_type] = {
             "raw": raw_plans,
             "processed": processed_plans,
+            "pddl": pddl_plans
         }
        
 
@@ -169,24 +171,28 @@ class HuggingFaceModel(Model):
                     msg=f"Token {', '.join(special_tokens_to_add)} cannot initialize its embedding layer with almost zero values. "
                     f"Setting it to the same as the reference token ID: {reference_token}, {reference_token_id}."
                 )
-                question = "My plan is as follows:\n"
-                messages = [{"role": "user", "content": question}]
-                tokens = self._tokenizer.apply_chat_template(messages, tokenize=True, return_tensors="pt")
-                tokens = tokens.to(self._model.device)
-    
-                reference_token_id = self._tokenizer.convert_tokens_to_ids(reference_token)
-                reference_token_prob = self.get_token_probability(tokens, reference_token_id)
-                print(f"Reference token probability: {reference_token_prob}")
+                logger.info(f"Probailities of special tokens before initialization:")
+                self.check_special_tokens_probability()
                 with torch.no_grad():
                     for token in special_tokens_to_add:
                         token_id = self._tokenizer.convert_tokens_to_ids(token)
-                        print(f"{token} probability before copying: {self.get_token_probability(tokens, token_id)}")
                         embedding_layer.weight[token_id].copy_(embedding_layer.weight[reference_token_id])
-                        print(f"{token} probability after copying: {self.get_token_probability(tokens, token_id)}")
+                logger.info(f"Probailities of special tokens after initialization:")
+                self.check_special_tokens_probability()
 
         except Exception as e:
             logger.error(f"Error loading model from {model_source} or resizing embeddings: {e}", exc_info=True)
             raise e
+
+    def check_special_tokens_probability(self):
+        question = "My plan is as follows:\n"
+        messages = [{"role": "user", "content": question}]
+        tokens = self._tokenizer.apply_chat_template(messages, tokenize=True, return_tensors="pt")
+        tokens = tokens.to(self._model.device)
+
+        for token in [config.START_OF_PLAN_TOKEN, config.END_OF_PLAN_TOKEN]:
+            token_id = self._tokenizer.convert_tokens_to_ids(token)
+            logger.info(f"Token: {token}, Probability: {self.get_token_probability(tokens, token_id)}")
 
     def get_token_probability(self, input_tokens, target_token):
         with torch.no_grad():
@@ -442,6 +448,7 @@ class HuggingFaceModel(Model):
         Returns:
             A list containing the generated plan(s), stopping at <|plan_end|> or max_new_tokens.
         """
+        self.check_special_tokens_probability()
         logger.debug("Generating with Hugging Face model.")
 
         # --- Generation Configuration ---
