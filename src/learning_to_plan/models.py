@@ -444,6 +444,9 @@ class HuggingFaceModel(Model):
             raise ValueError(f"Error during tokenizer.apply_chat_template: {e}") from e
 
         input_length = inputs["input_ids"].shape[1]
+        print("Generation messages:", generation_messages)
+        print("Input IDs:", inputs["input_ids"])
+        print("Attention Mask:", inputs["attention_mask"])
 
         # --- Perform Generation ---
         with torch.no_grad():
@@ -475,20 +478,20 @@ class HuggingFaceModel(Model):
             START_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
             END_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
             
-            start_of_plan_idx = next((i for i, token in enumerate(generated_tokens) if token == START_OF_PLAN_TOKEN_ID), None)
+            start_of_plan_idx = next((i for i, token in enumerate(output) if token == START_OF_PLAN_TOKEN_ID), None)
             if start_of_plan_idx:
-                end_of_plan_idx = next((i for i, token in enumerate(generated_tokens[start_of_plan_idx:]) if token == END_OF_PLAN_TOKEN_ID), None)
+                end_of_plan_idx = next((i for i, token in enumerate(output[start_of_plan_idx:]) if token == END_OF_PLAN_TOKEN_ID), None)
                 if end_of_plan_idx:
-                    plan_tokens = generated_tokens[start_of_plan_idx:end_of_plan_idx + 1]
+                    plan_tokens = output[start_of_plan_idx:end_of_plan_idx + 1]
                     plan_text = self._tokenizer.decode(plan_tokens, skip_special_tokens=True)
                     processed_outputs.append(plan_text)
                     logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: {plan_text}")
                 else:
                     processed_outputs.append("Generation Error: No end of plan token found.")
-                    logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: No end of plan token found in output tokens [{generated_tokens[:50]}...]")
+                    logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: No end of plan token found in output tokens [{output[:100]}...]")
             else:
                 processed_outputs.append("Generation Error: No start of plan token found.")
-                logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: No start of plan token found in output tokens [{generated_tokens[:50]}...]")
+                logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: No start of plan token found in output tokens [{output[:100]}...]")
         self.add_generated_plans(task, prompt_type, raw_outputs, processed_outputs)
         logger.info(f"Generated {len(processed_outputs)} plans for task {task._id} with prompt type {prompt_type}.")
 
