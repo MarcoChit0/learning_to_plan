@@ -180,9 +180,6 @@ class HuggingFaceModel(Model):
         """
         dataset_len = len(examples["instruction"])
         if not (dataset_len == len(examples["input"]) == len(examples["output"])):
-            logger.error(f"Dataset length mismatch: instruction({len(examples['instruction'])}) != input({len(examples['input'])}) != output({len(examples['output'])})")
-            # Optionally, raise an error or handle this case (e.g., by taking the minimum length)
-            # For now, let's assume this is an error condition if lengths don't match.
             raise ValueError("Instruction, input, and output lists must have the same length.")
         
         if dataset_len == 0:
@@ -395,10 +392,11 @@ class HuggingFaceModel(Model):
         """
         Generates text based on a prompt using the Hugging Face model.
 
+        The model now continues the last answer that was started with "My plan is as follows:" 
+        and the special start-of-plan token.
         Parameters:
             prompt: The input prompt text (should end before <|plan_start|>).
             **generation_kwargs: Keyword arguments for generation control (e.g., max_new_tokens, temperature).
-
         Returns:
             A list containing the generated plan(s), stopping at <|plan_end|> or max_new_tokens.
         """
@@ -424,23 +422,23 @@ class HuggingFaceModel(Model):
         device = next(self._model.parameters()).device
 
         prompt_type = "cot" if len(cot_examples) > 0 else "io"
-        # prompt = task.get_prompt(with_plan=False, cot_examples=cot_examples)
-        # TODO: Add the cot_examples to the prompt
         prompt_components = task.get_prompt_componenets()
         generation_messages: list[dict[str, str]] = [
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt_components["instruction"] + "\n" + prompt_components["input"]}
+            {"role": "user", "content": prompt_components["instruction"] + "\n" + prompt_components["input"]},
+            {"role": "assistant", "content": "My plan is as follows:\n" + config.START_OF_PLAN_TOKEN},
         ]
         try:
+            # Set add_generation_prompt=False so the model continues from the provided assistant prompt
             inputs = self._tokenizer.apply_chat_template(
                 generation_messages,
-                add_generation_prompt=True, # IMPORTANT: Adds the prompt for the assistant to start generating
-                padding=False,              # No padding for single instance generation
-                truncation=True,            # Truncate if prompt is too long
-                max_length=generation_kwargs.get("max_prompt_length", 2048), # Max length for the prompt part
+                add_generation_prompt=False,  # Changed from True to False
+                padding=False,              
+                truncation=True,            
+                max_length=generation_kwargs.get("max_prompt_length", 2048),
                 return_tensors="pt",
-                return_attention_mask=True,  # Good practice to return attention mask,
-                return_dict=True,          # Return as a dictionary for easier access
+                return_attention_mask=True,
+                return_dict=True,
             ).to(device)
         except Exception as e:
             raise ValueError(f"Error during tokenizer.apply_chat_template: {e}") from e
@@ -449,14 +447,14 @@ class HuggingFaceModel(Model):
 
         # --- Perform Generation ---
         with torch.no_grad():
-            dtype = getattr(self._model, 'dtype', torch.float16) # Get model's dtype
+            dtype = getattr(self._model, 'dtype', torch.float16)
             use_autocast = (device.type == 'cuda') and dtype in [torch.float16, torch.bfloat16]
             
             try:
                 with torch.autocast(device_type=device.type, dtype=dtype, enabled=use_autocast):
                     outputs = self._model.generate(
                         input_ids=inputs.input_ids,
-                        attention_mask=inputs.attention_mask, # Pass attention_mask
+                        attention_mask=inputs.attention_mask,
                         **gen_kwargs
                     )
             except Exception as e_generate:
