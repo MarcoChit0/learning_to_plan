@@ -191,7 +191,7 @@ class HuggingFaceModel(Model):
         batch_user_part_messages_for_len_calc: List[List[Dict[str, str]]] = [] # For length calculation
 
         for i in range(dataset_len):
-            user_content = examples["instruction"][i] + "\n" + examples["input"][i]
+            user_content = examples["instruction"][i] + "\n" + examples["input"][i] + "\nMy plan is as follows:"
             assistant_content = examples["output"][i]
             
             # For calculating length of user part + system prompt
@@ -425,14 +425,13 @@ class HuggingFaceModel(Model):
         prompt_components = task.get_prompt_componenets()
         generation_messages: list[dict[str, str]] = [
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt_components["instruction"] + "\n" + prompt_components["input"]},
-            {"role": "assistant", "content": "My plan is as follows:\n" + config.START_OF_PLAN_TOKEN},
+            {"role": "user", "content": prompt_components["instruction"] + "\n" + prompt_components["input"] + "\nMy plan is as follows:" },
         ]
         try:
             # Set add_generation_prompt=False so the model continues from the provided assistant prompt
             inputs = self._tokenizer.apply_chat_template(
                 generation_messages,
-                add_generation_prompt=False,  # Changed from True to False
+                add_generation_prompt=True,
                 padding=False,              
                 truncation=True,            
                 max_length=generation_kwargs.get("max_prompt_length", 2048),
