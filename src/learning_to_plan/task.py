@@ -115,7 +115,7 @@ class Task(abc.ABC):
         domain_description = self._converter._domain_description_in_natural_language
         instance_nl = self._converter.pddl_instance_to_natural_language(pddl_instance=self.read_instance())
         if self._pddl_plan:
-            plan_nl += "My plan is as follows:\n"
+            plan_nl = "My plan is as follows:\n"
             plan_nl += config.START_OF_PLAN_TOKEN + "\n"
             plan_nl += self._converter.pddl_plan_to_natural_language(pddl_plan=self._pddl_plan)
             plan_nl += +"\n" + config.END_OF_PLAN_TOKEN
