@@ -142,7 +142,7 @@ class HuggingFaceModel(Model):
                 pretrained_model_name_or_path=model_name,
                 trust_remote_code=True,
                 torch_dtype=torch_dtype,
-                token=config.HUGGINGFACE_TOKEN,
+                token=config.HUGGINGFACE_TOKEN
             )
             logger.info(f"Model loaded successfully from {model_source}.")
 
@@ -158,6 +158,7 @@ class HuggingFaceModel(Model):
                     self._model,
                     last_checkpoint,
                     token=config.HUGGINGFACE_TOKEN,
+                    is_trainable=kwargs.get("is_trainable", False),
                 )
                 logger.info(f"Model state loaded from checkpoint: {last_checkpoint}")
 
@@ -269,7 +270,7 @@ class HuggingFaceModel(Model):
             lora_cfg = LoraConfig(
                 r=lora_r,
                 lora_alpha=train_kwargs.get("lora_alpha", lora_r * 2), # Default LoRA alpha
-                lora_dropout=train_kwargs.get("lora_dropout", 0.05),
+                lora_dropout=train_kwargs.get("lora_dropout", 0.1),
                 bias=train_kwargs.get("lora_bias", "none"),
                 task_type="CAUSAL_LM",
             )
