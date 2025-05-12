@@ -118,7 +118,7 @@ class Task(abc.ABC):
             plan_nl = "My plan is as follows:\n"
             plan_nl += config.START_OF_PLAN_TOKEN + "\n"
             plan_nl += self._converter.pddl_plan_to_natural_language(pddl_plan=self._pddl_plan)
-            plan_nl += +"\n" + config.END_OF_PLAN_TOKEN
+            plan_nl += "\n" + config.END_OF_PLAN_TOKEN
         else: 
             raise ValueError(f"No plan available to convert to natural language for the task {self}.")
         return {"instruction": domain_description.strip(), "input": instance_nl.strip(), "output": plan_nl.strip()}

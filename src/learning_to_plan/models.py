@@ -151,6 +151,14 @@ class HuggingFaceModel(Model):
                 logger.info(f"Resizing model token embeddings to match tokenizer size: {len(self._tokenizer)}")
                 self._model.resize_token_embeddings(len(self._tokenizer))
                 logger.info("Model token embeddings resized successfully.")
+
+                embedding_layer = self._model.get_input_embeddings()
+                reference_token = "<|endoftext|>"
+                reference_token_id = self._tokenizer.convert_tokens_to_ids(reference_token)
+                logger.info(f"Token {', '.join} cannot initilize its embedding layer with almost zero values. Setting it to the same as the reference token ID: {reference_token}, {reference_token_id}.")
+                for token in special_tokens_to_add:
+                    token_id = self._tokenizer.convert_tokens_to_ids(token)
+                    embedding_layer.weight.data[token_id] = embedding_layer.weight.data[reference_token_id]
             
             if last_checkpoint:
                 logger.info(f"Loading model state from checkpoint: {last_checkpoint}")
