@@ -41,7 +41,7 @@ def generate_batch(
         elif number_of_instances == "long":
             tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.TEST, is_longer_plan=True)
         elif isinstance(number_of_instances, int):
-            tasks = task.get_tasks(domain=domain, type=task.Task.Type.TEST, number_of_instances=number_of_instances)
+            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.TEST, number_of_instances=number_of_instances)
         else:
             raise ValueError(f"Invalid value for number_of_instances: {number_of_instances}. Must be 'all', 'basic', 'long', or a positive integer.")
         assert len(tasks) > 0, f"No tasks found for generation."
