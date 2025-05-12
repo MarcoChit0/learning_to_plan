@@ -277,6 +277,7 @@ class HuggingFaceModel(Model):
                 lora_alpha=train_kwargs.get("lora_alpha", lora_r * 2), # Default LoRA alpha
                 lora_dropout=train_kwargs.get("lora_dropout", 0.1),
                 bias=train_kwargs.get("lora_bias", "none"),
+                target_modules="all-linear",
                 task_type="CAUSAL_LM",
             )
             self._model = get_peft_model(self._model, lora_cfg)
