@@ -173,16 +173,16 @@ class HuggingFaceModel(Model):
                 messages = [{"role": "user", "content": question}]
                 tokens = self._tokenizer.apply_chat_template(messages, tokenize=True, return_tensors="pt")
                 tokens = tokens.to(self._model.device)
-
+    
                 reference_token_id = self._tokenizer.convert_tokens_to_ids(reference_token)
-                reference_token_prob = self.get_token_probability(question, reference_token_id)
+                reference_token_prob = self.get_token_probability(tokens, reference_token_id)
                 print(f"Reference token probability: {reference_token_prob}")
                 with torch.no_grad():
                     for token in special_tokens_to_add:
                         token_id = self._tokenizer.convert_tokens_to_ids(token)
-                        print(f"{token} probability before copying: {self.get_token_probability(question, token_id)}")
+                        print(f"{token} probability before copying: {self.get_token_probability(tokens, token_id)}")
                         embedding_layer.weight[token_id].copy_(embedding_layer.weight[reference_token_id])
-                        print(f"{token} probability after copying: {self.get_token_probability(question, token_id)}")
+                        print(f"{token} probability after copying: {self.get_token_probability(tokens, token_id)}")
 
         except Exception as e:
             logger.error(f"Error loading model from {model_source} or resizing embeddings: {e}", exc_info=True)
