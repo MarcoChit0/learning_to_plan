@@ -14,7 +14,7 @@ def run_training_procedure(model_name, domain,  **train_kwargs):
     config.create_necessary_dirs(model_checkpoint_dir)
     logger.info(f"Checkpoints will be saved to: {model_checkpoint_dir}")
     try:
-        model = models.get_model(model_name=model_name, **train_kwargs)
+        model = models.get_model(model_name=model_name, checkpoint_dir=model_checkpoint_dir, **train_kwargs)
     except Exception as e:
         logger.error(f"Error loading model {model_name}: {e}", exc_info=True)
         raise e

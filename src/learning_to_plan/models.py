@@ -71,13 +71,6 @@ class Model:
         """
         raise NotImplementedError("Subclasses should implement this method.")
 
-    def tokenize(self, examples: List[str], max_length: int = 1024) -> Dict[str, Any]:
-        """
-        Tokenizes the input examples.
-        This is a placeholder method and should be implemented in subclasses.
-        """
-        raise NotImplementedError("Subclasses should implement this method.")
-
     def tokenize_chat(self, examples, max_seq_length: int = 1024) -> Dict[str, Any]:
         """
         Tokenizes the input examples for chat-based models.
@@ -178,60 +171,6 @@ class HuggingFaceModel(Model):
             skip_special_tokens=skip_special_tokens
         )
 
-    def tokenize(self, examples: List[str], max_length: int = 1024) -> Dict[str, Any]:
-            PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
-            PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
-            if PLAN_START_TOKEN_ID == self._tokenizer.unk_token_id or PLAN_END_TOKEN_ID == self._tokenizer.unk_token_id:
-                raise ValueError("Special plan tokens could not be resolved to IDs. Check token strings and tokenizer setup.")
-
-            batch_input_ids = []
-            batch_labels = []
-            batch_attention_mask = []
-
-            for text_instance in examples["text"]:
-                tokenized_output = self._tokenizer(
-                    text_instance + self._tokenizer.eos_token, # Add EOS token at the end
-                    max_length=max_length,
-                    padding="max_length",
-                    truncation=True,
-                    return_tensors=None,
-                    add_special_tokens=False, # We are handling special plan tokens manually
-                    return_attention_mask=True
-                )
-
-                input_ids_padded = tokenized_output["input_ids"]
-                attention_mask_padded = tokenized_output["attention_mask"]
-
-                try:
-                    plan_start_idx = input_ids_padded.index(PLAN_START_TOKEN_ID)
-                except ValueError:
-                    # Log more context for debugging
-                    logger.error(f"PLAN_START_TOKEN_ID {PLAN_START_TOKEN_ID} ('{config.START_OF_PLAN_TOKEN}') not found in input_ids. Input text (first 200 chars): {text_instance[:200]}...")
-                    logger.error(f"Input IDs (first 20): {input_ids_padded[:20]}")
-                    raise ValueError(f"PLAN_START_TOKEN_ID {PLAN_START_TOKEN_ID} not found.")
-
-                try:
-                    # Search for plan_end_idx *after* plan_start_idx
-                    plan_end_idx = input_ids_padded.index(PLAN_END_TOKEN_ID, plan_start_idx)
-                except ValueError:
-                    logger.error(f"PLAN_END_TOKEN_ID {PLAN_END_TOKEN_ID} ('{config.END_OF_PLAN_TOKEN}') not found after plan_start_idx in input_ids. Input text (first 200 chars): {text_instance[:200]}...")
-                    logger.error(f"Input IDs (segment around plan_start_idx): {input_ids_padded[max(0, plan_start_idx-10):plan_start_idx+20]}")
-                    raise ValueError(f"PLAN_END_TOKEN_ID {PLAN_END_TOKEN_ID} not found after plan_start_idx.")
-
-                labels = [-100] * len(input_ids_padded)
-                # Labels include the plan_start and plan_end tokens
-                labels[plan_start_idx : plan_end_idx + 1] = input_ids_padded[plan_start_idx : plan_end_idx + 1]
-
-                batch_input_ids.append(input_ids_padded)
-                batch_labels.append(labels)
-                batch_attention_mask.append(attention_mask_padded)
-
-            return {
-                "input_ids": batch_input_ids,
-                "labels": batch_labels,
-                "attention_mask": batch_attention_mask,
-            }
-
     def tokenize_chat(self, examples: Dict[str, List[str]], max_seq_length: int = 1024) -> Dict[str, Any]:
         """
         Tokenizes a batch of examples using the chat template.
@@ -317,26 +256,6 @@ class HuggingFaceModel(Model):
         processed_tokenized_outputs["labels"] = labels_batch
         return processed_tokenized_outputs
 
-    def find_all_linear_names(self):
-        """
-        Finds all linear layer names in the model for use in LoRA training.
-
-        Returns:
-            A list of layer names that are linear layers, excluding the final prediction head ('lm_head').
-        """
-        lora_module_names = set()
-        target_cls = torch.nn.Linear  # Target class for LoRA training
-
-        for name, module in self._model.named_modules():
-            if isinstance(module, target_cls):
-                lora_module_names.add(name)
-
-        # Exclude the final prediction head ('lm_head') if present
-        lora_module_names = {name for name in lora_module_names if 'lm_head' not in name}
-
-        return list(lora_module_names)
-
-
     def train(self, checkpoint_dir: str, tokenized_train_dataset: datasets.DatasetDict, tokenized_eval_dataset: datasets.DatasetDict, **train_kwargs: Dict[str, Any]) -> None:
 
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -350,7 +269,6 @@ class HuggingFaceModel(Model):
             lora_cfg = LoraConfig(
                 r=lora_r,
                 lora_alpha=train_kwargs.get("lora_alpha", lora_r * 2), # Default LoRA alpha
-                # target_modules=train_kwargs.get("target_modules", self.find_all_linear_names()),
                 lora_dropout=train_kwargs.get("lora_dropout", 0.05),
                 bias=train_kwargs.get("lora_bias", "none"),
                 task_type="CAUSAL_LM",
@@ -512,7 +430,6 @@ class HuggingFaceModel(Model):
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt_components["instruction"] + "\n" + prompt_components["input"]}
         ]
-        
         try:
             inputs = self._tokenizer.apply_chat_template(
                 generation_messages,
@@ -521,12 +438,13 @@ class HuggingFaceModel(Model):
                 truncation=True,            # Truncate if prompt is too long
                 max_length=generation_kwargs.get("max_prompt_length", 2048), # Max length for the prompt part
                 return_tensors="pt",
-                return_attention_mask=True  # Good practice to return attention mask
+                return_attention_mask=True,  # Good practice to return attention mask,
+                return_dict=True,          # Return as a dictionary for easier access
             ).to(device)
         except Exception as e:
             raise ValueError(f"Error during tokenizer.apply_chat_template: {e}") from e
 
-        input_length = inputs.input_ids.shape[1]
+        input_length = inputs["input_ids"].shape[1]
 
         # --- Perform Generation ---
         with torch.no_grad():
@@ -548,8 +466,10 @@ class HuggingFaceModel(Model):
         raw_outputs = []
         for output in outputs:
             generated_tokens = (output[input_length:] if output.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device))
+            print(f"Generated tokens: {generated_tokens}")
             generated_text = self._tokenizer.decode(generated_tokens, skip_special_tokens=True)
             raw_outputs.append(generated_text)
+            print(f"Generated text: {generated_text}")
             logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: {generated_text}")
 
             # --- Process Plan ---
