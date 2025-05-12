@@ -152,14 +152,6 @@ class HuggingFaceModel(Model):
                 self._model.resize_token_embeddings(len(self._tokenizer))
                 logger.info("Model token embeddings resized successfully.")
 
-                embedding_layer = self._model.get_input_embeddings()
-                reference_token = "<|endoftext|>"
-                reference_token_id = self._tokenizer.convert_tokens_to_ids(reference_token)
-                logger.info(f"Token {', '.join(special_tokens_to_add)} cannot initilize its embedding layer with almost zero values. Setting it to the same as the reference token ID: {reference_token}, {reference_token_id}.")
-                for token in special_tokens_to_add:
-                    token_id = self._tokenizer.convert_tokens_to_ids(token)
-                    embedding_layer.weight.data[token_id] = embedding_layer.weight.data[reference_token_id].clone() 
-
             if last_checkpoint:
                 logger.info(f"Loading model state from checkpoint: {last_checkpoint}")
                 self._model = PeftModel.from_pretrained(
@@ -169,10 +161,52 @@ class HuggingFaceModel(Model):
                     is_trainable=kwargs.get("is_trainable", False),
                 )
                 logger.info(f"Model state loaded from checkpoint: {last_checkpoint}")
+            else:
+                embedding_layer = self._model.get_input_embeddings()
+                reference_token = "<|endoftext|>"
+                reference_token_id = self._tokenizer.convert_tokens_to_ids(reference_token)
+                logger.info(
+                    msg=f"Token {', '.join(special_tokens_to_add)} cannot initialize its embedding layer with almost zero values. "
+                    f"Setting it to the same as the reference token ID: {reference_token}, {reference_token_id}."
+                )
+                question = "My plan is as follows:\n"
+                messages = [{"role": "user", "content": question}]
+                tokens = self._tokenizer.apply_chat_template(messages, tokenize=True, return_tensors="pt")
+                tokens = tokens.to(self._model.device)
+
+                reference_token_id = self._tokenizer.convert_tokens_to_ids(reference_token)
+                reference_token_prob = self.get_token_probability(question, reference_token_id)
+                print(f"Reference token probability: {reference_token_prob}")
+                with torch.no_grad():
+                    for token in special_tokens_to_add:
+                        token_id = self._tokenizer.convert_tokens_to_ids(token)
+                        print(f"{token} probability before copying: {self.get_token_probability(question, token_id)}")
+                        embedding_layer.weight[token_id].copy_(embedding_layer.weight[reference_token_id])
+                        print(f"{token} probability after copying: {self.get_token_probability(question, token_id)}")
 
         except Exception as e:
             logger.error(f"Error loading model from {model_source} or resizing embeddings: {e}", exc_info=True)
             raise e
+
+    def get_token_probability(self, input_tokens, target_token):
+        with torch.no_grad():
+            outputs = self._model(input_tokens)
+        logits = outputs.logits[:, -1, :]
+        probs = torch.softmax(logits, dim=-1)
+        token_prob = probs[0, target_token]
+        return token_prob
+
+
+    def get_token_probability(self, input_tokens, target_token):
+        with torch.no_grad():
+            outputs = self._model(input_tokens)
+        # get the logits for our model output
+        logits = outputs.logits[:, -1, :]
+        # calculate the softmax probabilities
+        probs = torch.softmax(logits, dim=-1)
+        token_prob = probs[0, target_token]
+        return token_prob
+
 
     def decode(self, input_ids: List[int], skip_special_tokens: bool = False) -> str:
         return self._tokenizer.decode(
