@@ -92,6 +92,11 @@ def parse_args():
         action="store_true",
         help="Reset the model directory, used for storing model generated plans and processed data."
     )
+    parser.add_argument(
+        "--overwrite_generated_plans",
+        action="store_true",
+        help="Overwrite the generated plans if they already exist."
+    )
     def number_of_instances_type(value):
         if value.isdigit():
             return int(value)
@@ -210,6 +215,9 @@ if __name__ == "__main__":
         config_file_path = args.config_file_path or os.path.join(config.CONFIGS_DIR, config.DEFAULT_GENERATE_CONFIG)
         generate_kwargs = config.get_config(config_file_path=config_file_path, args=args)
         assert generate_kwargs["model_name"], "Model name not found in config. Please check your configuration."
+        generate_kwargs["overwrite_generated_plans"] = args.overwrite_generated_plans
+        generate_kwargs["reset_model_dir"] = args.reset_model_dir
+        generate_kwargs[""]
         domains = get_selected_domains(args=args, is_file=True)
         for domain in domains:
             logger.info(f"Starting generation for domain: {domain}")

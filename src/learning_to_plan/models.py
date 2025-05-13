@@ -28,21 +28,22 @@ class Model:
                 "raw" : list[str], # List of raw generated plans
                 "processed" : list[str] # List of processed generated plans
                 "pddl" : list[str] # List of PDDL generated plans
+                "is_valid" : list[Optional[bool]] # List of booleans indicating if the plan is valid. If None, the plan is not validated.
             }
         }
         """
         self._model_name = model_name
         self.__dict__.update(kwargs)
         self._generated_plans:dict[task.Task, dict[str, Any]] = {}
-        self._model_dir_path = os.path.join(config.MODEL_DIR, model_name)
+        self._model_dir_path = os.path.join(config.MODELS_DIR, model_name)
         # TODO: add this to args
         if kwargs.get("reset_model_dir", False):
             if os.path.exists(self._model_dir_path):
                 logger.info(f"Deleting existing model directory: {self._model_dir_path}")
                 os.rmdir(self._model_dir_path)
-        config.create_necessary_dirs(self._model_dir_path)  
+        os.makedirs(self._model_dir_path, exist_ok=True)
 
-    def add_generated_plans(self, task: task.Task, prompt_type: str, raw_plans:list[str], processed_plans:list[str]=[], pddl_plans:list[str]=[]) -> None:
+    def add_generated_plans(self, task: task.Task, prompt_type: str, raw_plans:list[str], processed_plans:list[str], pddl_plans:list[str], is_valid:Optional[list[Optional[bool]]] = None, overwrite:bool=False) -> None:
         """
             Adds generated plans to the internal dictionary.
             This method is called after generating plans for a task.
@@ -54,17 +55,40 @@ class Model:
                 input_length: The length of the input tokens.
                 device: The device on which the model is running (e.g., "cuda", "cpu").
         """
-        if task not in self._generated_plans:
-            self._generated_plans[task] = {}
+
+        if len(raw_plans) != len(processed_plans) or len(raw_plans) != len(pddl_plans):
+            raise ValueError(f"Length mismatch: raw_plans ({len(raw_plans)}), processed_plans ({len(processed_plans)}), pddl_plans ({len(pddl_plans)})")
+        
+        if is_valid is not None and len(raw_plans) != len(is_valid):
+            raise ValueError(f"Length mismatch: raw_plans ({len(raw_plans)}), is_valid ({len(is_valid)})")
 
         if prompt_type not in self.VALID_PROMPT_TYPES:
             raise ValueError(f"Invalid prompt type: {prompt_type}. Must be in [{', '.join(self.VALID_PROMPT_TYPES)}].")
-        self._generated_plans[task][prompt_type] = {
-            "raw": raw_plans,
-            "processed": processed_plans,
-            "pddl": pddl_plans
-        }
-       
+        
+        if task not in self._generated_plans:
+            self._generated_plans[task] = {}
+        
+        if prompt_type not in self._generated_plans[task] or overwrite:
+            self._generated_plans[task][prompt_type] = {
+                "raw": [],
+                "processed": [],
+                "pddl": [],
+                "is_valid": [],
+            }
+        
+        if overwrite:
+            logger.info(f"Overwriting existing plans for task {task} and prompt type {prompt_type}.")
+        
+        self._generated_plans[task][prompt_type]["raw"].extend(raw_plans)
+        self._generated_plans[task][prompt_type]["processed"].extend(processed_plans)
+        self._generated_plans[task][prompt_type]["pddl"].extend(pddl_plans)
+        logger.info(f"Added {len(raw_plans)} plans for task {task} and prompt type {prompt_type}.")
+        if is_valid is not None:
+            logger.info(f"The {len(is_valid)} plans added were validated.")
+            self._generated_plans[task][prompt_type]["is_valid"].extend(is_valid)
+        else:
+            logger.info(f"The {len(raw_plans)} plans added were not validated.")
+            self._generated_plans[task][prompt_type]["is_valid"].extend([None] * len(raw_plans))
 
     def generate(self, task:task.Task, cot_examples:set[task.Task]=set(), **generation_kwargs) -> None:
         """
@@ -121,6 +145,7 @@ class Model:
                         "raw_plans": plan_data.get("raw", []),
                         "processed_plans": plan_data.get("processed", []),
                         "pddl_plans": plan_data.get("pddl", []),
+                        "is_valid": plan_data.get("is_valid", []),
                     }
                     f.write(json.dumps(output) + "\n")
                     number_of_lines += 1
@@ -166,6 +191,7 @@ class Model:
                         "raw": data.get("raw_plans", []),
                         "processed": data.get("processed_plans", []),
                         "pddl": data.get("pddl_plans", []),
+                        "is_valid": data.get("is_valid", []),
                     }
                     number_of_plans += len(data.get("raw_plans", []))
         self._generated_plans = loaded_plans
@@ -513,6 +539,33 @@ class HuggingFaceModel(Model):
         """
         logger.debug("Generating with Hugging Face model.")
 
+        num_return_sequences = generation_kwargs.get("num_return_sequences", 1)
+        overwrite_plans = generation_kwargs.get("overwrite_plans", False)
+        prompt_type = "cot" if len(cot_examples) > 0 else "io"
+        if task in self._generated_plans and prompt_type in self._generated_plans[task]:
+            if not overwrite_plans:
+                num_already_generated_plans = len(self._generated_plans[task][prompt_type]['raw'])
+                logger.info(f"Task {task._id} already has {num_already_generated_plans} generated plans with prompt type {prompt_type}.")
+                if num_already_generated_plans >= num_return_sequences:
+                    logger.info(f"Skipping generation for task {task._id} with prompt type {prompt_type}.")
+                    return
+                else:
+                    logger.info(f"Task {task._id} has {num_already_generated_plans} generated plans with prompt type {prompt_type}. Generating {num_return_sequences - num_already_generated_plans} more plans to match the requested {num_return_sequences} plans.")
+                    num_return_sequences -= num_already_generated_plans
+            else:
+                logger.info(f"Overwriting existing plans for task {task._id} with prompt type {prompt_type}.")
+
+        # Ensure model is in evaluation mode
+        self._model.eval()
+
+        device = next(self._model.parameters()).device
+
+        prompt_components = task.get_prompt_componenets()
+        generation_messages: list[dict[str, str]] = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt_components["instruction"] + "\n" + prompt_components["input"]},
+        ]
+        
         # --- Generation Configuration ---
         gen_kwargs = {
             "max_new_tokens": generation_kwargs.get("max_new_tokens", 512),
@@ -522,22 +575,10 @@ class HuggingFaceModel(Model):
             "top_k": generation_kwargs.get("top_k", 50),
             "eos_token_id": self._tokenizer.eos_token_id,
             "pad_token_id": self._tokenizer.pad_token_id,
-            "num_return_sequences": generation_kwargs.get("num_return_sequences", 1),
+            "num_return_sequences": num_return_sequences,
         }
         gen_kwargs = {k: v for k, v in gen_kwargs.items() if v is not None}
         logger.debug(f"Generation parameters: {gen_kwargs}")
-
-        # Ensure model is in evaluation mode
-        self._model.eval()
-
-        device = next(self._model.parameters()).device
-
-        prompt_type = "cot" if len(cot_examples) > 0 else "io"
-        prompt_components = task.get_prompt_componenets()
-        generation_messages: list[dict[str, str]] = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt_components["instruction"] + "\n" + prompt_components["input"]},
-        ]
         try:
             # Set add_generation_prompt=False so the model continues from the provided assistant prompt
             inputs = self._tokenizer.apply_chat_template(
@@ -578,7 +619,6 @@ class HuggingFaceModel(Model):
             generated_tokens = (output[input_length:] if output.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device))
             generated_text = self._tokenizer.decode(generated_tokens, skip_special_tokens=True)
             raw_outputs.append(generated_text)
-            logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: {generated_text}")
 
             # # --- Process Plan ---
             # TODO: use this in the future when the model knows how to add the plan start and end tokens
@@ -604,7 +644,14 @@ class HuggingFaceModel(Model):
             processed_outputs.append(generated_text)
             pddl_plans.append(task._converter.natural_language_plan_to_pddl(generated_text))
             print(f"Generated PDDL plan:\n{pddl_plans[-1]}")
-        self.add_generated_plans(task, prompt_type=prompt_type, raw_plans=raw_outputs, processed_plans=processed_outputs, pddl_plans=pddl_plans)
+        self.add_generated_plans(
+            task=task, 
+            prompt_type=prompt_type, 
+            raw_plans=raw_outputs, 
+            processed_plans=processed_outputs, 
+            pddl_plans=pddl_plans, 
+            overwrite=overwrite_plans
+        )
 
         logger.info(f"Generated {len(processed_outputs)} plans for task {task} with prompt type {prompt_type}.")
 

@@ -23,7 +23,6 @@ def generate_batch(
         number_of_cot_examples:int = 0, 
         random_seed:int = 42,
         checkpoint_dir:Optional[str] = None, 
-        reset_model_dir:bool = False,
         **generation_kwargs):
     start_time = datetime.datetime.now()
     rng = np.random.RandomState(random_seed)
@@ -31,8 +30,8 @@ def generate_batch(
     logger.info(
         f"Starting generation batch with model '{model_name}' – time: {start_time}" # Use logger
     )
-
-    model = models.get_model(model_name=model_name, checkpoint_dir=checkpoint_dir, reset_model_dir=reset_model_dir, is_trainable=False)
+    generation_kwargs['is_trainable'] = False
+    model = models.get_model(model_name=model_name, checkpoint_dir=checkpoint_dir, **generation_kwargs)
     model.load_generated_plans()
 
    # --- Get tasks from dataset ---
@@ -86,7 +85,7 @@ def generate_batch(
             logger.error(f"Error generating plan for task {t._id} with model {model_name}: {e}", exc_info=True)
     logger.info(f"Plan generation loop completed for {len(tasks)} instances.")
     try:
-        logger.info(f"Saving generated plans to {model._generated_plans_dir}")
+        logger.info(f"Saving generated plans to {model._model_dir_path}")
         model.save_generated_plans()
         logger.info(f"Generated plans saved successfully.")
     except Exception as e:
