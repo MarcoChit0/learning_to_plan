@@ -137,6 +137,9 @@ class Model:
         number_of_tasks = 0
         number_of_plans = 0
         number_of_lines = 0
+        if not os.path.exists(file_path):
+            logger.warning(f"File {file_path} does not exist. No plans loaded.")
+            return
         with open(file_path, "r", encoding="utf-8") as f:
             for line in f:
                 number_of_lines += 1
@@ -294,20 +297,11 @@ class HuggingFaceModel(Model):
 
 
         batch_messages: List[List[Dict[str, str]]] = []
-        batch_user_part_messages_for_len_calc: List[List[Dict[str, str]]] = [] # For length calculation
 
         for i in range(dataset_len):
             user_content = examples["instruction"][i] + "\n" + examples["input"][i]
             assistant_content = examples["output"][i]
-            
-            # For calculating length of user part + system prompt
-            user_part_conversation = [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": user_content},
-            ]
-            batch_user_part_messages_for_len_calc.append(user_part_conversation)
 
-            # Full conversation for tokenization
             full_conversation = [
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": user_content},
@@ -339,8 +333,22 @@ class HuggingFaceModel(Model):
         PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
         PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
         for i in range(dataset_len): 
-            labels = [-100] * len(processed_tokenized_outputs["input_ids"][i])
-
+            # --- user messages ---
+            messages = batch_messages[i]
+            user_messages = messages[:-1] 
+            # --- assistant message without answer ---
+            assistant_message_without_answer = messages[-1].copy()
+            assistant_message_without_answer["content"] = ""
+            input_messages = user_messages + [assistant_message_without_answer]
+            # --- tokenize input messages ---
+            input_ids = self._tokenizer.apply_chat_template(
+                input_messages,
+                add_generation_prompt=False,
+                return_tensors="pt",
+                return_dict=True
+            )["input_ids"].tolist()[0]
+            
+            # --- check plan start and end tokens ---
             plan_start_idx = next((
                 idx for idx, token_id in enumerate(processed_tokenized_outputs["input_ids"][i]) if token_id == PLAN_START_TOKEN_ID), None)
             
@@ -353,7 +361,9 @@ class HuggingFaceModel(Model):
             if plan_end_idx is None:
                 raise ValueError(f"PLAN_END_TOKEN_ID {PLAN_END_TOKEN_ID} not found in input_ids for example {i} after plan_start_idx.")
             
-            labels[plan_start_idx:plan_end_idx + 1] = processed_tokenized_outputs["input_ids"][i][plan_start_idx:plan_end_idx + 1]
+            # --- labels ---
+            labels = [-100] * len(processed_tokenized_outputs["input_ids"][i])
+            labels[len(input_ids):plan_end_idx + 1] = processed_tokenized_outputs["input_ids"][i][len(input_ids):plan_end_idx + 1]
 
             labels_batch.append(labels)
         
