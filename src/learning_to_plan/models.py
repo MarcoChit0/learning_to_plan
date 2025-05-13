@@ -333,21 +333,6 @@ class HuggingFaceModel(Model):
         PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
         PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
         for i in range(dataset_len): 
-            # --- user messages ---
-            messages = batch_messages[i]
-            user_messages = messages[:-1] 
-            # --- assistant message without answer ---
-            assistant_message_without_answer = messages[-1].copy()
-            assistant_message_without_answer["content"] = ""
-            input_messages = user_messages + [assistant_message_without_answer]
-            # --- tokenize input messages ---
-            input_ids = self._tokenizer.apply_chat_template(
-                input_messages,
-                add_generation_prompt=False,
-                return_tensors="pt",
-                return_dict=True
-            )["input_ids"].tolist()[0]
-            
             # --- check plan start and end tokens ---
             plan_start_idx = next((
                 idx for idx, token_id in enumerate(processed_tokenized_outputs["input_ids"][i]) if token_id == PLAN_START_TOKEN_ID), None)
@@ -363,7 +348,7 @@ class HuggingFaceModel(Model):
             
             # --- labels ---
             labels = [-100] * len(processed_tokenized_outputs["input_ids"][i])
-            labels[len(input_ids):plan_end_idx + 1] = processed_tokenized_outputs["input_ids"][i][len(input_ids):plan_end_idx + 1]
+            labels[plan_start_idx:plan_end_idx + 1] = processed_tokenized_outputs["input_ids"][i][plan_start_idx:plan_end_idx + 1]
 
             labels_batch.append(labels)
         
@@ -429,6 +414,7 @@ class HuggingFaceModel(Model):
             eval_strategy=train_kwargs.get("eval_strategy", "epoch"),
             optim=train_kwargs.get("optimizer", "adamw_8bit"),
             warmup_ratio=train_kwargs.get("warmup_ratio", 0.1),
+            label_names=["labels"],
         )
         logger.debug(f"Final TrainingArguments: {training_args.to_dict()}")
 
@@ -439,6 +425,7 @@ class HuggingFaceModel(Model):
             data_collator=collator,
             train_dataset=tokenized_train_dataset,
             eval_dataset=tokenized_eval_dataset,
+            label_names=["labels"],
         )
 
         # --- Start Training ---
