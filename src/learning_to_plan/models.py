@@ -22,8 +22,6 @@ logger = config.get_logger(__name__)
 class Model:
     VALID_PROMPT_TYPES = ["io", "cot"]
     def __init__(self, model_name, **kwargs):
-        self._model_name = model_name
-        self.__dict__.update(kwargs)
         """
         task:task.Task : { # Task object for which the plan was generated
             prompt_type:str : { # Prompt type used for generation, e.g., "io", "cot", ...
@@ -33,8 +31,17 @@ class Model:
             }
         }
         """
+        self._model_name = model_name
+        self.__dict__.update(kwargs)
         self._generated_plans:dict[task.Task, dict[str, Any]] = {}
-    
+        self._model_dir_path = os.path.join(config.MODEL_DIR, model_name)
+        # TODO: add this to args
+        if kwargs.get("reset_model_dir", False):
+            if os.path.exists(self._model_dir_path):
+                logger.info(f"Deleting existing model directory: {self._model_dir_path}")
+                os.rmdir(self._model_dir_path)
+        config.create_necessary_dirs(self._model_dir_path)  
+
     def add_generated_plans(self, task: task.Task, prompt_type: str, raw_plans:list[str], processed_plans:list[str]=[], pddl_plans:list[str]=[]) -> None:
         """
             Adds generated plans to the internal dictionary.
@@ -87,7 +94,7 @@ class Model:
         """
         raise NotImplementedError("Subclasses should implement this method.")
     
-    def save_generated_plans(self, file_path: str) -> None:
+    def save_generated_plans(self) -> None:
         """
         Saves the generated plans to a JSONL file.
         Each line in the file corresponds to a (task, prompt) pair.
@@ -99,6 +106,7 @@ class Model:
         - processed plans
         - pddl plans
         """
+        file_path = os.path.join(self._model_dir_path, config.GENERATED_PLANS_FILE_NAME)
         logger.info(f"Saving generated plans to {file_path}.")
         number_of_tasks = self._generated_plans.keys()
         number_of_lines = 0
@@ -120,7 +128,7 @@ class Model:
         logger.info(f"Saved {number_of_lines} lines to {file_path}.")
         logger.info(f"Saved {number_of_plans} plans from {len(number_of_tasks)} tasks.")
     
-    def load_generated_plans(self, file_path: str) -> None:
+    def load_generated_plans(self) -> None:
         """
         Loads generated plans from a JSONL file and overwrites the current generated_plans.
         Assumes each line in the file is a JSON object with:
@@ -133,6 +141,7 @@ class Model:
         A pseudo task key is created as a tuple (domain_file_path, instance_file_path).
         """
         loaded_plans = {}
+        file_path = os.path.join(self._model_dir_path, config.GENERATED_PLANS_FILE_NAME)
         logger.info(f"Loading generated plans from {file_path}.")
         number_of_tasks = 0
         number_of_plans = 0
@@ -425,7 +434,6 @@ class HuggingFaceModel(Model):
             data_collator=collator,
             train_dataset=tokenized_train_dataset,
             eval_dataset=tokenized_eval_dataset,
-            label_names=["labels"],
         )
 
         # --- Start Training ---
@@ -565,6 +573,7 @@ class HuggingFaceModel(Model):
         # --- Process Outputs ---
         processed_outputs = []
         raw_outputs = []
+        pddl_plans = []
         for output in outputs:
             generated_tokens = (output[input_length:] if output.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device))
             generated_text = self._tokenizer.decode(generated_tokens, skip_special_tokens=True)
@@ -593,9 +602,9 @@ class HuggingFaceModel(Model):
 
             # TODO: remove this when the model knows how to add the plan start and end tokens
             processed_outputs.append(generated_text)
-            pddl_plan = task._converter.natural_language_plan_to_pddl(generated_text)
-            print(f"Generated PDDL plan:\n{pddl_plan}")
-        self.add_generated_plans(task, prompt_type, raw_outputs, processed_outputs)
+            pddl_plans.append(task._converter.natural_language_plan_to_pddl(generated_text))
+            print(f"Generated PDDL plan:\n{pddl_plans[-1]}")
+        self.add_generated_plans(task, prompt_type=prompt_type, raw_plans=raw_outputs, processed_plans=processed_outputs, pddl_plans=pddl_plans)
 
         logger.info(f"Generated {len(processed_outputs)} plans for task {task} with prompt type {prompt_type}.")
 

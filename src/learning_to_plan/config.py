@@ -11,6 +11,7 @@ import dotenv
 DATA_DIR = "data/"
 RAW_DIR: Optional[str] = None
 CHECKPOINTS_DIR: Optional[str] = None
+MODELS_DIR: Optional[str] = None
 HUGGINGFACE_TOKEN: Optional[str] = None
 GOOGLE_API_KEY: Optional[str] = None
 TASKS_DATASET_FILE_PATH: Optional[str] = None
@@ -64,7 +65,7 @@ def initialize(
         config_path: Path to a specific JSON configuration file to load (optional).
     """
     global _CONFIG_STORE, HUGGINGFACE_TOKEN, GOOGLE_API_KEY
-    global DATA_DIR, RAW_DIR, CHECKPOINTS_DIR, TASKS_DATASET_FILE_PATH, TASKS_DATASET_FILE_NAME
+    global DATA_DIR, RAW_DIR, CHECKPOINTS_DIR, TASKS_DATASET_FILE_PATH, TASKS_DATASET_FILE_NAME, MODELS_DIR
     global LOGGING_INITIALIZED, logger
 
     logger.info("Initializing environment variables...")
@@ -88,12 +89,13 @@ def initialize(
     logger.info(f"Using DATA_DIR: {DATA_DIR}")
     RAW_DIR = os.path.join(DATA_DIR, "raw")
     CHECKPOINTS_DIR = os.path.join(DATA_DIR, "checkpoints")
+    MODELS_DIR = os.path.join(DATA_DIR, "models")
     if hasattr(args, 'tasks_dataset_file_path') and args.tasks_dataset_file_path:
         TASKS_DATASET_FILE_PATH = args.tasks_dataset_file_path
     else:
         TASKS_DATASET_FILE_PATH = os.path.join(DATA_DIR, TASKS_DATASET_FILE_NAME)
 
-    for dir_path in [DATA_DIR, RAW_DIR, CHECKPOINTS_DIR]:
+    for dir_path in [DATA_DIR, RAW_DIR, CHECKPOINTS_DIR, MODELS_DIR]:
         try:
             os.makedirs(dir_path, exist_ok=True)
         except OSError as e:

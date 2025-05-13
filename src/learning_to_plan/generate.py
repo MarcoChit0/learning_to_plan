@@ -23,6 +23,7 @@ def generate_batch(
         number_of_cot_examples:int = 0, 
         random_seed:int = 42,
         checkpoint_dir:Optional[str] = None, 
+        reset_model_dir:bool = False,
         **generation_kwargs):
     start_time = datetime.datetime.now()
     rng = np.random.RandomState(random_seed)
@@ -31,12 +32,8 @@ def generate_batch(
         f"Starting generation batch with model '{model_name}' – time: {start_time}" # Use logger
     )
 
-    model = models.get_model(model_name=model_name, checkpoint_dir=checkpoint_dir)
-    generated_plans_file_path = os.path.join(
-        checkpoint_dir,
-        config.GENERATED_PLANS_FILE_NAME
-    )
-    model.load_generated_plans(generated_plans_file_path)
+    model = models.get_model(model_name=model_name, checkpoint_dir=checkpoint_dir, reset_model_dir=reset_model_dir, is_trainable=False)
+    model.load_generated_plans()
 
    # --- Get tasks from dataset ---
     try:
@@ -85,12 +82,15 @@ def generate_batch(
                 cot_examples=cot_examples,
                 **generation_kwargs
             )
-            logger.info(f"Task prompt:\n{t.get_prompt(with_plan=False, cot_examples=cot_examples)}")
-            logger.info(f"Model plans:\n{model._generated_plans}")
         except Exception as e:
-            logger.error(f"Error generating plan for task {t._id} with model {model_name}: {e}", exc_info=True) # Use logger
-
+            logger.error(f"Error generating plan for task {t._id} with model {model_name}: {e}", exc_info=True)
     logger.info(f"Plan generation loop completed for {len(tasks)} instances.")
+    try:
+        logger.info(f"Saving generated plans to {model._generated_plans_dir}")
+        model.save_generated_plans()
+        logger.info(f"Generated plans saved successfully.")
+    except Exception as e:
+        logger.error(f"Error saving generated plans: {e}", exc_info=True)
 
     end_time = datetime.datetime.now()
     logger.info(f"Generation batch finished at {end_time.strftime('%Y-%m-%d %H:%M:%S')}. Total time: {end_time - start_time}") # Use logger

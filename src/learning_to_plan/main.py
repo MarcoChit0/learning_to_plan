@@ -7,8 +7,8 @@ import asyncio
 from learning_to_plan import train
 from learning_to_plan import utils
 from learning_to_plan import task
-from learning_to_plan import config # Import the refactored config
-from learning_to_plan import generate # Import the new generate module
+from learning_to_plan import config
+from learning_to_plan import generate
 
 logger = config.get_logger(__name__)
 
@@ -86,6 +86,11 @@ def parse_args():
         type=str,
         default=None,
         help="Path to the tasks dataset file (e.g., 'data/tasks.jsonl'). Defaults to './data/tasks.jsonl'."
+    )
+    parser.add_argument(
+        "--reset_model_dir",
+        action="store_true",
+        help="Reset the model directory, used for storing model generated plans and processed data."
     )
     def number_of_instances_type(value):
         if value.isdigit():
@@ -209,19 +214,9 @@ if __name__ == "__main__":
         for domain in domains:
             logger.info(f"Starting generation for domain: {domain}")
             checkpoint_dir = config.get_checkpoint_dir(domain, generate_kwargs["model_name"]) if not args.dont_use_checkpoint else None
-            generate.generate_batch(domain=domain, number_of_instances=args.number_of_instances, random_seed=args.random_seed, number_of_cot_examples=args.cot, checkpoint_dir=checkpoint_dir, **generate_kwargs)
+            generate.generate_batch(domain=domain, number_of_instances=args.number_of_instances, random_seed=args.random_seed, number_of_cot_examples=args.cot, checkpoint_dir=checkpoint_dir, reset_model_dir=args.reset_model_dir, **generate_kwargs)
             logger.info(f"Finished generation for domain: {domain}")
         logger.info("--- Finished All Generation ---")
-
-    # elif args.validate:
-    #     logger.info("--- Starting Validation ---")
-    #     validate.validate_plans(data_file_path=data_file_path)
-    #     logger.info("--- Finished All Validation ---")
-
-    # elif args.compute_metrics:
-    #     logger.info("--- Starting Metric Computation ---")
-    #     metrics.compute_metrics(data_file_path=data_file_path)
-    #     logger.info("--- Finished Metric Computation ---")
 
     else:
         logger.warning("No action requested (e.g., --train, --generate). Exiting.")
