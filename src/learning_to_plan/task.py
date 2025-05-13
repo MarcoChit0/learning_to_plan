@@ -641,6 +641,15 @@ def get_tasks(filter_by_domain: Optional[str] = None,  filter_by_type: Optional[
             raise ValueError(f"No tasks found after filtering.")
     return tasks
 
+def get_task(domain_file_path: str, instance_file_path: str) -> Task:
+    global DATASET
+    if not DATASET:
+        raise ValueError("Dataset is empty. Please load the dataset first.")
+    for task in DATASET:
+        if task._domain_file_path == domain_file_path and task._instance_file_path == instance_file_path:
+            return task
+    raise ValueError(f"Task with domain file path '{domain_file_path}' and instance file path '{instance_file_path}' not found.")
+
 def save()-> None:
     jsonl_file_path = config.TASKS_DATASET_FILE_PATH
     global DATASET

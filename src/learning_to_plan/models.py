@@ -16,7 +16,7 @@ from learning_to_plan import config, task
 import torch
 import datasets
 import numpy as np
-
+import json
 logger = config.get_logger(__name__)
 
 class Model:
@@ -87,7 +87,79 @@ class Model:
         """
         raise NotImplementedError("Subclasses should implement this method.")
     
-
+    def save_generated_plans(self, file_path: str) -> None:
+        """
+        Saves the generated plans to a JSONL file.
+        Each line in the file corresponds to a (task, prompt) pair.
+        In each line, there is a JSON object containing:
+        - task domain file path
+        - task instance file path
+        - prompt type
+        - raw plans
+        - processed plans
+        - pddl plans
+        """
+        logger.info(f"Saving generated plans to {file_path}.")
+        number_of_tasks = self._generated_plans.keys()
+        number_of_lines = 0
+        number_of_plans = 0
+        with open(file_path, "w", encoding="utf-8") as f:
+            for task_obj, prompts in self._generated_plans.items():
+                for prompt_type, plan_data in prompts.items():
+                    output = {
+                        "domain_file_path": getattr(task_obj, "_domain_file_path", None),
+                        "instance_file_path": getattr(task_obj, "_instance_file_path", None),
+                        "prompt_type": prompt_type,
+                        "raw_plans": plan_data.get("raw", []),
+                        "processed_plans": plan_data.get("processed", []),
+                        "pddl_plans": plan_data.get("pddl", []),
+                    }
+                    f.write(json.dumps(output) + "\n")
+                    number_of_lines += 1
+                    number_of_plans += len(plan_data.get("raw", []))
+        logger.info(f"Saved {number_of_lines} lines to {file_path}.")
+        logger.info(f"Saved {number_of_plans} plans from {len(number_of_tasks)} tasks.")
+    
+    def load_generated_plans(self, file_path: str) -> None:
+        """
+        Loads generated plans from a JSONL file and overwrites the current generated_plans.
+        Assumes each line in the file is a JSON object with:
+        - domain_file_path
+        - instance_file_path
+        - prompt_type
+        - raw_plans
+        - processed_plans
+        - pddl_plans
+        A pseudo task key is created as a tuple (domain_file_path, instance_file_path).
+        """
+        loaded_plans = {}
+        logger.info(f"Loading generated plans from {file_path}.")
+        number_of_tasks = 0
+        number_of_plans = 0
+        number_of_lines = 0
+        with open(file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                number_of_lines += 1
+                if line.strip():
+                    data = json.loads(line)
+                    t = task.get_task(
+                        domain_file_path=data.get("domain_file_path"),
+                        instance_file_path=data.get("instance_file_path"),
+                    )
+                    if t not in loaded_plans:
+                        loaded_plans[t] = {}
+                        number_of_tasks += 1
+                    
+                    loaded_plans[t][data.get("prompt_type")] = {
+                        "raw": data.get("raw_plans", []),
+                        "processed": data.get("processed_plans", []),
+                        "pddl": data.get("pddl_plans", []),
+                    }
+                    number_of_plans += len(data.get("raw_plans", []))
+        self._generated_plans = loaded_plans
+        logger.info(f"{number_of_lines} lines read from {file_path}.")
+        logger.info(f"Loaded {number_of_plans} plans from {number_of_tasks} tasks.")
+                
 class HuggingFaceModel(Model):
     def __init__(self, model_name, checkpoint_dir: Optional[str] = None, **kwargs):
         super().__init__(model_name, **kwargs)
@@ -171,28 +243,14 @@ class HuggingFaceModel(Model):
                     msg=f"Token {', '.join(special_tokens_to_add)} cannot initialize its embedding layer with almost zero values. "
                     f"Setting it to the same as the reference token ID: {reference_token}, {reference_token_id}."
                 )
-                logger.info(f"Probailities of special tokens before initialization:")
-                self.check_special_tokens_probability()
                 with torch.no_grad():
                     for token in special_tokens_to_add:
                         token_id = self._tokenizer.convert_tokens_to_ids(token)
                         embedding_layer.weight[token_id].copy_(embedding_layer.weight[reference_token_id])
-                logger.info(f"Probailities of special tokens after initialization:")
-                self.check_special_tokens_probability()
 
         except Exception as e:
             logger.error(f"Error loading model from {model_source} or resizing embeddings: {e}", exc_info=True)
             raise e
-
-    def check_special_tokens_probability(self):
-        question = "My plan is as follows:\n"
-        messages = [{"role": "user", "content": question}]
-        tokens = self._tokenizer.apply_chat_template(messages, tokenize=True, return_tensors="pt")
-        tokens = tokens.to(self._model.device)
-
-        for token in [config.START_OF_PLAN_TOKEN, config.END_OF_PLAN_TOKEN]:
-            token_id = self._tokenizer.convert_tokens_to_ids(token)
-            logger.info(f"Token: {token}, Probability: {self.get_token_probability(tokens, token_id)}")
 
     def get_token_probability(self, input_tokens, target_token):
         with torch.no_grad():
@@ -448,7 +506,6 @@ class HuggingFaceModel(Model):
         Returns:
             A list containing the generated plan(s), stopping at <|plan_end|> or max_new_tokens.
         """
-        self.check_special_tokens_probability()
         logger.debug("Generating with Hugging Face model.")
 
         # --- Generation Configuration ---

@@ -1,6 +1,7 @@
 # generate.py 
 
 import datetime
+import os
 import torch
 from tqdm import tqdm
 from learning_to_plan import models
@@ -31,7 +32,11 @@ def generate_batch(
     )
 
     model = models.get_model(model_name=model_name, checkpoint_dir=checkpoint_dir)
-    
+    generated_plans_file_path = os.path.join(
+        checkpoint_dir,
+        config.GENERATED_PLANS_FILE_NAME
+    )
+    model.load_generated_plans(generated_plans_file_path)
 
    # --- Get tasks from dataset ---
     try:

@@ -83,6 +83,47 @@ def run_training_procedure(model_name, domain,  **train_kwargs):
             ]
             logger.debug(f"Decoded Input (first 300 chars): {decoded_input[:300]}...")
             logger.debug(f"Labeled Tokens (first 50): {' '.join(labeled_tokens[:50])}...")
+
+            def save_dataset_samples(dataset, model, checkpoint_dir, dataset_name, num_samples=5):
+                if len(dataset) == 0:
+                    logger.warning(f"Cannot save samples from empty {dataset_name} dataset.")
+                    return
+                
+                actual_num_samples = min(num_samples, len(dataset))
+                logger.info(f"Selecting {actual_num_samples} random samples from {dataset_name} dataset.")
+                # Ensure reproducibility if dataset is shuffled
+                random_samples_dataset = dataset.shuffle(seed=42).select(range(actual_num_samples))
+                
+                samples_to_save = []
+                for i in range(actual_num_samples):
+                    sample = random_samples_dataset[i]
+                    # Create a new dictionary to avoid modifying the original dataset structure directly
+                    # and to ensure all data is serializable.
+                    processed_sample = {
+                        'input_ids': sample['input_ids'],
+                        'labels': sample['labels'],
+                        'attention_mask': sample.get('attention_mask', []), # Include if present
+                        'decoded_input': model.decode(sample['input_ids'], skip_special_tokens=False)
+                    }
+                    samples_to_save.append(processed_sample)
+
+                sample_file_path = os.path.join(checkpoint_dir, f"sample_{dataset_name}_data.jsonl")
+                try:
+                    with open(sample_file_path, "w") as f:
+                        for sample_dict in samples_to_save:
+                            import json # Ensure json is imported
+                            f.write(json.dumps(sample_dict) + "\n")
+                    logger.info(f"Sample {dataset_name} data saved to {sample_file_path}")
+                except Exception as e:
+                    logger.error(f"Error saving sample {dataset_name} data to {sample_file_path}: {e}", exc_info=True)
+
+            # Save samples for training dataset
+            save_dataset_samples(tokenized_train_dataset, model, model_checkpoint_dir, "training")
+            # Save samples for validation dataset
+            save_dataset_samples(tokenized_eval_dataset, model, model_checkpoint_dir, "validation")
+
+
+
         else: 
             raise ValueError("Tokenized training dataset is empty despite non-empty input. Check processing logic and data.")
     except Exception as e:
