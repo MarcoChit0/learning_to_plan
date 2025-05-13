@@ -9,6 +9,7 @@ from learning_to_plan import utils
 from learning_to_plan import task
 from learning_to_plan import config
 from learning_to_plan import generate
+from learning_to_plan import processing_data
 
 logger = config.get_logger(__name__)
 
@@ -215,15 +216,30 @@ if __name__ == "__main__":
         config_file_path = args.config_file_path or os.path.join(config.CONFIGS_DIR, config.DEFAULT_GENERATE_CONFIG)
         generate_kwargs = config.get_config(config_file_path=config_file_path, args=args)
         assert generate_kwargs["model_name"], "Model name not found in config. Please check your configuration."
-        generate_kwargs["overwrite_generated_plans"] = args.overwrite_generated_plans
-        generate_kwargs["reset_model_dir"] = args.reset_model_dir
         domains = get_selected_domains(args=args, is_file=True)
         for domain in domains:
             logger.info(f"Starting generation for domain: {domain}")
-            checkpoint_dir = config.get_checkpoint_dir(domain, generate_kwargs["model_name"]) if not args.dont_use_checkpoint else None
-            generate.generate_batch(domain=domain, number_of_instances=args.number_of_instances, random_seed=args.random_seed, number_of_cot_examples=args.cot, checkpoint_dir=checkpoint_dir, **generate_kwargs)
+            checkpoint_dir = None if args.dont_use_checkpoint else checkpoint_dir = config.get_checkpoint_dir(domain, generate_kwargs["model_name"])
+            generate.generate_batch(
+                domain=domain, 
+                number_of_instances=args.number_of_instances, 
+                random_seed=args.random_seed, 
+                number_of_cot_examples=args.cot, 
+                ## --- generation kwargs ---
+                checkpoint_dir=checkpoint_dir, 
+                overwrite_generated_plans=args.overwrite_generated_plans, 
+                reset_model_dir=args.reset_model_dir, 
+                **generate_kwargs)
             logger.info(f"Finished generation for domain: {domain}")
         logger.info("--- Finished All Generation ---")
+    
+    elif args.validate:
+        logger.info("--- Starting Plan Validation ---")
+        config_file_path = args.config_file_path or os.path.join(config.CONFIGS_DIR, config.DEFAULT_GENERATE_CONFIG)
+        generate_kwargs = config.get_config(config_file_path=config_file_path, args=args)
+        assert generate_kwargs["model_name"], "Model name not found in config. Please check your configuration."
+        processing_data.validate_plans(model_name=generate_kwargs["model_name"], **generate_kwargs)
+        logger.info("--- Finished All Validation ---")
 
     else:
         logger.warning("No action requested (e.g., --train, --generate). Exiting.")

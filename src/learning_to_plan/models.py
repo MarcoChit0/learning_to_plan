@@ -89,6 +89,28 @@ class Model:
         else:
             logger.info(f"The {len(raw_plans)} plans added were not validated.")
             self._generated_plans[task][prompt_type]["is_valid"].extend([None] * len(raw_plans))
+    
+    def validate_generated_plan(self, task:task.Task, prompt_type:str, plan_idx:int, is_valid:bool) -> None:
+        """
+        Validates a generated plan for a specific task and prompt type.
+        This method is called after generating plans for a task.
+        """
+        if task not in self._generated_plans:
+            raise ValueError(f"Task {task} not found in generated plans.")
+        
+        if prompt_type not in self._generated_plans[task]:
+            raise ValueError(f"Prompt type {prompt_type} not found in generated plans for task {task}.")
+        
+        if plan_idx < 0 or plan_idx >= len(self._generated_plans[task][prompt_type]["raw"]):
+            raise IndexError(f"Plan index {plan_idx} out of range for task {task} and prompt type {prompt_type}.")
+        
+        self._generated_plans[task][prompt_type]["is_valid"][plan_idx] = is_valid
+
+        if is_valid:
+            s = "is valid."
+        else:
+            s = "is invalid."
+        logger.info(f"Model {self._model_name} - Task {task} - Prompt Type {prompt_type} - Plan Index {plan_idx}: Plan validated as {s}.")
 
     def generate(self, task:task.Task, cot_examples:set[task.Task]=set(), **generation_kwargs) -> None:
         """
@@ -761,5 +783,7 @@ def get_model(model_name: str, **kwargs) -> Model:
     #     return GeminiModel(model_name, **kwargs)
     # else:
     logger.info("Identified as Hugging Face model.")
-    checkpoint_dir = kwargs.pop('checkpoint_dir', None)
-    return HuggingFaceModel(model_name, checkpoint_dir=checkpoint_dir, **kwargs)
+    model = HuggingFaceModel(model_name, **kwargs)
+    model.load_generated_plans()
+    return model
+

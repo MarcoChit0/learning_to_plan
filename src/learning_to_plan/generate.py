@@ -22,7 +22,6 @@ def generate_batch(
         number_of_instances:Union[str, int] = "all", 
         number_of_cot_examples:int = 0, 
         random_seed:int = 42,
-        checkpoint_dir:Optional[str] = None, 
         **generation_kwargs):
     start_time = datetime.datetime.now()
     rng = np.random.RandomState(random_seed)
@@ -31,10 +30,8 @@ def generate_batch(
         f"Starting generation batch with model '{model_name}' – time: {start_time}" # Use logger
     )
     generation_kwargs['is_trainable'] = False
-    model = models.get_model(model_name=model_name, checkpoint_dir=checkpoint_dir, **generation_kwargs)
-    model.load_generated_plans()
-
-   # --- Get tasks from dataset ---
+    model = models.get_model(model_name=model_name, **generation_kwargs)
+    # --- Get tasks from dataset ---
     try:
         if number_of_instances == "all":
             tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.TEST)
