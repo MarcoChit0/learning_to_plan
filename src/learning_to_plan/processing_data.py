@@ -64,7 +64,7 @@ def validate_plans(model_name: str, **validation_kwargs):
                         if "Plan valid" in line:
                             is_plan_valid = True
                             break
-                    model.validate_generated_plan(task=task, prompt_type=prompt_type, plan=pddl_plan, is_valid=is_plan_valid)
+                    model.validate_generated_plan(task=task, prompt_type=prompt_type, plan_idx=i, is_valid=is_plan_valid)
                     # TODO: remove this later
                     with open(temp_plan_file, mode="a") as f:
                         f.write("\n")

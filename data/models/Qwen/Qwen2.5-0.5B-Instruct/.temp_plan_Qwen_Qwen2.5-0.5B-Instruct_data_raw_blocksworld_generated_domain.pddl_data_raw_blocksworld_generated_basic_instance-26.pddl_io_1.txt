@@ -4,7 +4,7 @@
 (stack c a)
 (pick-up b)
 (stack b c)
-Checking plan: data/models/Qwen/Qwen2.5-0.5B-Instruct/.temp_plan_Qwen_Qwen2.5-0.5B-Instruct_data_raw_blocksworld_generated_domain.pddl_data_raw_blocksworld_generated_basic_instance-26.pddl_io_0.txt
+Checking plan: data/models/Qwen/Qwen2.5-0.5B-Instruct/.temp_plan_Qwen_Qwen2.5-0.5B-Instruct_data_raw_blocksworld_generated_domain.pddl_data_raw_blocksworld_generated_basic_instance-26.pddl_io_1.txt
 Plan to validate:
 
 Plan size: 6
@@ -74,6 +74,6 @@ Final value: 6
 
 Successful plans:
 Value: 6
- data/models/Qwen/Qwen2.5-0.5B-Instruct/.temp_plan_Qwen_Qwen2.5-0.5B-Instruct_data_raw_blocksworld_generated_domain.pddl_data_raw_blocksworld_generated_basic_instance-26.pddl_io_0.txt 6 
+ data/models/Qwen/Qwen2.5-0.5B-Instruct/.temp_plan_Qwen_Qwen2.5-0.5B-Instruct_data_raw_blocksworld_generated_domain.pddl_data_raw_blocksworld_generated_basic_instance-26.pddl_io_1.txt 6 
 
 --> Plan is valid.

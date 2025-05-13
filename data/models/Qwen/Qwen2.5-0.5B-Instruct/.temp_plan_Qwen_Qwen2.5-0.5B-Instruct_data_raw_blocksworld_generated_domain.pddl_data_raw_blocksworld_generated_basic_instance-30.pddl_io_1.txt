@@ -1,24 +1,24 @@
-(unstack b a)
-(put-down b)
-(pick-up c)
-(stack c a)
+(unstack c a)
+(put-down c)
+(unstack a b)
+(put-down a)
 (pick-up b)
 (stack b c)
-Checking plan: data/models/Qwen/Qwen2.5-0.5B-Instruct/.temp_plan_Qwen_Qwen2.5-0.5B-Instruct_data_raw_blocksworld_generated_domain.pddl_data_raw_blocksworld_generated_basic_instance-26.pddl_io_0.txt
+Checking plan: data/models/Qwen/Qwen2.5-0.5B-Instruct/.temp_plan_Qwen_Qwen2.5-0.5B-Instruct_data_raw_blocksworld_generated_domain.pddl_data_raw_blocksworld_generated_basic_instance-30.pddl_io_1.txt
 Plan to validate:
 
 Plan size: 6
 1:
-(unstack b a)
+(unstack c a)
  
 2:
-(put-down b)
+(put-down c)
  
 3:
-(pick-up c)
+(unstack a b)
  
 4:
-(stack c a)
+(put-down a)
  
 5:
 (pick-up b)
@@ -31,30 +31,30 @@ Plan Validation details
 -----------------------
 
 Checking next happening (time 1)
-Deleting (on b a)
-Deleting (clear b)
+Deleting (on c a)
+Deleting (clear c)
 Deleting (handempty)
-Adding (holding b)
+Adding (holding c)
 Adding (clear a)
 
 Checking next happening (time 2)
-Deleting (holding b)
-Adding (clear b)
+Deleting (holding c)
+Adding (clear c)
 Adding (handempty)
-Adding (ontable b)
+Adding (ontable c)
 
 Checking next happening (time 3)
-Deleting (clear c)
-Deleting (ontable c)
+Deleting (on a b)
+Deleting (clear a)
 Deleting (handempty)
-Adding (holding c)
+Adding (holding a)
+Adding (clear b)
 
 Checking next happening (time 4)
-Deleting (clear a)
-Deleting (holding c)
+Deleting (holding a)
+Adding (clear a)
 Adding (handempty)
-Adding (clear c)
-Adding (on c a)
+Adding (ontable a)
 
 Checking next happening (time 5)
 Deleting (clear b)
@@ -74,6 +74,6 @@ Final value: 6
 
 Successful plans:
 Value: 6
- data/models/Qwen/Qwen2.5-0.5B-Instruct/.temp_plan_Qwen_Qwen2.5-0.5B-Instruct_data_raw_blocksworld_generated_domain.pddl_data_raw_blocksworld_generated_basic_instance-26.pddl_io_0.txt 6 
+ data/models/Qwen/Qwen2.5-0.5B-Instruct/.temp_plan_Qwen_Qwen2.5-0.5B-Instruct_data_raw_blocksworld_generated_domain.pddl_data_raw_blocksworld_generated_basic_instance-30.pddl_io_1.txt 6 
 
 --> Plan is valid.

@@ -1,0 +1,100 @@
+(unstack b a)
+(put-down b)
+(unstack a c)
+(put-down a)
+(pick-up b)
+(stack b c)
+(pick-up a)
+(stack a b)
+Checking plan: data/models/Qwen/Qwen2.5-0.5B-Instruct/.temp_plan_Qwen_Qwen2.5-0.5B-Instruct_data_raw_blocksworld_generated_domain.pddl_data_raw_blocksworld_generated_basic_instance-44.pddl_io_1.txt
+Plan to validate:
+
+Plan size: 8
+1:
+(unstack b a)
+ 
+2:
+(put-down b)
+ 
+3:
+(unstack a c)
+ 
+4:
+(put-down a)
+ 
+5:
+(pick-up b)
+ 
+6:
+(stack b c)
+ 
+7:
+(pick-up a)
+ 
+8:
+(stack a b)
+ 
+
+Plan Validation details
+-----------------------
+
+Checking next happening (time 1)
+Deleting (on b a)
+Deleting (clear b)
+Deleting (handempty)
+Adding (holding b)
+Adding (clear a)
+
+Checking next happening (time 2)
+Deleting (holding b)
+Adding (clear b)
+Adding (handempty)
+Adding (ontable b)
+
+Checking next happening (time 3)
+Deleting (on a c)
+Deleting (clear a)
+Deleting (handempty)
+Adding (holding a)
+Adding (clear c)
+
+Checking next happening (time 4)
+Deleting (holding a)
+Adding (clear a)
+Adding (handempty)
+Adding (ontable a)
+
+Checking next happening (time 5)
+Deleting (clear b)
+Deleting (ontable b)
+Deleting (handempty)
+Adding (holding b)
+
+Checking next happening (time 6)
+Deleting (clear c)
+Deleting (holding b)
+Adding (handempty)
+Adding (clear b)
+Adding (on b c)
+
+Checking next happening (time 7)
+Deleting (clear a)
+Deleting (ontable a)
+Deleting (handempty)
+Adding (holding a)
+
+Checking next happening (time 8)
+Deleting (clear b)
+Deleting (holding a)
+Adding (handempty)
+Adding (clear a)
+Adding (on a b)
+Plan executed successfully - checking goal
+Plan valid
+Final value: 8 
+
+Successful plans:
+Value: 8
+ data/models/Qwen/Qwen2.5-0.5B-Instruct/.temp_plan_Qwen_Qwen2.5-0.5B-Instruct_data_raw_blocksworld_generated_domain.pddl_data_raw_blocksworld_generated_basic_instance-44.pddl_io_1.txt 8 
+
+--> Plan is valid.
