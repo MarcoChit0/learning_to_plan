@@ -43,7 +43,7 @@ def validate_plans(model_name: str, **validation_kwargs):
     
     for task in model._generated_plans:
         for prompt_type in model._generated_plans[task]:
-            pddl_plans = model._generated_plans[task][prompt_type]['pddl_plans']
+            pddl_plans = model._generated_plans[task][prompt_type]['pddl']
             for i, pddl_plan in enumerate(pddl_plans):
                 temp_plan_file = os.path.join(model._model_dir_path, f".temp_plan_{model._model_name}_{task._domain_file_path}_{task._instance_file_path}_{prompt_type}_{i}.txt".replace(" ", "_").replace("/", "_"))
                 try:

@@ -219,7 +219,7 @@ if __name__ == "__main__":
         domains = get_selected_domains(args=args, is_file=True)
         for domain in domains:
             logger.info(f"Starting generation for domain: {domain}")
-            checkpoint_dir = None if args.dont_use_checkpoint else checkpoint_dir = config.get_checkpoint_dir(domain, generate_kwargs["model_name"])
+            checkpoint_dir = None if args.dont_use_checkpoint else config.get_checkpoint_dir(domain, generate_kwargs["model_name"])
             generate.generate_batch(
                 domain=domain, 
                 number_of_instances=args.number_of_instances, 
@@ -238,7 +238,7 @@ if __name__ == "__main__":
         config_file_path = args.config_file_path or os.path.join(config.CONFIGS_DIR, config.DEFAULT_GENERATE_CONFIG)
         generate_kwargs = config.get_config(config_file_path=config_file_path, args=args)
         assert generate_kwargs["model_name"], "Model name not found in config. Please check your configuration."
-        processing_data.validate_plans(model_name=generate_kwargs["model_name"], **generate_kwargs)
+        processing_data.validate_plans(**generate_kwargs)
         logger.info("--- Finished All Validation ---")
 
     else:
