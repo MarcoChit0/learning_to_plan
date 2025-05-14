@@ -1,5 +1,7 @@
+from typing import Callable
 from learning_to_plan import task
 from learning_to_plan import config
+from learning_to_plan import models
 import asyncio
 import aiohttp
 import os
@@ -117,3 +119,50 @@ def split_dataset(
         # Save the final dataset
         task.save()
     logger.info(f"Finished building finetuning dataset at {datetime.datetime.now()}.")
+
+
+def get_model_names_from_models_dir():
+    """
+    Go through all models names and compute the metrics for each one of them.
+    A model names is in the following format:
+        config.MODELS_DIR/model_name/config.GENERATED_PLANS_FILE_NAME,
+
+    where model_name can be separated by '/' as well.
+    """
+    if not os.path.exists(config.MODELS_DIR):
+        raise FileNotFoundError(f"Models directory '{config.MODELS_DIR}' not found.")
+    
+    model_names = []
+    for root, dirs, files in os.walk(config.MODELS_DIR):
+        for file in files:
+            if file == config.GENERATED_PLANS_FILE_NAME:
+                model_path = os.path.join(root, file)
+                model_name = os.path.relpath(model_path, config.MODELS_DIR)
+                model_name = os.path.dirname(model_name)
+                model_names.append(model_name)
+    
+    logger.info(f"Found {len(model_names)} models in '{config.MODELS_DIR}' directory.")
+    return model_names
+
+def apply_function_to_all_models(
+    function: Callable[..., None],
+    **kwargs
+):
+    model_names = get_model_names_from_models_dir()
+    if not model_names:
+        logger.warning(f"No models found in the {config.MODELS_DIR} directory.")
+        return
+    logger.info(f"Applying function '{function.__name__}' to all models...")
+    for model_name in model_names:
+        try:
+            model = models.get_model(model_name=model_name, **kwargs)
+            if not model:
+                logger.warning(f"Model '{model_name}' not found or could not be loaded.")
+                continue
+        except Exception as e:
+            logger.error(f"Error loading model '{model_name}': {e}", exc_info=True)
+            continue
+        try:
+            function(model=model, **kwargs)
+        except Exception as e:
+            raise ValueError(f"Error applying function '{function.__name__}' to model '{model_name}': {e}") from e

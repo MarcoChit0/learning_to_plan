@@ -562,7 +562,7 @@ class HuggingFaceModel(Model):
         logger.debug("Generating with Hugging Face model.")
 
         num_return_sequences = generation_kwargs.get("num_return_sequences", 1)
-        overwrite_plans = generation_kwargs.get("overwrite_plans", False)
+        overwrite_plans = generation_kwargs.get("overwrite_generated_plans", False)
         prompt_type = "cot" if len(cot_examples) > 0 else "io"
         if task in self._generated_plans and prompt_type in self._generated_plans[task]:
             if not overwrite_plans:

@@ -235,12 +235,18 @@ if __name__ == "__main__":
     
     elif args.validate:
         logger.info("--- Starting Plan Validation ---")
-        processing_data.validate_plans()
+        utils.apply_function_to_all_models(
+            function=processing_data.validate_plans,
+            is_trainable=False,
+        )
         logger.info("--- Finished All Validation ---")
     
     elif args.compute_metrics:
         logger.info("--- Starting Metrics Computation ---")
-        processing_data.compute_metrics()
+        utils.apply_function_to_all_models(
+            function=processing_data.compute_metrics,
+            is_trainable=False,
+        )
         logger.info("--- Finished All Metrics Computation ---")
 
     else:
