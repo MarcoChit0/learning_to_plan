@@ -503,7 +503,7 @@ class HuggingFaceModel(Model):
         try:
             logger.info(f"Saving final model and trainer state to {checkpoint_dir}")
             # Ensure the PeftModel is saved correctly. trainer.save_model() handles this for PeftModel.
-            self._model.save_pretrained(checkpoint_dir) # Recommended for PEFT models
+            self._model.save_pretrained(checkpoint_dir, save_embedding_layers=True) # Recommended for PEFT models
             self._tokenizer.save_pretrained(checkpoint_dir) # Save tokenizer explicitly
             # trainer.save_model(checkpoint_dir) # This also works and saves adapter for PEFT
             trainer.save_state()
