@@ -3,5 +3,6 @@
     "max_output_tokens": 2048,
     "candidate_count": 1,
     "top_k": 50,
-    "top_p": 0.93
+    "top_p": 0.93,
+    "wait_time": 20
 }

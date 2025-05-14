@@ -92,25 +92,6 @@ class Task(abc.ABC):
             return NotImplemented
         return self._instance_file_path == other._instance_file_path and self._domain_file_path == other._domain_file_path
 
-    def get_prompt(self, with_plan: bool = True,  cot_examples:set[Task] = set(), as_chat_template:bool = False) -> str:
-        try:
-            is_cot = len(cot_examples) > 0
-            domain_description = self._converter._domain_description_in_natural_language
-            instance_nl = self._converter.pddl_instance_to_natural_language(pddl_instance=self.read_instance())
-            
-            prompt = ""
-            prompt += domain_description
-            prompt += instance_nl
-            if with_plan and self._pddl_plan:
-                prompt += "My plan is as follows:\n"
-                prompt += config.START_OF_PLAN_TOKEN + "\n"
-                prompt += self._converter.pddl_plan_to_natural_language(pddl_plan=self._pddl_plan)
-                prompt += +"\n" + config.END_OF_PLAN_TOKEN
-            return prompt
-                    
-        except Exception as e:
-            raise Exception(f"An error occurred while building the prompt: {e}")
-
     def get_prompt_componenets(self) -> dict[str, str]:
         domain_description = self._converter._domain_description_in_natural_language
         instance_nl = self._converter.pddl_instance_to_natural_language(pddl_instance=self.read_instance())
@@ -122,6 +103,21 @@ class Task(abc.ABC):
         else: 
             raise ValueError(f"No plan available to convert to natural language for the task {self}.")
         return {"instruction": domain_description.strip(), "input": instance_nl.strip(), "output": plan_nl.strip()}
+
+    def get_chat(self, with_plan: bool = True,  cot_examples:set[Task] = set()) -> list[dict[str, str]]:
+        try:
+            prompt_components = self.get_prompt_componenets()
+            
+            chat: list[dict[str, str]] = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt_components["instruction"] + "\n" + prompt_components["input"]},
+            ]       
+            if with_plan and self._pddl_plan:
+                chat.append({"role": "assistant", "content": prompt_components['output']})
+            return chat
+
+        except Exception as e:
+            raise Exception(f"An error occurred while building the prompt: {e}")
 
     def to_json(self):
         try:

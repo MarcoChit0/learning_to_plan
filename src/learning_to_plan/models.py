@@ -26,7 +26,6 @@ class Model:
         task:task.Task : { # Task object for which the plan was generated
             prompt_type:str : { # Prompt type used for generation, e.g., "io", "cot", ...
                 "raw" : list[str], # List of raw generated plans
-                "processed" : list[str] # List of processed generated plans
                 "pddl" : list[str] # List of PDDL generated plans
                 "is_valid" : list[Optional[bool]] # List of booleans indicating if the plan is valid. If None, the plan is not validated.
             }
@@ -36,14 +35,13 @@ class Model:
         self.__dict__.update(kwargs)
         self._generated_plans:dict[task.Task, dict[str, Any]] = {}
         self._model_dir_path = os.path.join(config.MODELS_DIR, model_name)
-        # TODO: add this to args
         if kwargs.get("reset_model_dir", False):
             if os.path.exists(self._model_dir_path):
                 logger.info(f"Deleting existing model directory: {self._model_dir_path}")
                 os.rmdir(self._model_dir_path)
         os.makedirs(self._model_dir_path, exist_ok=True)
 
-    def add_generated_plans(self, task: task.Task, prompt_type: str, raw_plans:list[str], processed_plans:list[str], pddl_plans:list[str], is_valid:Optional[list[Optional[bool]]] = None, overwrite:bool=False) -> None:
+    def add_generated_plans(self, task: task.Task, prompt_type: str, raw_plans:list[str], pddl_plans:list[str], is_valid:Optional[list[Optional[bool]]] = None, overwrite:bool=False) -> None:
         """
             Adds generated plans to the internal dictionary.
             This method is called after generating plans for a task.
@@ -56,8 +54,8 @@ class Model:
                 device: The device on which the model is running (e.g., "cuda", "cpu").
         """
 
-        if len(raw_plans) != len(processed_plans) or len(raw_plans) != len(pddl_plans):
-            raise ValueError(f"Length mismatch: raw_plans ({len(raw_plans)}), processed_plans ({len(processed_plans)}), pddl_plans ({len(pddl_plans)})")
+        if  len(raw_plans) != len(pddl_plans):
+            raise ValueError(f"Length mismatch: raw_plans ({len(raw_plans)}), pddl_plans ({len(pddl_plans)})")
         
         if is_valid is not None and len(raw_plans) != len(is_valid):
             raise ValueError(f"Length mismatch: raw_plans ({len(raw_plans)}), is_valid ({len(is_valid)})")
@@ -71,7 +69,6 @@ class Model:
         if prompt_type not in self._generated_plans[task] or overwrite:
             self._generated_plans[task][prompt_type] = {
                 "raw": [],
-                "processed": [],
                 "pddl": [],
                 "is_valid": [],
             }
@@ -80,7 +77,6 @@ class Model:
             logger.info(f"Overwriting existing plans for task {task} and prompt type {prompt_type}.")
         
         self._generated_plans[task][prompt_type]["raw"].extend(raw_plans)
-        self._generated_plans[task][prompt_type]["processed"].extend(processed_plans)
         self._generated_plans[task][prompt_type]["pddl"].extend(pddl_plans)
         logger.info(f"Added {len(raw_plans)} plans for task {task} and prompt type {prompt_type}.")
         if is_valid is not None:
@@ -149,7 +145,6 @@ class Model:
         - task instance file path
         - prompt type
         - raw plans
-        - processed plans
         - pddl plans
         """
         file_path = os.path.join(self._model_dir_path, config.GENERATED_PLANS_FILE_NAME)
@@ -165,7 +160,6 @@ class Model:
                         "instance_file_path": getattr(task_obj, "_instance_file_path", None),
                         "prompt_type": prompt_type,
                         "raw_plans": plan_data.get("raw", []),
-                        "processed_plans": plan_data.get("processed", []),
                         "pddl_plans": plan_data.get("pddl", []),
                         "is_valid": plan_data.get("is_valid", []),
                     }
@@ -183,7 +177,6 @@ class Model:
         - instance_file_path
         - prompt_type
         - raw_plans
-        - processed_plans
         - pddl_plans
         A pseudo task key is created as a tuple (domain_file_path, instance_file_path).
         """
@@ -211,7 +204,6 @@ class Model:
                     
                     loaded_plans[t][data.get("prompt_type")] = {
                         "raw": data.get("raw_plans", []),
-                        "processed": data.get("processed_plans", []),
                         "pddl": data.get("pddl_plans", []),
                         "is_valid": data.get("is_valid", []),
                     }
@@ -271,12 +263,19 @@ class HuggingFaceModel(Model):
         # --- Model Loading ---
         try:
             torch_dtype = torch.bfloat16 if self.__dict__.get("bf16", False) else torch.float16
+            
+            quantization_config_param = None
+            if self.__dict__.get("load_in_8bit", False): # Check if load_in_8bit is true from train_config.json
+                quantization_config_param = BitsAndBytesConfig(load_in_8bit=True)
+                logger.info("8-bit quantization enabled for model loading.")
 
             self._model = AutoModelForCausalLM.from_pretrained(
                 pretrained_model_name_or_path=model_name,
                 trust_remote_code=True,
                 torch_dtype=torch_dtype,
-                token=config.HUGGINGFACE_TOKEN
+                token=config.HUGGINGFACE_TOKEN,
+                device_map="auto",
+                quantization_config=quantization_config_param,
             )
             logger.info(f"Model loaded successfully from {model_source}.")
 
@@ -285,7 +284,25 @@ class HuggingFaceModel(Model):
                 logger.info(f"Resizing model token embeddings to match tokenizer size: {len(self._tokenizer)}")
                 self._model.resize_token_embeddings(len(self._tokenizer))
                 logger.info("Model token embeddings resized successfully.")
+                # ---- Initialize new token embeddings with almost zero values ----
+                if not last_checkpoint and special_tokens_to_add:
+                    embedding_layer = self._model.get_input_embeddings()
+                    reference_token = "<|endoftext|>"
+                    reference_token_id = self._tokenizer.convert_tokens_to_ids(reference_token)
+                    logger.info(
+                        msg=f"Token {', '.join(special_tokens_to_add)} cannot initialize its embedding layer with almost zero values. "
+                        f"Setting it to the same as the reference token ID: {reference_token}, {reference_token_id}."
+                    )
+                    with torch.no_grad():
+                        for token in special_tokens_to_add:
+                            token_id = self._tokenizer.convert_tokens_to_ids(token)
+                            embedding_layer.weight[token_id].copy_(embedding_layer.weight[reference_token_id])
 
+            if quantization_config_param and kwargs.get("is_trainable", False):
+                logger.info("Preparing model for 8-bit training.")
+                self._model = prepare_model_for_kbit_training(self._model, use_gradient_checkpointing=True)
+                logger.info("Model prepared for 8-bit training.")
+            
             if last_checkpoint:
                 logger.info(f"Loading model state from checkpoint: {last_checkpoint}")
                 self._model = PeftModel.from_pretrained(
@@ -295,18 +312,6 @@ class HuggingFaceModel(Model):
                     is_trainable=kwargs.get("is_trainable", False),
                 )
                 logger.info(f"Model state loaded from checkpoint: {last_checkpoint}")
-            else:
-                embedding_layer = self._model.get_input_embeddings()
-                reference_token = "<|endoftext|>"
-                reference_token_id = self._tokenizer.convert_tokens_to_ids(reference_token)
-                logger.info(
-                    msg=f"Token {', '.join(special_tokens_to_add)} cannot initialize its embedding layer with almost zero values. "
-                    f"Setting it to the same as the reference token ID: {reference_token}, {reference_token_id}."
-                )
-                with torch.no_grad():
-                    for token in special_tokens_to_add:
-                        token_id = self._tokenizer.convert_tokens_to_ids(token)
-                        embedding_layer.weight[token_id].copy_(embedding_layer.weight[reference_token_id])
 
         except Exception as e:
             logger.error(f"Error loading model from {model_source} or resizing embeddings: {e}", exc_info=True)
@@ -582,11 +587,7 @@ class HuggingFaceModel(Model):
 
         device = next(self._model.parameters()).device
 
-        prompt_components = task.get_prompt_componenets()
-        generation_messages: list[dict[str, str]] = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt_components["instruction"] + "\n" + prompt_components["input"]},
-        ]
+        generation_messages: list[dict[str, str]] = task.get_chat(with_plan=False)
         
         # --- Generation Configuration ---
         gen_kwargs = {
@@ -634,7 +635,6 @@ class HuggingFaceModel(Model):
                 raise RuntimeError(f"Error during model.generate: {e_generate}") from e_generate
         
         # --- Process Outputs ---
-        processed_outputs = []
         raw_outputs = []
         pddl_plans = []
         for output in outputs:
@@ -663,127 +663,162 @@ class HuggingFaceModel(Model):
             #     logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: No start of plan token found in output tokens [{output[:100]}...]")
 
             # TODO: remove this when the model knows how to add the plan start and end tokens
-            processed_outputs.append(generated_text)
             pddl_plans.append(task._converter.natural_language_plan_to_pddl(generated_text))
             print(f"Generated PDDL plan:\n{pddl_plans[-1]}")
         self.add_generated_plans(
             task=task, 
             prompt_type=prompt_type, 
-            raw_plans=raw_outputs, 
-            processed_plans=processed_outputs, 
+            raw_plans=raw_outputs,
             pddl_plans=pddl_plans, 
             overwrite=overwrite_plans
         )
 
-        logger.info(f"Generated {len(processed_outputs)} plans for task {task} with prompt type {prompt_type}.")
+        logger.info(f"Generated {len(raw_outputs)} plans for task {task} with prompt type {prompt_type}.")
 
 
 # # --- Gemini Model (Remains unchanged from previous version) ---
-# import google.generativeai as genai
-# class GeminiModel(Model):
-#     def __init__(self, model_name, **kwargs):
-#         super().__init__(model_name, **kwargs)
-#         assert config.GOOGLE_API_KEY, "Google API Key is required for Gemini model."
-#         try:
-#             genai.configure(api_key=config.GOOGLE_API_KEY)
-#             logger.info("Gemini API configured successfully.")
-#         except Exception as e:
-#             logger.error(f"Failed to configure Gemini model: {e}", exc_info=True)
-#             raise RuntimeError(f"Failed to configure Gemini model: {e}")
+import google.generativeai as genai
+class GeminiModel(Model):
+    def __init__(self, model_name, **kwargs):
+        super().__init__(model_name, **kwargs)
+        assert config.GOOGLE_API_KEY, "Google API Key is required for Gemini model."
+        try:
+            genai.configure(api_key=config.GOOGLE_API_KEY)
+            logger.info("Gemini API configured successfully.")
+        except Exception as e:
+            logger.error(f"Failed to configure Gemini model: {e}", exc_info=True)
+            raise RuntimeError(f"Failed to configure Gemini model: {e}")
 
-#     def train(self, dataset:datasets.DatasetDict, **train_kwargs) -> None: # Changed type hint
-#         """
-#         Training is not applicable for Gemini model as it is a hosted service.
-#         """
-#         logger.warning("Training is not applicable for Gemini models.")
-#         raise NotImplementedError("Training is not applicable for Gemini model.")
+    def train(self, dataset:datasets.DatasetDict, **train_kwargs) -> None: # Changed type hint
+        """
+        Training is not applicable for Gemini model as it is a hosted service.
+        """
+        logger.warning("Training is not applicable for Gemini models.")
+        raise NotImplementedError("Training is not applicable for Gemini model.")
 
-#     def generate(
-#             self,
-#             prompt_text: str,
-#             **generation_kwargs
-#         ) -> list[str]:
-#         logger.debug(f"Generating with Gemini model {self._model_name}.")
+    def generate(
+            self,
+            task:task.Task,
+            cot_examples:set[task.Task]=set(),
+            **generation_kwargs:dict[str, Any] # Changed type hint
+        ) -> None:
+        logger.debug(f"Generating with Gemini model {self._model_name}.")
 
-#         generation_config = genai.types.GenerationConfig( # Use GenerationConfig object
-#             temperature=generation_kwargs.get("temperature", 0.7),
-#             top_p=generation_kwargs.get("top_p", 0.93),
-#             top_k=generation_kwargs.get("top_k", 50),
-#             max_output_tokens=generation_kwargs.get("max_new_tokens", 2048),
-#             candidate_count=generation_kwargs.get("num_return_sequences", 1), # Map num_return_sequences
-#             stop_sequences=[PLAN_END_TOKEN] # Add plan end token as stop sequence
-#         )
-#         logger.debug(f"Gemini generation config: {generation_config}")
+        original_chat_messages: list[dict[str, str]] = task.get_chat(with_plan=False)
 
+        system_instruction_parts = []
+        gemini_contents = []
 
-#         try:
-#             model = genai.GenerativeModel(
-#                 self._model_name,
-#                 generation_config=generation_config,
-#                 # safety_settings= # Add safety settings if needed
-#             )
-#         except Exception as e:
-#             logger.error(f"Failed to initialize Gemini model '{self._model_name}': {e}", exc_info=True)
-#             raise RuntimeError(f"Failed to initialize Gemini model '{self._model_name}': {e}") from e
+        for msg in original_chat_messages:
+            role = msg.get("role", "").lower()
+            content = msg.get("content", "")
 
-#         try:
-#             wait_time = generation_kwargs.get("wait_time", 0) # Default to 0 wait time unless specified
-#             if wait_time > 0:
-#                 logger.info(f"Waiting for {wait_time} seconds before Gemini API call.")
-#                 time.sleep(wait_time)
-
-#             logger.debug("Calling Gemini model.generate_content...")
-#             # The prompt should ideally include PLAN_START_TOKEN if Gemini needs it to trigger plan generation
-#             # Example: prompt_text_full = prompt_text + PLAN_START_TOKEN
-#             response = model.generate_content(prompt_text) # Use original prompt_text for now
-#             logger.debug("Gemini API call completed.")
-
-
-#             generated_texts = []
-#             if response and response.candidates:
-#                 for candidate in response.candidates:
-#                     if candidate.content and candidate.content.parts:
-#                         text = "".join(part.text for part in candidate.content.parts if hasattr(part, 'text'))
-#                         # Remove potential trailing PLAN_END_TOKEN if stop sequence worked
-#                         if text.endswith(PLAN_END_TOKEN):
-#                              text = text[:-len(PLAN_END_TOKEN)]
-#                         generated_texts.append(text.strip())
-#                     elif candidate.content and not candidate.content.parts:
-#                          logger.warning(f"Gemini candidate content has no parts: {candidate.content}")
-#                     else:
-#                          logger.warning(f"Gemini candidate has no content: {candidate}")
-
-#             if hasattr(response, 'prompt_feedback') and response.prompt_feedback.block_reason:
-#                  logger.error(f"Gemini request blocked. Reason: {response.prompt_feedback.block_reason}")
-#                  raise RuntimeError(f"Gemini request blocked. Reason: {response.prompt_feedback.block_reason}")
-#             if not generated_texts and response.candidates:
-#                  finish_reasons = [c.finish_reason for c in response.candidates]
-#                  logger.warning(f"No text extracted from Gemini response. Finish reasons: {finish_reasons}")
+            if role == "system":
+                system_instruction_parts.append(content)
+            elif role == "user":
+                gemini_contents.append({
+                    "role": "user",
+                    "parts": [{"text": content}]
+                })
+            elif role == "assistant": # Map "assistant" to "model" for Gemini
+                gemini_contents.append({
+                    "role": "model",
+                    "parts": [{"text": content}]
+                })
+            else:
+                logger.warning(f"Unsupported role '{role}' in chat for Gemini model. Skipping message: '{content[:50]}...'")
+        
+        final_system_instruction = "\n".join(system_instruction_parts) if system_instruction_parts else None
+        
+        generation_config = genai.types.GenerationConfig( # Use GenerationConfig object
+            temperature=generation_kwargs.get("temperature", 0.7),
+            top_p=generation_kwargs.get("top_p", 0.93),
+            top_k=generation_kwargs.get("top_k", 50),
+            max_output_tokens=generation_kwargs.get("max_output_tokens", 2048),
+            candidate_count=generation_kwargs.get("candidate_count", 1), # Map num_return_sequences
+            stop_sequences=[config.END_OF_PLAN_TOKEN] # Add plan end token as stop sequence
+        )
+        logger.debug(f"Gemini generation config: {generation_config}")
 
 
-#             if not generated_texts:
-#                 logger.error(f"No valid generated texts found in Gemini response. Response: {response}")
-#                 raise RuntimeError("No valid generated texts found in Gemini response.")
+        try:
+            model = genai.GenerativeModel(
+                self._model_name,
+                generation_config=generation_config,
+                system_instruction=final_system_instruction,
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize Gemini model '{self._model_name}': {e}", exc_info=True)
+            raise RuntimeError(f"Failed to initialize Gemini model '{self._model_name}': {e}") from e
 
-#             logger.debug(f"Generated {len(generated_texts)} sequences from Gemini.")
-#             return generated_texts
+        try:
+            wait_time = generation_kwargs.get("wait_time", 0) # Default to 0 wait time unless specified
+            if wait_time > 0:
+                logger.info(f"Waiting for {wait_time} seconds before Gemini API call.")
+                time.sleep(wait_time)
 
-#         except Exception as e:
-#             logger.error(f"Failed to generate text with Gemini model '{self._model_name}': {e}", exc_info=True)
-#             raise RuntimeError(f"Failed to generate text with Gemini model '{self._model_name}': {e}") from e
+            logger.debug("Calling Gemini model.generate_content...")
+            # The prompt should ideally include PLAN_START_TOKEN if Gemini needs it to trigger plan generation
+            # Example: prompt_text_full = prompt_text + PLAN_START_TOKEN
+            response = model.generate_content(gemini_contents) # Use original prompt_text for now
+            logger.debug("Gemini API call completed.")
+
+
+            generated_texts = []
+            if response and response.candidates:
+                for candidate in response.candidates:
+                    if candidate.content and candidate.content.parts:
+                        text = "".join(part.text for part in candidate.content.parts if hasattr(part, 'text'))
+                        generated_texts.append(text.strip())
+                    elif candidate.content and not candidate.content.parts:
+                         logger.warning(f"Gemini candidate content has no parts: {candidate.content}")
+                    else:
+                         logger.warning(f"Gemini candidate has no content: {candidate}")
+
+            if hasattr(response, 'prompt_feedback') and response.prompt_feedback.block_reason:
+                 logger.error(f"Gemini request blocked. Reason: {response.prompt_feedback.block_reason}")
+                 raise RuntimeError(f"Gemini request blocked. Reason: {response.prompt_feedback.block_reason}")
+            if not generated_texts and response.candidates:
+                 finish_reasons = [c.finish_reason for c in response.candidates]
+                 logger.warning(f"No text extracted from Gemini response. Finish reasons: {finish_reasons}")
+
+
+            if not generated_texts:
+                logger.error(f"No valid generated texts found in Gemini response. Response: {response}")
+                raise RuntimeError("No valid generated texts found in Gemini response.")
+
+            pddl_plans = [task._converter.natural_language_plan_to_pddl(text) for text in generated_texts]
+            prompt_type = "cot" if len(cot_examples) > 0 else "io"
+            self.add_generated_plans(
+                task=task,
+                prompt_type=prompt_type,
+                raw_plans=generated_texts,
+                pddl_plans=pddl_plans,
+                overwrite=generation_kwargs.get("overwrite_generated_plans", False)
+            )
+            logger.info(f"Generated {len(generated_texts)} plans for task {task} with prompt type {prompt_type}.")
+
+        except Exception as e:
+            logger.error(f"Failed to generate text with Gemini model '{self._model_name}': {e}", exc_info=True)
+            raise RuntimeError(f"Failed to generate text with Gemini model '{self._model_name}': {e}") from e
 
 # --- get_model function (Remains unchanged) ---
 def get_model(model_name: str, **kwargs) -> Model:
     """
     Factory function to get the appropriate model based on the model name.
     """
-    # logger.info(f"Creating model instance for: {model_name}")
-    # if model_name.lower().startswith("gemini"):
-    #     logger.info("Identified as Gemini model.")
-    #     return GeminiModel(model_name, **kwargs)
-    # else:
-    logger.info("Identified as Hugging Face model.")
-    model = HuggingFaceModel(model_name, **kwargs)
+    logger.info(f"Creating model instance for: {model_name}")
+    if model_name.lower().startswith("gemini"):
+        logger.info("Identified as Gemini model.")
+        model_cls = GeminiModel
+    else:
+        logger.info("Identified as Hugging Face model.")
+        model_cls = HuggingFaceModel
+    try:
+        model = model_cls(model_name, **kwargs)
+    except Exception as e:
+        logger.error(f"Error creating model instance: {e}", exc_info=True)
+        raise e
     model.load_generated_plans()
     return model
 

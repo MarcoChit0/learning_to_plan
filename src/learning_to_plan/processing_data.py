@@ -62,16 +62,7 @@ def validate_plans(model:models.Model, **kwargs):
                             is_plan_valid = True
                             break
                     model.validate_generated_plan(task=task, prompt_type=prompt_type, plan_idx=i, is_valid=is_plan_valid)
-                    # TODO: remove this later
-                    with open(temp_plan_file, mode="a") as f:
-                        f.write("\n")
-                        for line in result.stdout.splitlines():
-                            f.write(line + "\n")
-                        if is_plan_valid:
-                            f.write("--> Plan is valid.\n")
-                        else:
-                            f.write("--> Plan is invalid.\n")
-                    # TODO: when this method is ok, remove the temp file
+                    os.remove(temp_plan_file)
                 except Exception as e:
                     logger.error(f"Error validating plan for task {task._id} - Model '{model._model_name}' - Prompt Type '{prompt_type}': {e}")
                     raise e
