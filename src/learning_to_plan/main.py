@@ -235,11 +235,13 @@ if __name__ == "__main__":
     
     elif args.validate:
         logger.info("--- Starting Plan Validation ---")
-        config_file_path = args.config_file_path or os.path.join(config.CONFIGS_DIR, config.DEFAULT_GENERATE_CONFIG)
-        generate_kwargs = config.get_config(config_file_path=config_file_path, args=args)
-        assert generate_kwargs["model_name"], "Model name not found in config. Please check your configuration."
-        processing_data.validate_plans(**generate_kwargs)
+        processing_data.validate_plans()
         logger.info("--- Finished All Validation ---")
+    
+    elif args.compute_metrics:
+        logger.info("--- Starting Metrics Computation ---")
+        processing_data.compute_metrics()
+        logger.info("--- Finished All Metrics Computation ---")
 
     else:
         logger.warning("No action requested (e.g., --train, --generate). Exiting.")
