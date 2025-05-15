@@ -1,3 +1,3 @@
 Model,Domain,Task Size,Prompt Type,Any Valid (%),All Valid (%),Avg Valid Ratio (%)
-Qwen/Qwen2.5-0.5B-Instruct,blocksworld,basic,io,36.00,36.00,36.00
-Qwen/Qwen2.5-0.5B-Instruct,blocksworld,longer,io,0.00,0.00,0.00
+Qwen/Qwen2.5-0.5B-Instruct,blocksworld,basic,io,52.00,52.00,52.00
+Qwen/Qwen2.5-0.5B-Instruct,blocksworld,longer,io,2.00,2.00,2.00

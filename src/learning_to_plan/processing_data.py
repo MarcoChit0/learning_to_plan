@@ -5,6 +5,7 @@ from learning_to_plan import task
 import datetime
 import subprocess
 import csv
+from tqdm import tqdm
 logger = config.get_logger(__name__)
 # # domin_path = "data/raw/blocksworld/generated_domain.pddl"
 # # problem_path = "data/raw/blocksworld/generated_basic/instance-0.pddl"
@@ -38,11 +39,22 @@ logger = config.get_logger(__name__)
 
 def validate_plans(model:models.Model, **kwargs):
     logger.info(f"Starting plan validation at {datetime.datetime.now()}.")
+    # Calculate total number of plans to validate
+    total_plans = sum(
+        len(model._generated_plans[task][prompt_type]['pddl'])
+        for task in model._generated_plans
+        for prompt_type in model._generated_plans[task]
+    )
+    progress_bar = tqdm(total=total_plans, desc="Validated Tasks", unit="plan")
+
     for task in model._generated_plans:
         for prompt_type in model._generated_plans[task]:
             pddl_plans = model._generated_plans[task][prompt_type]['pddl']
             for i, pddl_plan in enumerate(pddl_plans):
-                temp_plan_file = os.path.join(model._model_dir_path, f".temp_plan_{model._model_name}_{task._domain_file_path}_{task._instance_file_path}_{prompt_type}_{i}.txt".replace(" ", "_").replace("/", "_"))
+                temp_plan_file = os.path.join(
+                    model._model_dir_path,
+                    f".temp_plan_{model._model_name}_{task._domain_file_path}_{task._instance_file_path}_{prompt_type}_{i}.txt".replace(" ", "_").replace("/", "_")
+                )
                 try:
                     with open(temp_plan_file, "w") as f:
                         f.write(pddl_plan)
@@ -66,6 +78,8 @@ def validate_plans(model:models.Model, **kwargs):
                 except Exception as e:
                     logger.error(f"Error validating plan for task {task._id} - Model '{model._model_name}' - Prompt Type '{prompt_type}': {e}")
                     raise e
+                progress_bar.update(1)
+    progress_bar.close()
     model.save_generated_plans()
     logger.info(f"Plan validation completed at {datetime.datetime.now()}.")
 
@@ -100,43 +114,41 @@ def compute_metrics(
                 data[task._domain][task_size][prompt_type]['all_valid'] += 1
 
     # --- Calculate final metrics ---
-    for model_name in data:
-        for domain in data:
-            for task_size in data[domain]:
-                for prompt_type in data[domain][task_size]:
-                    num_instances = data[domain][task_size][prompt_type]['num_instances']
-                    if num_instances > 0:
-                        data[domain][task_size][prompt_type]['valid_ratio'] = sum(data[domain][task_size][prompt_type]['valid_ratio']) / len(data[domain][task_size][prompt_type]['valid_ratio'])
-                        data[domain][task_size][prompt_type]['any_valid'] = data[domain][task_size][prompt_type]['any_valid'] / num_instances
-                        data[domain][task_size][prompt_type]['all_valid'] = data[domain][task_size][prompt_type]['all_valid'] / num_instances
-                    else:
-                        # Handle cases with no instances to avoid division by zero
-                        data[domain][task_size][prompt_type]['valid_ratio'] = 0.0
-                        data[domain][task_size][prompt_type]['any_valid'] = 0.0
-                        data[domain][task_size][prompt_type]['all_valid'] = 0.0
+    for domain in data:
+        for task_size in data[domain]:
+            for prompt_type in data[domain][task_size]:
+                num_instances = data[domain][task_size][prompt_type]['num_instances']
+                if num_instances > 0:
+                    data[domain][task_size][prompt_type]['valid_ratio'] = sum(data[domain][task_size][prompt_type]['valid_ratio']) / len(data[domain][task_size][prompt_type]['valid_ratio'])
+                    data[domain][task_size][prompt_type]['any_valid'] = data[domain][task_size][prompt_type]['any_valid'] / num_instances
+                    data[domain][task_size][prompt_type]['all_valid'] = data[domain][task_size][prompt_type]['all_valid'] / num_instances
+                else:
+                    # Handle cases with no instances to avoid division by zero
+                    data[domain][task_size][prompt_type]['valid_ratio'] = 0.0
+                    data[domain][task_size][prompt_type]['any_valid'] = 0.0
+                    data[domain][task_size][prompt_type]['all_valid'] = 0.0
 
     logger.info(f"Metrics computed at {datetime.datetime.now()}.")
 
     # --- Prepare data for CSV and logging ---
     header = ['Model', 'Domain', 'Task Size', 'Prompt Type', 'Any Valid (%)', 'All Valid (%)', 'Avg Valid Ratio (%)']
     table_data = [header]
-    for model_name in data:
-        for domain in data:
-            for task_size in data[domain]:
-                for prompt_type in data[domain][task_size]:
-                    metrics = data[domain][task_size][prompt_type]
-                    any_valid_pct = metrics['any_valid'] * 100
-                    all_valid_pct = metrics['all_valid'] * 100
-                    valid_ratio_pct = metrics['valid_ratio'] * 100
-                    table_data.append([
-                        model_name,
-                        domain,
-                        task_size,
-                        prompt_type,
-                        f"{any_valid_pct:.2f}",
-                        f"{all_valid_pct:.2f}",
-                        f"{valid_ratio_pct:.2f}"
-                    ])
+    for domain in data:
+        for task_size in data[domain]:
+            for prompt_type in data[domain][task_size]:
+                metrics = data[domain][task_size][prompt_type]
+                any_valid_pct = metrics['any_valid'] * 100
+                all_valid_pct = metrics['all_valid'] * 100
+                valid_ratio_pct = metrics['valid_ratio'] * 100
+                table_data.append([
+                    model._model_name,
+                    domain,
+                    task_size,
+                    prompt_type,
+                    f"{any_valid_pct:.2f}",
+                    f"{all_valid_pct:.2f}",
+                    f"{valid_ratio_pct:.2f}"
+                ])
 
     # --- Save metrics to CSV ---
     csv_file_path = os.path.join(model._model_dir_path, f"metrics.csv")

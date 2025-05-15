@@ -106,7 +106,7 @@ class Model:
             s = "is valid."
         else:
             s = "is invalid."
-        logger.info(f"Model {self._model_name} - Task {task} - Prompt Type {prompt_type} - Plan Index {plan_idx}: Plan validated as {s}.")
+        logger.debug(f"Model {self._model_name} - Task {task} - Prompt Type {prompt_type} - Plan Index {plan_idx}: Plan validated as {s}.")
 
     def generate(self, task:task.Task, cot_examples:set[task.Task]=set(), **generation_kwargs) -> None:
         """
