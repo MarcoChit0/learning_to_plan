@@ -406,9 +406,7 @@ class HuggingFaceModel(Model):
             tokenized_user_part = self._tokenizer.apply_chat_template(
                 user_part,
                 add_generation_prompt=False,
-                padding="max_length",
-                max_length=max_seq_length,
-                truncation=True,
+                padding="do_not_pad",
                 return_tensors="pt",
                 return_dict=True
             )
