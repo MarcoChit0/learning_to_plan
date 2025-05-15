@@ -359,16 +359,22 @@ class HuggingFaceModel(Model):
 
 
         batch_messages: List[List[Dict[str, str]]] = []
+        user_content_messages: List[List[Dict[str, str]]] = []
 
         for i in range(dataset_len):
             user_content = examples["instruction"][i] + "\n" + examples["input"][i]
             assistant_content = examples["output"][i]
 
-            full_conversation = [
+            user_part_of_conversation = [
                 {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": user_content},
-                {"role": "assistant", "content": assistant_content},
+                {"role": "user", "content": user_content}
             ]
+            user_content_messages.append(user_part_of_conversation)
+
+            full_conversation = []
+            full_conversation.extend(user_part_of_conversation)
+            full_conversation.append({"role": "assistant", "content": assistant_content})
+
             batch_messages.append(full_conversation)
         
         # Tokenize the full conversations for training
@@ -392,26 +398,37 @@ class HuggingFaceModel(Model):
         }
 
         labels_batch = []
-        PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
-        PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
         for i in range(dataset_len): 
-            # --- check plan start and end tokens ---
-            plan_start_idx = next((
-                idx for idx, token_id in enumerate(processed_tokenized_outputs["input_ids"][i]) if token_id == PLAN_START_TOKEN_ID), None)
-            
-            if plan_start_idx is None:
-                raise ValueError(f"PLAN_START_TOKEN_ID {PLAN_START_TOKEN_ID} not found in input_ids for example {i}.")
-            
-            plan_end_idx = next((
-                idx for idx, token_id in enumerate(processed_tokenized_outputs["input_ids"][i], start=plan_start_idx) if token_id == PLAN_END_TOKEN_ID), None)
-            
-            if plan_end_idx is None:
-                raise ValueError(f"PLAN_END_TOKEN_ID {PLAN_END_TOKEN_ID} not found in input_ids for example {i} after plan_start_idx.")
-            
-            # --- labels ---
-            labels = [-100] * len(processed_tokenized_outputs["input_ids"][i])
-            labels[plan_start_idx:plan_end_idx + 1] = processed_tokenized_outputs["input_ids"][i][plan_start_idx:plan_end_idx + 1]
+            # Create labels for the model
+            labels = [-100] * len(tokenized_encoding_batch["input_ids"][i])
 
+            user_part = user_content_messages[i]
+            tokenized_user_part = self._tokenizer.apply_chat_template(
+                user_part,
+                add_generation_prompt=False,
+                padding="max_length",
+                max_length=max_seq_length,
+                truncation=True,
+                return_tensors="pt",
+                return_dict=True
+            )
+
+            tokenized_user_part_length = len(tokenized_user_part["input_ids"][0])
+            input_ids = processed_tokenized_outputs['input_ids'][i]
+            response_input_ids = input_ids[tokenized_user_part_length:]
+
+            PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
+            PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
+
+            plan_start_index = next((i for i, x in enumerate(response_input_ids) if x == PLAN_START_TOKEN_ID), None)
+            if plan_start_index is None:
+                raise ValueError(f"Plan start token not found in response input IDs for example {i}.")
+            
+            plan_end_index = next((i for i, x in enumerate(response_input_ids, start=plan_start_index) if x == PLAN_END_TOKEN_ID), None)
+            if plan_end_index is None:
+                raise ValueError(f"Plan end token not found in response input IDs for example {i}.")
+    
+            labels[tokenized_user_part_length:plan_end_index+1] = input_ids[tokenized_user_part_length:plan_end_index+1]
             labels_batch.append(labels)
         
         processed_tokenized_outputs["labels"] = labels_batch
@@ -639,7 +656,7 @@ class HuggingFaceModel(Model):
         pddl_plans = []
         for output in outputs:
             generated_tokens = (output[input_length:] if output.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device))
-            generated_text = self._tokenizer.decode(generated_tokens, skip_special_tokens=True)
+            generated_text = self._tokenizer.decode(generated_tokens, skip_special_tokens=False)
             raw_outputs.append(generated_text)
 
             # # --- Process Plan ---
