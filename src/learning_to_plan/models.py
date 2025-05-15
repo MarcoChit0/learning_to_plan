@@ -400,8 +400,6 @@ class HuggingFaceModel(Model):
         labels_batch = []
         for i in range(dataset_len): 
             # Create labels for the model
-            labels = [-100] * len(tokenized_encoding_batch["input_ids"][i])
-
             user_part = user_content_messages[i]
             tokenized_user_part = self._tokenizer.apply_chat_template(
                 user_part,
@@ -425,8 +423,13 @@ class HuggingFaceModel(Model):
             plan_end_index = next((i for i, x in enumerate(response_input_ids, start=plan_start_index) if x == PLAN_END_TOKEN_ID), None)
             if plan_end_index is None:
                 raise ValueError(f"Plan end token not found in response input IDs for example {i}.")
-    
-            labels[tokenized_user_part_length:plan_end_index+1] = input_ids[tokenized_user_part_length:plan_end_index+1]
+            
+            response_input_ids = response_input_ids[:plan_end_index + 1]
+
+            labels = [-100] * tokenized_user_part_length + len(response_input_ids)
+            labels[tokenized_user_part_length:] = response_input_ids
+            # complete the labels with -100
+            labels = labels + [-100] * (len(input_ids) - len(labels))
             labels_batch.append(labels)
         
         processed_tokenized_outputs["labels"] = labels_batch
