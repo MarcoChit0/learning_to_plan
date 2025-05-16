@@ -426,10 +426,9 @@ class HuggingFaceModel(Model):
             
             response_input_ids = response_input_ids[:plan_end_index + 1]
 
-            labels = [-100] * tokenized_user_part_length + len(response_input_ids)
-            labels[tokenized_user_part_length:] = response_input_ids
-            # complete the labels with -100
-            labels = labels + [-100] * (len(input_ids) - len(labels))
+            labels = [-100] * len(input_ids)  # Initialize labels with -100
+            for j in range(len(response_input_ids)):
+                labels[tokenized_user_part_length + j] = response_input_ids[j]  # Set labels for the response part
             labels_batch.append(labels)
         
         processed_tokenized_outputs["labels"] = labels_batch
