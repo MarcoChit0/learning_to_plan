@@ -420,10 +420,12 @@ class HuggingFaceModel(Model):
             if plan_start_index is None:
                 raise ValueError(f"Plan start token not found in response input IDs for example {i}.")
             
-            plan_end_index = next((i for i, x in enumerate(response_input_ids, start=plan_start_index) if x == PLAN_END_TOKEN_ID), None)
+            plan_end_index = next((i for i, x in enumerate(response_input_ids) if x == PLAN_END_TOKEN_ID), None)
             if plan_end_index is None:
                 raise ValueError(f"Plan end token not found in response input IDs for example {i}.")
             
+            assert plan_end_index > plan_start_index, f"Plan end token index {plan_end_index} must be greater than start token index {plan_start_index}."
+
             response_input_ids = response_input_ids[:plan_end_index + 1]
 
             labels = [-100] * len(input_ids)  # Initialize labels with -100
