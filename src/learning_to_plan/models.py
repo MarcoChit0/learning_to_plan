@@ -414,15 +414,24 @@ class HuggingFaceModel(Model):
 
             # --- verify the response ---
             end_of_text_token_id = self._tokenizer.eos_token_id
-            start_of_text_token_id = self._tokenizer.convert_tokens_to_ids("<|im_start|>") # special start token for qwen models
+            start_of_response_sequence = ["<|im_start|>", "assistant", "\n"]
+            start_of_response_sequence_tokens_ids = self._tokenizer.convert_tokens_to_ids(start_of_response_sequence)
 
             end_of_response_token_index = next((i for i, x in enumerate(response_input_ids) if x == end_of_text_token_id), None)
             if end_of_response_token_index is None:
                 raise ValueError(f"End of response token not found in response input IDs for example {i}.")
             
-            assert start_of_text_token_id == response_input_ids[0], f"Start of text token {start_of_text_token_id} must be the first token in the response input IDs for example {i}."
-            response_input_ids = response_input_ids[1:end_of_response_token_index] # Exclude the start token and the end token to not be a part in the loss calculation
-            assert len(response_input_ids) > 0, f"Response input IDs for example {i} are empty after removing start and end tokens." 
+            response_input_ids = response_input_ids[:end_of_response_token_index] # Remove everything after the end of response token, including the token itself
+            
+            assert start_of_response_sequence_tokens_ids[0] == response_input_ids[0], f"Start of response token {start_of_response_sequence_tokens_ids[0]} not found in response input IDs for example {i}."
+            for j in range(len(start_of_response_sequence_tokens_ids)):
+                start_of_response_token_index = next((i for i, x in enumerate(response_input_ids) if x == start_of_response_sequence_tokens_ids[j]), None)
+                if start_of_response_token_index is None:
+                    raise ValueError(f"Start of response token {start_of_response_sequence[j]} not found in response input IDs for example {i}.")
+            
+            start_of_response_length = len(start_of_response_sequence_tokens_ids)
+            response_input_ids = response_input_ids[start_of_response_length:] # Remove the start of response sequence tokens
+            
 
             # --- verify the plan, inside the response ---
             PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
@@ -439,9 +448,10 @@ class HuggingFaceModel(Model):
             assert plan_end_index > plan_start_index, f"Plan end token index {plan_end_index} must be greater than start token index {plan_start_index}."
 
             # --- Create labels ---
+            # In the loss calculation, there should be all the model output tokens, including "My plan is as follows:" and the special start-of-plan token, until the end-of-plan token (inclusive).
             labels = [-100] * len(input_ids)  # Initialize labels with -100
             for j in range(len(response_input_ids)):
-                labels[tokenized_user_part_length + j] = response_input_ids[j]  # Set labels for the response part
+                labels[tokenized_user_part_length + start_of_response_length + j] = response_input_ids[j]  # Set labels for the response part
             labels_batch.append(labels)
         
         processed_tokenized_outputs["labels"] = labels_batch

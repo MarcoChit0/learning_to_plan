@@ -103,7 +103,8 @@ def run_training_procedure(model_name, domain,  **train_kwargs):
                         'input_ids': sample['input_ids'],
                         'labels': sample['labels'],
                         'attention_mask': sample.get('attention_mask', []), # Include if present
-                        'decoded_input': model.decode(sample['input_ids'], skip_special_tokens=False)
+                        'decoded_input': model.decode(sample['input_ids'], skip_special_tokens=False),
+                        'decoded_labels': model.decode(sample['labels'], skip_special_tokens=False),
                     }
                     samples_to_save.append(processed_sample)
 
