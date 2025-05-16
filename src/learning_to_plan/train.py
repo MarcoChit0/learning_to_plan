@@ -44,10 +44,10 @@ def save_dataset_samples(dataset:datasets.Dataset, model:models.Model, checkpoin
         # Create a new dictionary to avoid modifying the original dataset structure directly
         # and to ensure all data is serializable.
         processed_sample = {
-            'input_ids': sample['input_ids'].to_list(), # Convert to list for JSON serialization
-            'labels': sample['labels'].to_list(), # Convert to list for JSON serialization
-            'attention_mask': sample['attention_mask'].to_list(), # Convert to list for JSON serialization
-            'decoded_input': model.decode(sample['input_ids'], skip_special_tokens=False).to_list(), # Convert to list for JSON serialization
+            'input_ids': sample['input_ids'].tolist(), # Convert to list for JSON serialization
+            'labels': sample['labels'].tolist(), # Convert to list for JSON serialization
+            'attention_mask': sample['attention_mask'].tolist(), # Convert to list for JSON serialization
+            'decoded_input': model.decode(sample['input_ids'], skip_special_tokens=False),
         }
         samples_to_save.append(processed_sample)
     sample_file_path = os.path.join(checkpoint_dir, f"sample_{dataset_name}_data.jsonl")
