@@ -420,8 +420,9 @@ class HuggingFaceModel(Model):
             if end_of_response_token_index is None:
                 raise ValueError(f"End of response token not found in response input IDs for example {i}.")
             
-            response_input_ids = response_input_ids[:end_of_response_token_index + 1]  # Include the end of text token
             assert start_of_text_token_id == response_input_ids[0], f"Start of text token {start_of_text_token_id} must be the first token in the response input IDs for example {i}."
+            response_input_ids = response_input_ids[1:end_of_response_token_index] # Exclude the start token and the end token to not be a part in the loss calculation
+            assert len(response_input_ids) > 0, f"Response input IDs for example {i} are empty after removing start and end tokens." 
 
             # --- verify the plan, inside the response ---
             PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
