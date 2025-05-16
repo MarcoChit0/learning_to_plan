@@ -397,11 +397,11 @@ class HuggingFaceModel(Model):
         PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
         plan_start_index = next((i for i, x in enumerate(output_tokens) if x == PLAN_START_TOKEN_ID), None)
         if plan_start_index is None:
-            raise ValueError(f"Plan start token not found in response input IDs for example {i}.")
+            raise ValueError(f"Plan start token not found in response input IDs for the chat {chat}.")
         
         plan_end_index = next((i for i, x in enumerate(output_tokens) if x == PLAN_END_TOKEN_ID), None)
         if plan_end_index is None:
-            raise ValueError(f"Plan end token not found in response input IDs for example {i}.")
+            raise ValueError(f"Plan end token not found in response input IDs for the chat {chat}.")
         
         assert plan_end_index > plan_start_index, f"Plan end token index {plan_end_index} must be greater than start token index {plan_start_index}."
         
