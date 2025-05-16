@@ -1,7 +1,7 @@
 {
     "model_name": "Qwen/Qwen2.5-0.5B-Instruct",
-    "max_seq_length": 512,
-    "max_new_tokens": 512,
+    "max_seq_length": 1024,
+    "max_new_tokens": 1024,
     "report_to": "none",
     "batch_size": 1,
     "gradient_accumulation_steps": 1,
