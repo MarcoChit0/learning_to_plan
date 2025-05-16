@@ -399,7 +399,7 @@ class HuggingFaceModel(Model):
 
         labels_batch = []
         for i in range(dataset_len): 
-            # Create labels for the model
+            # --- Extract user part of the conversation ---
             user_part = user_content_messages[i]
             tokenized_user_part = self._tokenizer.apply_chat_template(
                 user_part,
@@ -408,11 +408,22 @@ class HuggingFaceModel(Model):
                 return_tensors="pt",
                 return_dict=True
             )
-
             tokenized_user_part_length = len(tokenized_user_part["input_ids"][0])
             input_ids = processed_tokenized_outputs['input_ids'][i]
             response_input_ids = input_ids[tokenized_user_part_length:]
 
+            # --- verify the response ---
+            end_of_text_token_id = self._tokenizer.eos_token_id
+            start_of_text_token_id = self._tokenizer.convert_tokens_to_ids("<|im_start|>") # special start token for qwen models
+
+            end_of_response_token_index = next((i for i, x in enumerate(response_input_ids) if x == end_of_text_token_id), None)
+            if end_of_response_token_index is None:
+                raise ValueError(f"End of response token not found in response input IDs for example {i}.")
+            
+            response_input_ids = response_input_ids[:end_of_response_token_index + 1]  # Include the end of text token
+            assert start_of_text_token_id == response_input_ids[0], f"Start of text token {start_of_text_token_id} must be the first token in the response input IDs for example {i}."
+
+            # --- verify the plan, inside the response ---
             PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
             PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
 
@@ -426,12 +437,7 @@ class HuggingFaceModel(Model):
             
             assert plan_end_index > plan_start_index, f"Plan end token index {plan_end_index} must be greater than start token index {plan_start_index}."
 
-            if len(response_input_ids) > plan_end_index + 2:
-                # include the plan end token and the end of text token
-                response_input_ids = response_input_ids[:plan_end_index + 2]
-            else:
-                raise ValueError(f"Response input IDs for example {i} are too short to include plan end token and end of text token.")
-
+            # --- Create labels ---
             labels = [-100] * len(input_ids)  # Initialize labels with -100
             for j in range(len(response_input_ids)):
                 labels[tokenized_user_part_length + j] = response_input_ids[j]  # Set labels for the response part
