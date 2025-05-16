@@ -426,7 +426,11 @@ class HuggingFaceModel(Model):
             
             assert plan_end_index > plan_start_index, f"Plan end token index {plan_end_index} must be greater than start token index {plan_start_index}."
 
-            response_input_ids = response_input_ids[:plan_end_index + 1]
+            if len(response_input_ids) > plan_end_index + 2:
+                # include the plan end token and the end of text token
+                response_input_ids = response_input_ids[:plan_end_index + 2]
+            else:
+                raise ValueError(f"Response input IDs for example {i} are too short to include plan end token and end of text token.")
 
             labels = [-100] * len(input_ids)  # Initialize labels with -100
             for j in range(len(response_input_ids)):
