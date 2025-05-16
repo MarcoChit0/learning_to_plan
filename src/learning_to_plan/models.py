@@ -343,44 +343,13 @@ class HuggingFaceModel(Model):
             skip_special_tokens=skip_special_tokens
         )
 
-    def tokenize_chat(self, examples: Dict[str, List[str]], max_seq_length: int = 1024) -> Dict[str, Any]:
+    def tokenize_chat(self, chat:list[dict[str, str]], max_seq_length: int = 1024) -> Dict[str, Any]:
         """
-        Tokenizes a batch of examples using the chat template.
-        'examples' is a dictionary where keys like "instruction", "input", "output"
-        hold lists of strings (one string per example in the batch).
+        Tokenizes a single chat conversation for training.
         """
-        dataset_len = len(examples["instruction"])
-        if not (dataset_len == len(examples["input"]) == len(examples["output"])):
-            raise ValueError("Instruction, input, and output lists must have the same length.")
-        
-        if dataset_len == 0:
-            logger.warning("tokenize_chat received an empty batch of examples.")
-            return {"input_ids": [], "attention_mask": [], "labels": []}
-
-
-        batch_messages: List[List[Dict[str, str]]] = []
-        user_content_messages: List[List[Dict[str, str]]] = []
-
-        for i in range(dataset_len):
-            user_content = examples["instruction"][i] + "\n" + examples["input"][i]
-            assistant_content = examples["output"][i]
-
-            user_part_of_conversation = [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": user_content}
-            ]
-            user_content_messages.append(user_part_of_conversation)
-
-            full_conversation = []
-            full_conversation.extend(user_part_of_conversation)
-            full_conversation.append({"role": "assistant", "content": assistant_content})
-
-            batch_messages.append(full_conversation)
-        
-        # Tokenize the full conversations for training
-        # Force PyTorch tensor output to ensure BatchEncoding (dict-like) is returned
-        tokenized_encoding_batch = self._tokenizer.apply_chat_template(
-            batch_messages,
+        # --- Tokenize the chat conversation ---
+        tokenized_chat = self._tokenizer.apply_chat_template(
+            chat,
             add_generation_prompt=False,
             padding="max_length",
             max_length=max_seq_length,
@@ -390,72 +359,61 @@ class HuggingFaceModel(Model):
             return_dict=True
         )
 
-        # Convert tensors to lists for subsequent Python logic
-        processed_tokenized_outputs = {
-            "input_ids": tokenized_encoding_batch["input_ids"].tolist(),
-            "attention_mask": tokenized_encoding_batch["attention_mask"].tolist(),
-            "labels": []
-        }
+        # --- Extract model's response part of the conversation ---
+        expected_output_content = chat[-1]['content']
+        expected_output_content_ids = self._tokenizer.encode(
+            expected_output_content,
+            add_generation_prompt=False,
+            padding="do_not_pad",
+            return_tensors="pt",
+            return_dict=True
+        )
 
-        labels_batch = []
-        for i in range(dataset_len): 
-            # --- Extract user part of the conversation ---
-            user_part = user_content_messages[i]
-            tokenized_user_part = self._tokenizer.apply_chat_template(
-                user_part,
-                add_generation_prompt=False,
-                padding="do_not_pad",
-                return_tensors="pt",
-                return_dict=True
-            )
-            tokenized_user_part_length = len(tokenized_user_part["input_ids"][0])
-            input_ids = processed_tokenized_outputs['input_ids'][i]
-            response_input_ids = input_ids[tokenized_user_part_length:]
-
-            # --- verify the response ---
-            end_of_text_token_id = self._tokenizer.eos_token_id
-            start_of_response_sequence = ["<|im_start|>", "assistant", "\n"]
-            start_of_response_sequence_tokens_ids = self._tokenizer.convert_tokens_to_ids(start_of_response_sequence)
-
-            end_of_response_token_index = next((i for i, x in enumerate(response_input_ids) if x == end_of_text_token_id), None)
-            if end_of_response_token_index is None:
-                raise ValueError(f"End of response token not found in response input IDs for example {i}.")
+        # --- Find the start sequence index ---
+        # The start sequence index is the first occurrence of the expected output content in the tokenized chat
+        # All the tokens from the expected output content should be present in the tokenized chat in the same order
+        def is_sublist(sublist, lst):
+            if len(sublist) > len(lst):
+                return False
+            for i in range(len(sublist)):
+                if sublist[i] != lst[i]:
+                    return False
+            return True
             
-            response_input_ids = response_input_ids[:end_of_response_token_index] # Remove everything after the end of response token, including the token itself
-            
-            assert start_of_response_sequence_tokens_ids[0] == response_input_ids[0], f"Start of response token {start_of_response_sequence_tokens_ids[0]} not found in response input IDs for example {i}."
-            for j in range(len(start_of_response_sequence_tokens_ids)):
-                start_of_response_token_index = next((i for i, x in enumerate(response_input_ids) if x == start_of_response_sequence_tokens_ids[j]), None)
-                if start_of_response_token_index is None:
-                    raise ValueError(f"Start of response token {start_of_response_sequence[j]} not found in response input IDs for example {i}.")
-            
-            start_of_response_length = len(start_of_response_sequence_tokens_ids)
-            response_input_ids = response_input_ids[start_of_response_length:] # Remove the start of response sequence tokens
-            
-
-            # --- verify the plan, inside the response ---
-            PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
-            PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
-
-            plan_start_index = next((i for i, x in enumerate(response_input_ids) if x == PLAN_START_TOKEN_ID), None)
-            if plan_start_index is None:
-                raise ValueError(f"Plan start token not found in response input IDs for example {i}.")
-            
-            plan_end_index = next((i for i, x in enumerate(response_input_ids) if x == PLAN_END_TOKEN_ID), None)
-            if plan_end_index is None:
-                raise ValueError(f"Plan end token not found in response input IDs for example {i}.")
-            
-            assert plan_end_index > plan_start_index, f"Plan end token index {plan_end_index} must be greater than start token index {plan_start_index}."
-
-            # --- Create labels ---
-            # In the loss calculation, there should be all the model output tokens, including "My plan is as follows:" and the special start-of-plan token, until the end-of-plan token (inclusive).
-            labels = [-100] * len(input_ids)  # Initialize labels with -100
-            for j in range(len(response_input_ids)):
-                labels[tokenized_user_part_length + start_of_response_length + j] = response_input_ids[j]  # Set labels for the response part
-            labels_batch.append(labels)
+        start_sequence_index = None
+        for i in range(len(tokenized_chat["input_ids"][0])):
+            if is_sublist(expected_output_content_ids[0], tokenized_chat["input_ids"][0][i:]):
+                start_sequence_index = i
+                break
         
-        processed_tokenized_outputs["labels"] = labels_batch
-        return processed_tokenized_outputs
+        if start_sequence_index is None:
+            raise ValueError(f"Start sequence index not found in tokenized chat for example {i}.")
+        
+        # --- verify the plan ---
+        # The plan is between the start and end tokens (inclusive)
+        PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
+        PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
+        plan_start_index = next((i for i, x in enumerate(expected_output_content_ids) if x == PLAN_START_TOKEN_ID), None)
+        if plan_start_index is None:
+            raise ValueError(f"Plan start token not found in response input IDs for example {i}.")
+        
+        plan_end_index = next((i for i, x in enumerate(expected_output_content_ids) if x == PLAN_END_TOKEN_ID), None)
+        if plan_end_index is None:
+            raise ValueError(f"Plan end token not found in response input IDs for example {i}.")
+        
+        assert plan_end_index > plan_start_index, f"Plan end token index {plan_end_index} must be greater than start token index {plan_start_index}."
+        
+        # --- Create labels ---
+        # In the loss calculation, there should be all the model output tokens, including "My plan is as follows:" and the special start-of-plan token, until the end-of-plan token (inclusive).
+        labels = [-100] * len(tokenized_chat)  # Initialize labels with -100
+        for j in range(len(expected_output_content_ids)):
+            labels[start_sequence_index + j] = expected_output_content_ids[j]
+        
+        return {
+            "input_ids": tokenized_chat["input_ids"][0].tolist(),
+            "labels": labels,
+            "attention_mask": tokenized_chat["attention_mask"][0].tolist(),
+        }
 
     def train(self, checkpoint_dir: str, tokenized_train_dataset: datasets.DatasetDict, tokenized_eval_dataset: datasets.DatasetDict, **train_kwargs: Dict[str, Any]) -> None:
 
