@@ -358,16 +358,15 @@ class HuggingFaceModel(Model):
             return_attention_mask=True,
             return_dict=True
         )
+        input_ids = tokenized_chat["input_ids"][0].tolist()
+        attention_mask = tokenized_chat["attention_mask"][0].tolist()
 
         # --- Extract model's response part of the conversation ---
-        expected_output_content = chat[-1]['content']
-        expected_output_content_ids = self._tokenizer.encode(
-            expected_output_content,
-            add_generation_prompt=False,
+        output_tokens = self._tokenizer.encode(
+            chat[-1]['content'],
             padding="do_not_pad",
-            return_tensors="pt",
-            return_dict=True
-        )
+            return_tensors="pt"
+        )[0].tolist()
 
         # --- Find the start sequence index ---
         # The start sequence index is the first occurrence of the expected output content in the tokenized chat
@@ -381,23 +380,26 @@ class HuggingFaceModel(Model):
             return True
             
         start_sequence_index = None
-        for i in range(len(tokenized_chat["input_ids"][0])):
-            if is_sublist(expected_output_content_ids[0], tokenized_chat["input_ids"][0][i:]):
+        for i in range(len(input_ids)):
+            if is_sublist(output_tokens, input_ids[i:]):
                 start_sequence_index = i
                 break
         
         if start_sequence_index is None:
             raise ValueError(f"Start sequence index not found in tokenized chat for example {i}.")
         
+        if start_sequence_index + len(output_tokens) > len(input_ids):
+            raise ValueError(f"Start sequence index + output tokens length exceeds input IDs length for example {i}.")
+        
         # --- verify the plan ---
         # The plan is between the start and end tokens (inclusive)
         PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
         PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
-        plan_start_index = next((i for i, x in enumerate(expected_output_content_ids) if x == PLAN_START_TOKEN_ID), None)
+        plan_start_index = next((i for i, x in enumerate(output_tokens) if x == PLAN_START_TOKEN_ID), None)
         if plan_start_index is None:
             raise ValueError(f"Plan start token not found in response input IDs for example {i}.")
         
-        plan_end_index = next((i for i, x in enumerate(expected_output_content_ids) if x == PLAN_END_TOKEN_ID), None)
+        plan_end_index = next((i for i, x in enumerate(output_tokens) if x == PLAN_END_TOKEN_ID), None)
         if plan_end_index is None:
             raise ValueError(f"Plan end token not found in response input IDs for example {i}.")
         
@@ -405,14 +407,14 @@ class HuggingFaceModel(Model):
         
         # --- Create labels ---
         # In the loss calculation, there should be all the model output tokens, including "My plan is as follows:" and the special start-of-plan token, until the end-of-plan token (inclusive).
-        labels = [-100] * len(tokenized_chat)  # Initialize labels with -100
-        for j in range(len(expected_output_content_ids)):
-            labels[start_sequence_index + j] = expected_output_content_ids[j]
+        labels = [-100] * len(input_ids)  # Initialize labels with -100
+        for j in range(len(output_tokens)):
+            labels[start_sequence_index + j] = output_tokens[j]
         
         return {
-            "input_ids": tokenized_chat["input_ids"][0].tolist(),
+            "input_ids": input_ids,
             "labels": labels,
-            "attention_mask": tokenized_chat["attention_mask"][0].tolist(),
+            "attention_mask": attention_mask,
         }
 
     def train(self, checkpoint_dir: str, tokenized_train_dataset: datasets.DatasetDict, tokenized_eval_dataset: datasets.DatasetDict, **train_kwargs: Dict[str, Any]) -> None:
