@@ -361,55 +361,26 @@ class HuggingFaceModel(Model):
         input_ids = tokenized_chat["input_ids"][0].tolist()
         attention_mask = tokenized_chat["attention_mask"][0].tolist()
 
-        # --- Extract model's response part of the conversation ---
-        output_tokens = self._tokenizer.encode(
-            chat[-1]['content'],
-            padding="do_not_pad",
-            return_tensors="pt"
-        )[0].tolist()
+        labels = input_ids.copy()
+        for i in range(len(labels)):
+            if labels[i] == self._tokenizer.pad_token_id:
+                labels[i] = -100
 
-        # --- Find the start sequence index ---
-        # The start sequence index is the first occurrence of the expected output content in the tokenized chat
-        # All the tokens from the expected output content should be present in the tokenized chat in the same order
-        def is_sublist(sublist, lst):
-            if len(sublist) > len(lst):
-                return False
-            for i in range(len(sublist)):
-                if sublist[i] != lst[i]:
-                    return False
-            return True
-            
-        start_sequence_index = None
-        for i in range(len(input_ids)):
-            if is_sublist(output_tokens, input_ids[i:]):
-                start_sequence_index = i
-                break
-        
-        if start_sequence_index is None:
-            raise ValueError(f"Start sequence index not found in tokenized chat for example {i}.")
-        
-        if start_sequence_index + len(output_tokens) > len(input_ids):
-            raise ValueError(f"Start sequence index + output tokens length exceeds input IDs length for example {i}.")
-        
+
+
         # --- verify the plan ---
         # The plan is between the start and end tokens (inclusive)
         PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
         PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
-        plan_start_index = next((i for i, x in enumerate(output_tokens) if x == PLAN_START_TOKEN_ID), None)
+        plan_start_index = next((i for i, x in enumerate(input_ids) if x == PLAN_START_TOKEN_ID), None)
         if plan_start_index is None:
             raise ValueError(f"Plan start token not found in response input IDs for the chat {chat}.")
         
-        plan_end_index = next((i for i, x in enumerate(output_tokens) if x == PLAN_END_TOKEN_ID), None)
+        plan_end_index = next((i for i, x in enumerate(input_ids) if x == PLAN_END_TOKEN_ID), None)
         if plan_end_index is None:
             raise ValueError(f"Plan end token not found in response input IDs for the chat {chat}.")
         
         assert plan_end_index > plan_start_index, f"Plan end token index {plan_end_index} must be greater than start token index {plan_start_index}."
-        
-        # --- Create labels ---
-        # In the loss calculation, there should be all the model output tokens, including "My plan is as follows:" and the special start-of-plan token, until the end-of-plan token (inclusive).
-        labels = [-100] * len(input_ids)  # Initialize labels with -100
-        for j in range(len(output_tokens)):
-            labels[start_sequence_index + j] = output_tokens[j]
         
         return {
             "input_ids": input_ids,
