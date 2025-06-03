@@ -108,7 +108,7 @@ class Model:
             s = "is invalid."
         logger.debug(f"Model {self._model_name} - Task {task} - Prompt Type {prompt_type} - Plan Index {plan_idx}: Plan validated as {s}.")
 
-    def generate(self, task:task.Task, cot_examples:set[task.Task]=set(), **generation_kwargs) -> None:
+    def generate(self, task:task.Task, prompt_type:task.Task.PromptType,  **generation_kwargs) -> None:
         """
         Generates a plan based on the provided prompt.
         This is a placeholder method and should be implemented in subclasses.
@@ -233,28 +233,29 @@ class HuggingFaceModel(Model):
         # --- Tokenizer Setup ---
         try:
             self._tokenizer = AutoTokenizer.from_pretrained(
-                model_source,
-                trust_remote_code=True,
-                token=config.HUGGINGFACE_TOKEN
+            model_source,
+            trust_remote_code=True,
+            token=config.HUGGINGFACE_TOKEN
             )
 
             # --- Add special tokens IF they don't exist ---
             special_tokens_to_add = []
-            for separator in [config.START_OF_PLAN_TOKEN, config.END_OF_PLAN_TOKEN]:
-                if separator not in self._tokenizer.get_vocab():
-                    special_tokens_to_add.append(separator)
+            all_config_tokens = [getattr(config.TOKENS, attr) for attr in dir(config.TOKENS) if not callable(getattr(config.TOKENS, attr)) and not attr.startswith("__")]
+
+            for token_str in all_config_tokens:
+                if isinstance(token_str, str) and token_str not in self._tokenizer.get_vocab():
+                    special_tokens_to_add.append(token_str)
 
             if special_tokens_to_add:
-                num_added_tokens = self._tokenizer.add_tokens(special_tokens_to_add, special_tokens=True)
-                logger.info(f"Added {num_added_tokens} special tokens to tokenizer: {special_tokens_to_add}")
+                logger.info(f"Added {len(special_tokens_to_add)} special tokens to tokenizer: {special_tokens_to_add}")
 
             logger.info(f"Tokenizer loaded. Pad token: {self._tokenizer.pad_token}, Padding side: {self._tokenizer.padding_side}")
-            PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
-            PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
-            logger.info(f"Plan Start Token ID: {PLAN_START_TOKEN_ID}, Plan End Token ID: {PLAN_END_TOKEN_ID}")
-            if PLAN_START_TOKEN_ID == self._tokenizer.unk_token_id or PLAN_END_TOKEN_ID == self._tokenizer.unk_token_id:
-                logger.error("One or both special plan tokens were not found in the tokenizer vocabulary after attempting to add them. Check token strings and tokenizer setup.")
-                raise ValueError("Special plan tokens could not be resolved to IDs.")
+
+            for token in special_tokens_to_add:
+                if token not in self._tokenizer.get_vocab():
+                    raise ValueError(f"Special token '{token}' not found in tokenizer vocabulary. It will be added.")
+                else:
+                    logger.info(f"Special token '{token}' added to tokenizer vocabulary.")
 
         except Exception as e:
             logger.error(f"Error loading or setting up tokenizer from {model_source}: {e}", exc_info=True)
@@ -370,8 +371,8 @@ class HuggingFaceModel(Model):
 
         # --- verify the plan ---
         # The plan is between the start and end tokens (inclusive)
-        PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
-        PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
+        PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.TOKENS.PLAN_START)
+        PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.TOKENS.PLAN_END)
         plan_start_index = next((i for i, x in enumerate(input_ids) if x == PLAN_START_TOKEN_ID), None)
         if plan_start_index is None:
             raise ValueError(f"Plan start token not found in response input IDs for the chat {chat}.")
@@ -523,7 +524,7 @@ class HuggingFaceModel(Model):
             logger.error(f"Error during training metrics logging or final summary: {e}", exc_info=True)
             # Don't re-raise here if training itself was successful.
 
-    def generate(self, task: task.Task, cot_examples:set[task.Task]=set(), **generation_kwargs) -> None:
+    def generate(self, task:task.Task, prompt_type:task.Task.PromptType, **generation_kwargs) -> None:
         """
         Generates text based on a prompt using the Hugging Face model.
 
@@ -539,7 +540,6 @@ class HuggingFaceModel(Model):
 
         num_return_sequences = generation_kwargs.get("num_return_sequences", 1)
         overwrite_plans = generation_kwargs.get("overwrite_generated_plans", False)
-        prompt_type = "cot" if len(cot_examples) > 0 else "io"
         if task in self._generated_plans and prompt_type in self._generated_plans[task]:
             if not overwrite_plans:
                 num_already_generated_plans = len(self._generated_plans[task][prompt_type]['raw'])
@@ -558,7 +558,7 @@ class HuggingFaceModel(Model):
 
         device = next(self._model.parameters()).device
 
-        generation_messages: list[dict[str, str]] = task.get_chat(with_plan=False)
+        generation_messages: list[dict[str, str]] = task.get_chat(with_plan=False, prompt_type=prompt_type, **generation_kwargs) 
         
         # --- Generation Configuration ---
         gen_kwargs = {
@@ -634,7 +634,7 @@ class HuggingFaceModel(Model):
             #     logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: No start of plan token found in output tokens [{output[:100]}...]")
 
             # TODO: remove this when the model knows how to add the plan start and end tokens
-            pddl_plans.append(task._converter.natural_language_plan_to_pddl(generated_text))
+            pddl_plans.append(task._domain_translator.translate_natural_language_plan_to_pddl(generated_text))
             print(f"Generated PDDL plan:\n{pddl_plans[-1]}")
         self.add_generated_plans(
             task=task, 
@@ -670,12 +670,12 @@ class GeminiModel(Model):
     def generate(
             self,
             task:task.Task,
-            cot_examples:set[task.Task]=set(),
-            **generation_kwargs:dict[str, Any] # Changed type hint
+            prompt_type:task.Task.PromptType,
+            **generation_kwargs:dict[str, Any]
         ) -> None:
         logger.debug(f"Generating with Gemini model {self._model_name}.")
 
-        original_chat_messages: list[dict[str, str]] = task.get_chat(with_plan=False)
+        original_chat_messages: list[dict[str, str]] = task.get_chat(with_plan=False, prompt_type=prompt_type, **generation_kwargs)
 
         system_instruction_parts = []
         gemini_contents = []
@@ -707,7 +707,7 @@ class GeminiModel(Model):
             top_k=generation_kwargs.get("top_k", 50),
             max_output_tokens=generation_kwargs.get("max_output_tokens", 2048),
             candidate_count=generation_kwargs.get("candidate_count", 1), # Map num_return_sequences
-            stop_sequences=[config.END_OF_PLAN_TOKEN] # Add plan end token as stop sequence
+            stop_sequences=[config.TOKENS.PLAN_END] # Add plan end token as stop sequence
         )
         logger.debug(f"Gemini generation config: {generation_config}")
 
@@ -758,7 +758,7 @@ class GeminiModel(Model):
                 logger.error(f"No valid generated texts found in Gemini response. Response: {response}")
                 raise RuntimeError("No valid generated texts found in Gemini response.")
 
-            pddl_plans = [task._converter.natural_language_plan_to_pddl(text) for text in generated_texts]
+            pddl_plans = [task._domain_translator.translate_natural_language_plan_to_pddl(text) for text in generated_texts]
             prompt_type = "cot" if len(cot_examples) > 0 else "io"
             self.add_generated_plans(
                 task=task,

@@ -20,8 +20,9 @@ def generate_batch(
         model_name: str, 
         domain:str, 
         number_of_instances:Union[str, int] = "all", 
-        number_of_cot_examples:int = 0, 
+        few_shot:int = 0, 
         random_seed:int = 42,
+        prompt_type:task.Task.PromptType = task.Task.PromptType.IO,
         **generation_kwargs):
     start_time = datetime.datetime.now()
     rng = np.random.RandomState(random_seed)
@@ -50,12 +51,11 @@ def generate_batch(
         raise e
     
     try:
-        possible_cot_examples = set()
-        if number_of_cot_examples > 0:
-            # Get possible CoT examples
+        possible_few_shot_examples = set()
+        if few_shot > 0:
             val = task.get_tasks(domain=domain, type=task.Task.Type.VALIDATION, is_longer_plan=True)
             train = task.get_tasks(domain=domain, type=task.Task.Type.TRAIN, is_longer_plan=True)
-            possible_cot_examples = set(val + train)
+            possible_few_shot_examples = set(val + train)
     except Exception as e:
         logger.error(f"Error getting possible CoT examples: {e}", exc_info=True)
         raise e
@@ -63,19 +63,19 @@ def generate_batch(
     # --- Generate Plans ---
     logger.info("Starting plan generation loop...") # Use logger
     for t in tqdm(tasks, total=len(tasks), desc="Generating plans"):
-        cot_examples = set()
-        if number_of_cot_examples > 0:
-            cot_examples = set(
+        few_shot_examples = set()
+        if few_shot > 0:
+            few_shot_examples = set(
                 rng.choice(
-                    list(possible_cot_examples),
-                    size=min(number_of_cot_examples, len(possible_cot_examples)),
+                    list(possible_few_shot_examples),
+                    size=min(few_shot, len(possible_few_shot_examples)),
                     replace=False
                 )
             )
         try:
             model.generate(
                 task=t,
-                cot_examples=cot_examples,
+                few_shot_examples=few_shot_examples,
                 **generation_kwargs
             )
         except Exception as e:

@@ -24,21 +24,91 @@ class Task(abc.ABC):
         OK = "ok"
         ERROR = "error"
     
-    class LanguageConverter(abc.ABC):
+    class PromptType(Enum):
+        IO = "io"
+        COT = "cot"
+        FEW_SHOT = "few_shot"
+    
+    class DomainTranslator(abc.ABC):
+        FACT_PATTERN = r"\(\s*[\w-]+\s*[\w\s-]*\)"
+
+        def get_section_content(section_name: str, text: str) -> str | None:
+            # --- Helper function to extract section content ---
+            # Pattern explanation:
+            # \(:section_name\s+   : Match the keyword (e.g., :init) followed by whitespace
+            # (.*?)                : Non-greedily capture the content (re.DOTALL makes '.' match newline)
+            # (?=\s+\(:|\s*\)\s*$) : Positive lookahead assertion:
+            #    \s+\(:            : Ensure the match is followed by whitespace and the start of another section '(:...'
+            #    |                 : OR
+            #    \s*\)\s*$         : Ensure the match is followed by the final closing parenthesis of the define block
+            #                       (allowing for potential whitespace)
+            pattern = r"\({}\s+(.*?)(?=\s+\(:|\s*\)\s*$)".format(re.escape(section_name))
+            match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+            if match:
+                return match.group(1).strip() # Return the stripped content
+            return None
+        
+        def get_initial_state_facts_from_pddl_instance(self, pddl_instance: str) -> list[str]:
+            """
+            Extracts initial state facts from a PDDL instance.
+            This method should be implemented to return a list of initial state facts in PDDL format.
+            """
+            init_content = self.get_section_content(":init", pddl_instance)
+            if init_content is None:
+                raise ValueError("Invalid PDDL instance format: Could not find :init section content.")
+            
+            init_facts_raw = re.findall(self.FACT_PATTERN, init_content)
+            init_facts_pddl = [re.sub(r"\s+", " ", fact).strip() for fact in init_facts_raw if fact.strip()]
+            init_facts_nl = []
+            for fact in init_facts_pddl:
+                try:
+                    init_facts_nl.append(self.translate_pddl_fact_to_natural_language(fact))
+                except ValueError as e:
+                    logger.warning(f"Skipping initial fact due to conversion error: {e} (Fact: '{fact}')")
+            return init_facts_nl
+        
+        def get_goal_facts_from_pddl_instance(self, pddl_instance: str) -> list[str]:
+            """
+            Extracts goal facts from a PDDL instance.
+            This method should be implemented to return a list of goal facts in PDDL format.
+            """
+            goal_content = self.get_section_content(":goal", pddl_instance)
+            if goal_content is None:
+                raise ValueError("Invalid PDDL instance format: Could not find :goal section content.")
+
+            goal_facts_raw = []
+            and_match = re.search(r"^\(and\s+(.*)\s*\)$", goal_content, re.DOTALL | re.IGNORECASE)
+            if and_match:
+                and_content = and_match.group(1).strip()
+                goal_facts_raw = re.findall(self.FACT_PATTERN, and_content)
+            else:
+                stripped_goal_content = goal_content.strip()
+                if stripped_goal_content and re.fullmatch(self.FACT_PATTERN, stripped_goal_content):
+                    goal_facts_raw = [stripped_goal_content]
+                elif not stripped_goal_content:
+                    pass 
+
+            goal_facts_pddl = [re.sub(r"\s+", " ", fact).strip() for fact in goal_facts_raw if fact.strip()]
+
+            goal_facts_nl = []
+            for fact in goal_facts_pddl:
+                try:
+                    goal_facts_nl.append(self.translate_pddl_fact_to_natural_language(fact))
+                except ValueError as e:
+                    logger.warning(f"Skipping goal fact due to conversion error: {e} (Fact: '{fact}')")
+
+            return goal_facts_nl
+
         @abc.abstractmethod
-        def fact_to_natural_language(self, fact: str) -> str:
+        def translate_pddl_fact_to_natural_language(self, fact: str) -> str:
             raise NotImplementedError("Subclasses must implement this method.")
 
         @abc.abstractmethod
-        def pddl_instance_to_natural_language(self, pddl_instance: str) -> str:
-            raise NotImplementedError("Subclasses must implement this method.")
-
-        @abc.abstractmethod
-        def pddl_plan_to_natural_language(self, pddl_plan: str) -> str:
+        def translate_pddl_plan_to_natural_language(self, pddl_plan: str) -> str:
             raise NotImplementedError("Subclasses must implement this method.")
         
         @abc.abstractmethod
-        def natural_language_plan_to_pddl(self, nl_plan: str) -> str:
+        def translate_natural_language_plan_to_pddl(self, nl_plan: str) -> str:
             raise NotImplementedError("Subclasses must implement this method.")
         
         @property
@@ -58,7 +128,7 @@ class Task(abc.ABC):
         self._type : Optional[Task.Type] = None # training, validation, test | None
 
         if self._domain == "blocksworld":
-            self._converter : Task.LanguageConverter = BlocksworldLanguageConverter()
+            self._domain_translator : Task.DomainTranslator = BlocksworldTranslator()
         else:
             raise ValueError(f"Unknown domain: {self._domain}. Supported domains are: blocksworld.")
 
@@ -92,32 +162,100 @@ class Task(abc.ABC):
             return NotImplemented
         return self._instance_file_path == other._instance_file_path and self._domain_file_path == other._domain_file_path
 
-    def get_prompt_componenets(self) -> dict[str, str]:
-        domain_description = self._converter._domain_description_in_natural_language
-        instance_nl = self._converter.pddl_instance_to_natural_language(pddl_instance=self.read_instance())
+    def get_task_components_in_natural_language(self, with_plan:bool = True) -> dict[str, str]:
+        domain_description = self._domain_translator._domain_description_in_natural_language.strip()
+        pddl_instance = self.read_instance()
+        initial_state_facts_nl = self._domain_translator.get_initial_state_facts_from_pddl_instance(pddl_instance=pddl_instance)
+        goal_facts_nl = self._domain_translator.get_goal_facts_from_pddl_instance(pddl_instance=pddl_instance)
         if self._pddl_plan:
-            plan_nl = "My plan is as follows:\n"
-            plan_nl += config.START_OF_PLAN_TOKEN + "\n"
-            plan_nl += self._converter.pddl_plan_to_natural_language(pddl_plan=self._pddl_plan)
-            plan_nl += "\n" + config.END_OF_PLAN_TOKEN
-        else: 
-            raise ValueError(f"No plan available to convert to natural language for the task {self}.")
-        return {"instruction": domain_description.strip(), "input": instance_nl.strip(), "output": plan_nl.strip()}
+            plan_nl = self._domain_translator.translate_pddl_plan_to_natural_language(pddl_plan=self._pddl_plan)
+        else:
+            if with_plan:
+                raise ValueError("PDDL plan is not available, but 'with_plan' is set to True. Please ensure the task has a PDDL plan before requesting it.")
+            else:
+                plan_nl = ""
+        return {
+            "domain_description": domain_description,
+            "initial_state_facts": initial_state_facts_nl,
+            "goal_facts": goal_facts_nl,
+            "plan": plan_nl
+        }
 
-    def get_chat(self, with_plan: bool = True,  cot_examples:set[Task] = set()) -> list[dict[str, str]]:
-        try:
-            prompt_components = self.get_prompt_componenets()
-            
+    def get_chat(self, with_plan: bool = True, prompt_type : Task.PromptType = PromptType.IO, **kwargs) -> list[dict[str, str]]:
+        task_components_in_nl = self.get_task_components_in_natural_language(with_plan=with_plan)
+        if prompt_type == Task.PromptType.IO:
+            # TODO: VERIFICAR SE A MODIFICAÇÃO NÃO CAUSOU ERROS
+            initial_state_facts_str = "As initial conditions I have that: " + (", ".join(task_components_in_nl['initial_state_facts']))
+            goal_facts_str = "My goal is to have that: " + (", ".join(task_components_in_nl['goal_facts']))      
             chat: list[dict[str, str]] = [
                 {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": prompt_components["instruction"] + "\n" + prompt_components["input"]},
+                {"role": "user", "content": f"{task_components_in_nl['domain_description']}\n{initial_state_facts_str}\n{goal_facts_str}"},
             ]       
-            if with_plan and self._pddl_plan:
-                chat.append({"role": "assistant", "content": prompt_components['output']})
+            if with_plan:
+                chat.append({"role": "assistant", "content": f"My plan is as follows:\n{config.TOKENS.PLAN_START}\n{task_components_in_nl['plan']}\n{config.TOKENS.PLAN_END}"})
             return chat
+        elif prompt_type == Task.PromptType.FEW_SHOT:
+            few_shot_examples = kwargs.get("few_shot_examples", set())
+            if not few_shot_examples:
+                raise ValueError("Few-shot examples are required for the Few-Shot prompt type.")
+            
+            assert isinstance(few_shot_examples, set), "Few-shot examples must be provided as a set of tasks."
 
-        except Exception as e:
-            raise Exception(f"An error occurred while building the prompt: {e}")
+            assert all(isinstance(t, Task) for t in few_shot_examples), "All few-shot examples must be instances of Task."
+
+            assert all(t._domain == self._domain for t in few_shot_examples), "All few-shot examples must belong to the same domain as the current task."
+
+            assert len(few_shot_examples) > 0, "At least one few-shot example is required."
+
+            examples = []
+            for t in few_shot_examples:
+                eg_components_nl = t.get_task_components_in_natural_language(with_plan=True)
+                examples.append(f"""{config.TOKENS.EXAMPLE_START}
+{config.TOKENS.INITIAL_STATE_START}
+{eg_components_nl['initial_state_facts']}
+{config.TOKENS.INITIAL_STATE_END}
+{config.TOKENS.GOAL_START}
+{eg_components_nl['goal_facts']}
+{config.TOKENS.GOAL_END}
+{config.TOKENS.PLAN_START}
+{eg_components_nl['plan']}
+{config.TOKENS.PLAN_END}
+{config.TOKENS.EXAMPLE_END}""")
+            
+            examples_content = "\n".join(examples)
+            
+            content = f"""{config.TOKENS.DOMAIN_START}
+{task_components_in_nl['domain_description']}
+{config.TOKENS.DOMAIN_END}
+
+{config.TOKENS.EXAMPLE_START}
+{examples_content}
+{config.TOKENS.EXAMPLE_END}
+
+{config.TOKENS.INITIAL_STATE_START}
+{task_components_in_nl['initial_state_facts']}
+{config.TOKENS.INITIAL_STATE_END}
+{config.TOKENS.GOAL_START}
+{task_components_in_nl['goal_facts']}
+{config.TOKENS.GOAL_END}
+
+Provide only the plan for the given instance. Here is a checklist to help you with your task:
+1) The plan must be in the same format as the examples above.
+2) Use the tags "<|plan_start|>...<|plan_end|>" around the plan.
+3) The actions in the plan must be from the set of actions in the domain described above, that is, they must use the same name and the same number of parameters as one of the action schemas.
+4) The plan must be valid, that is, each action must be applicable in the state it is applied, and the plan must end in a goal state.
+"""
+            chat = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": content}
+            ]
+            if with_plan:
+                chat.append({"role": "assistant", "content": f"{config.TOKENS.PLAN_START}\n{task_components_in_nl['plan']}\n{config.TOKENS.PLAN_END}"})
+            return chat
+        else:
+            raise ValueError(f"Unsupported prompt type: {prompt_type}. Supported types are: {list(Task.PromptType)}.")
+
+
 
     def to_json(self):
         try:
@@ -195,7 +333,7 @@ class Task(abc.ABC):
         return domain_content
 
 
-class BlocksworldLanguageConverter(Task.LanguageConverter):
+class BlocksworldTranslator(Task.DomainTranslator):
         def __init__(self):
             self._color_map = {
             "a": "red",
@@ -226,7 +364,7 @@ class BlocksworldLanguageConverter(Task.LanguageConverter):
             "z": "pearl",
         }
 
-        def fact_to_natural_language(self, pddl_fact:str) -> str:
+        def translate_pddl_fact_to_natural_language(self, pddl_fact:str) -> str:
             """
                 Converts a PDDL fact into natural language, using color mapping.
 
@@ -290,88 +428,8 @@ class BlocksworldLanguageConverter(Task.LanguageConverter):
             # If none of the patterns matched
             raise ValueError(f"Unknown or malformed fact format: {pddl_fact}")
 
-        def pddl_instance_to_natural_language(self, pddl_instance: str) -> str:
-            """
-            Converts a PDDL instance into natural language format.
-            (Implementation with corrected regex for section extraction)
-            """
-            # --- Helper function to extract section content ---
-            def get_section_content(section_name: str, text: str) -> str | None:
-                # Pattern explanation:
-                # \(:section_name\s+   : Match the keyword (e.g., :init) followed by whitespace
-                # (.*?)                : Non-greedily capture the content (re.DOTALL makes '.' match newline)
-                # (?=\s+\(:|\s*\)\s*$) : Positive lookahead assertion:
-                #    \s+\(:            : Ensure the match is followed by whitespace and the start of another section '(:...'
-                #    |                 : OR
-                #    \s*\)\s*$         : Ensure the match is followed by the final closing parenthesis of the define block
-                #                       (allowing for potential whitespace)
-                pattern = r"\({}\s+(.*?)(?=\s+\(:|\s*\)\s*$)".format(re.escape(section_name))
-                match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
-                if match:
-                    return match.group(1).strip() # Return the stripped content
-                return None
-            # --- End of helper function ---
 
-            objects_match = re.search(r"\(:objects\s+(.*?)\s*\)", pddl_instance, re.DOTALL | re.IGNORECASE)
-            objects_str = objects_match.group(1).strip() if objects_match else None
-            init_content = get_section_content(":init", pddl_instance)
-            goal_content = get_section_content(":goal", pddl_instance)
-
-            if objects_str is None:
-                raise ValueError("Invalid PDDL instance format: Could not find :objects section content.")
-            if init_content is None:
-                raise ValueError("Invalid PDDL instance format: Could not find :init section content.")
-            if goal_content is None:
-                raise ValueError("Invalid PDDL instance format: Could not find :goal section content.")
-
-            fact_pattern = r"\(\s*[\w-]+\s*[\w\s-]*\)"
-
-            objects = objects_str.split()
-            init_facts_raw = re.findall(fact_pattern, init_content)
-            goal_facts_raw = []
-            and_match = re.search(r"^\(and\s+(.*)\s*\)$", goal_content, re.DOTALL | re.IGNORECASE)
-            if and_match:
-                and_content = and_match.group(1).strip()
-                goal_facts_raw = re.findall(fact_pattern, and_content)
-            else:
-                stripped_goal_content = goal_content.strip()
-                if stripped_goal_content and re.fullmatch(fact_pattern, stripped_goal_content):
-                    goal_facts_raw = [stripped_goal_content]
-                elif not stripped_goal_content:
-                    pass # Goal is empty
-
-            # --- Fact Cleaning (Remains the same) ---
-            init_facts_pddl = [re.sub(r"\s+", " ", fact).strip() for fact in init_facts_raw if fact.strip()]
-            goal_facts_pddl = [re.sub(r"\s+", " ", fact).strip() for fact in goal_facts_raw if fact.strip()]
-
-            # --- Validation and NL Conversion (Remains the same) ---
-            if not objects:
-                raise ValueError("Empty objects list in PDDL instance.")
-
-            for obj in objects:
-                if not hasattr(self, '_color_map') or obj not in self._color_map:
-                    raise ValueError(f"Unknown object '{obj}' found in :objects section or missing in color map.")
-
-            init_facts_nl = []
-            for fact in init_facts_pddl:
-                try:
-                    init_facts_nl.append(self.fact_to_natural_language(fact))
-                except ValueError as e:
-                    logger.warning(f"Skipping initial fact due to conversion error: {e} (Fact: '{fact}')")
-            init_facts_str = "As initial conditions I have that: " + (", ".join(init_facts_nl) if init_facts_nl else "nothing specific")
-
-            goal_facts_nl = []
-            for fact in goal_facts_pddl:
-                try:
-                    goal_facts_nl.append(self.fact_to_natural_language(fact))
-                except ValueError as e:
-                    logger.warning(f"Skipping goal fact due to conversion error: {e} (Fact: '{fact}')")
-            goal_facts_str = "My goal is to have that: " + (", ".join(goal_facts_nl) if goal_facts_nl else "nothing specific")
-
-            nl_output = f"{init_facts_str}.\n{goal_facts_str}."
-            return nl_output
-
-        def pddl_plan_to_natural_language(self, pddl_plan:str) -> str:
+        def translate_pddl_plan_to_natural_language(self, pddl_plan:str) -> str:
             """
             Converts a PDDL plan into natural language, using color mapping.
 
@@ -446,7 +504,7 @@ class BlocksworldLanguageConverter(Task.LanguageConverter):
 
             return "\n".join(nl_actions)
 
-        def natural_language_plan_to_pddl(self, nl_plan:str) -> str:
+        def translate_natural_language_plan_to_pddl(self, nl_plan:str) -> str:
             """
             Converts a natural language plan into PDDL format.
 

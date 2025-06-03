@@ -42,8 +42,21 @@ TASKS_DATASET_FILE_NAME = "tasks.jsonl"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
 GENERATED_PLANS_FILE_NAME = "generated_plans.jsonl"
-START_OF_PLAN_TOKEN = "<|plan_start|>"
-END_OF_PLAN_TOKEN = "<|plan_end|>"
+
+from enum import Enum
+class TOKENS(Enum):
+    PLAN_START = "<|plan_start|>"
+    PLAN_END = "<|plan_end|>"
+    DOMAIN_START = "<|domain_start|>"
+    DOMAIN_END = "<|domain_end|>"
+    GOAL_START = "<|goal_start|>"
+    GOAL_END = "<|goal_end|>"
+    INITIAL_STATE_START = "<|initial_state_start|>"
+    INITIAL_STATE_END = "<|initial_state_end|>"
+    EXAMPLE_START = "<|example_start|>"
+    EXAMPLE_END = "<|example_end|>"
+    
+
 # --- End Constants ---
 
 

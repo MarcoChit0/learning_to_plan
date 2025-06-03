@@ -13,6 +13,13 @@ from learning_to_plan import processing_data
 
 logger = config.get_logger(__name__)
 
+def prompt_type_converter(value: str) -> task.Task.PromptType:
+    try:
+        return task.Task.PromptType[value.upper()]
+    except KeyError:
+        valid = ", ".join([pt.name.lower() for pt in task.Task.PromptType])
+        raise argparse.ArgumentTypeError(f"Invalid prompt_type: {value}. Valid options are: {valid}.")
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Learning to Plan")
     parser.add_argument(
@@ -111,12 +118,17 @@ def parse_args():
         default="all",
         help="Number of instances to generate plans for. Can be 'all', 'long', 'basic', or a positive integer."
     )
-    # --- Generate Specific ---
     parser.add_argument(
-        "--cot",
+        "--prompt_type",
+        type=prompt_type_converter,
+        default=task.Task.PromptType.IO,
+        help=f"Type of prompt to use for plan generation. Options: {list(task.Task.PromptType)}. Default is {task.Task.PromptType.IO.name}."
+    )
+    parser.add_argument(
+        "--few_shot",
         type=int,
         default=0,
-        help="Number of Chain of Thought (CoT) steps to use."
+        help="Number of few-shot examples to use for generation. Default is 0 (no few-shot examples)."
     )
     parser.add_argument(
         "--random_seed",
@@ -184,6 +196,13 @@ if __name__ == "__main__":
     args = parse_args()
     config.initialize(args) # Config initialization likely sets up logging
 
+    if args.prompt_type == task.Task.PromptType.FEW_SHOT and args.few_shot <= 0:
+        logger.error("For few-shot prompting, please specify a positive number of few-shot examples with --few_shot <number>.")
+        raise ValueError("Few-shot prompting requires a positive number of examples.")
+    if args.few_shot > 0 and args.prompt_type != task.Task.PromptType.FEW_SHOT:
+        logger.warning("You specified a few-shot number but not the few-shot prompt type. Defaulting to IO prompt type.")
+        raise ValueError("For few-shot prompting, please specify the prompt type as --prompt_type few_shot.")
+
     # --- Action Blocks ---
     if args.call_paas:
         logger.info("--- Starting Planning as a Service (PaaS) Calls ---")
@@ -224,7 +243,7 @@ if __name__ == "__main__":
                 domain=domain, 
                 number_of_instances=args.number_of_instances, 
                 random_seed=args.random_seed, 
-                number_of_cot_examples=args.cot, 
+                few_shot=args.few_shot, 
                 ## --- generation kwargs ---
                 checkpoint_dir=checkpoint_dir, 
                 overwrite_generated_plans=args.overwrite_generated_plans, 
