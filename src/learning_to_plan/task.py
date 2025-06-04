@@ -187,7 +187,7 @@ class Task(abc.ABC):
                 {"role": "user", "content": f"{task_components_in_nl['domain_description']}\n{initial_state_facts_str}\n{goal_facts_str}"},
             ]       
             if with_plan:
-                chat.append({"role": "assistant", "content": f"My plan is as follows:\n{config.TOKENS.PLAN_START}\n{task_components_in_nl['plan']}\n{config.TOKENS.PLAN_END}"})
+                chat.append({"role": "assistant", "content": f"My plan is as follows:\n{config.TOKENS.PLAN_START.value}\n{task_components_in_nl['plan']}\n{config.TOKENS.PLAN_END.value}"})
             return chat
         elif prompt_type == config.PROMPT_TYPE.FEW_SHOT:
             if self._type == Task.TYPE.TRAIN or self._type == Task.TYPE.VALIDATION:
@@ -206,34 +206,34 @@ class Task(abc.ABC):
             examples = []
             for t in few_shot_examples:
                 eg_components_nl = t.get_task_components_in_natural_language(with_plan=True)
-                examples.append(f"""{config.TOKENS.EXAMPLE_START}
-{config.TOKENS.INITIAL_STATE_START}
+                examples.append(f"""{config.TOKENS.EXAMPLE_START.value}
+{config.TOKENS.INITIAL_STATE_START.value}
 {eg_components_nl['initial_state_facts']}
-{config.TOKENS.INITIAL_STATE_END}
-{config.TOKENS.GOAL_START}
+{config.TOKENS.INITIAL_STATE_END.value}
+{config.TOKENS.GOAL_START.value}
 {eg_components_nl['goal_facts']}
-{config.TOKENS.GOAL_END}
-{config.TOKENS.PLAN_START}
+{config.TOKENS.GOAL_END.value}
+{config.TOKENS.PLAN_START.value}
 {eg_components_nl['plan']}
-{config.TOKENS.PLAN_END}
-{config.TOKENS.EXAMPLE_END}""")
+{config.TOKENS.PLAN_END.value}
+{config.TOKENS.EXAMPLE_END.value}""")
             
             examples_content = "\n".join(examples)
             
-            content = f"""{config.TOKENS.DOMAIN_START}
+            content = f"""{config.TOKENS.DOMAIN_START.value}
 {task_components_in_nl['domain_description']}
-{config.TOKENS.DOMAIN_END}
+{config.TOKENS.DOMAIN_END.value}
 
-{config.TOKENS.EXAMPLE_START}
+{config.TOKENS.EXAMPLE_START.value}
 {examples_content}
-{config.TOKENS.EXAMPLE_END}
+{config.TOKENS.EXAMPLE_END.value}
 
-{config.TOKENS.INITIAL_STATE_START}
+{config.TOKENS.INITIAL_STATE_START.value}
 {task_components_in_nl['initial_state_facts']}
-{config.TOKENS.INITIAL_STATE_END}
-{config.TOKENS.GOAL_START}
+{config.TOKENS.INITIAL_STATE_END.value}
+{config.TOKENS.GOAL_START.value}
 {task_components_in_nl['goal_facts']}
-{config.TOKENS.GOAL_END}
+{config.TOKENS.GOAL_END.value}
 
 Provide only the plan for the given instance. Here is a checklist to help you with your task:
 1) The plan must be in the same format as the examples above.
@@ -246,7 +246,7 @@ Provide only the plan for the given instance. Here is a checklist to help you wi
                 {"role": "user", "content": content}
             ]
             if with_plan:
-                chat.append({"role": "assistant", "content": f"{config.TOKENS.PLAN_START}\n{task_components_in_nl['plan']}\n{config.TOKENS.PLAN_END}"})
+                chat.append({"role": "assistant", "content": f"{config.TOKENS.PLAN_START.value}\n{task_components_in_nl['plan']}\n{config.TOKENS.PLAN_END.value}"})
             return chat
         else:
             raise ValueError(f"Unsupported prompt type: {prompt_type}. Supported types are: {list(config.PROMPT_TYPE)}.")
