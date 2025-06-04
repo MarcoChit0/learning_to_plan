@@ -27,7 +27,7 @@ class Task(abc.ABC):
     class DomainTranslator(abc.ABC):
         FACT_PATTERN = r"\(\s*[\w-]+\s*[\w\s-]*\)"
 
-        def get_section_content(section_name: str, text: str) -> str | None:
+        def get_section_content(self, section_name: str, text: str) -> str | None:
             # --- Helper function to extract section content ---
             # Pattern explanation:
             # \(:section_name\s+   : Match the keyword (e.g., :init) followed by whitespace

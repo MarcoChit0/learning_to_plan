@@ -370,8 +370,8 @@ class HuggingFaceModel(Model):
 
         # --- verify the plan ---
         # The plan is between the start and end tokens (inclusive)
-        PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.TOKENS.PLAN_START)
-        PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.TOKENS.PLAN_END)
+        PLAN_START_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.TOKENS.PLAN_START.value)
+        PLAN_END_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.TOKENS.PLAN_END.value)
         plan_start_index = next((i for i, x in enumerate(input_ids) if x == PLAN_START_TOKEN_ID), None)
         if plan_start_index is None:
             raise ValueError(f"Plan start token not found in response input IDs for the chat {chat}.")
@@ -706,7 +706,7 @@ class GeminiModel(Model):
             top_k=generation_kwargs.get("top_k", 50),
             max_output_tokens=generation_kwargs.get("max_output_tokens", 2048),
             candidate_count=generation_kwargs.get("candidate_count", 1), # Map num_return_sequences
-            stop_sequences=[config.TOKENS.PLAN_END] # Add plan end token as stop sequence
+            stop_sequences=[config.TOKENS.PLAN_END.value] # Add plan end token as stop sequence
         )
         logger.debug(f"Gemini generation config: {generation_config}")
 
