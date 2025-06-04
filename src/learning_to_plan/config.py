@@ -3,7 +3,6 @@
 import os
 import json
 import logging
-from learning_to_plan import task
 import argparse
 from typing import Optional, Dict, Any
 import dotenv
@@ -57,6 +56,11 @@ class TOKENS(Enum):
     EXAMPLE_START = "<|example_start|>"
     EXAMPLE_END = "<|example_end|>"
     
+class PROMPT_TYPE(Enum):
+    IO = "io"
+    COT = "cot"
+    FEW_SHOT = "few_shot"
+
 
 # --- End Constants ---
 
@@ -200,26 +204,26 @@ def get_config(config_file_path, args: Optional[argparse.Namespace] = None) -> D
                 if hasattr(args, key):
                     if getattr(args, key) is not None:
                         if key == 'prompt_type':
-                            value = task.Task.PROMPT_TYPE[getattr(args, key).upper()]
+                            value = PROMPT_TYPE[getattr(args, key).upper()]
                         else:
                             value = getattr(args, key)
                         config[key] = value
                         logger.debug(f"Overriding config key '{key}' with value '{value}' from command line.")    
         else:
             logger.debug("No command-line arguments provided for overrides.")
-            config['prompt_type'] = task.Task.PROMPT_TYPE[config.get('prompt_type', 'io').upper()] # Default to 'io' if not specified
+            config['prompt_type'] = PROMPT_TYPE[config.get('prompt_type', 'io').upper()] # Default to 'io' if not specified
 
 
         # -- Check for consistency in config values --
         few_shot = config.get('few_shot', None)
         prompt_type = config.get('prompt_type', None)
-        if prompt_type == task.Task.PROMPT_TYPE.FEW_SHOT:
+        if prompt_type == PROMPT_TYPE.FEW_SHOT:
             if isinstance(few_shot, int) and few_shot <= 0:
                 raise ValueError("If prompt_type is 'few_shot', few_shot must be greater than 0.")
             elif not isinstance(few_shot, int):
                 raise ValueError("If prompt_type is 'few_shot', few_shot must be an integer.")
 
-        elif prompt_type != task.Task.PROMPT_TYPE.FEW_SHOT and isinstance(few_shot, int) and few_shot > 0:
+        elif prompt_type != PROMPT_TYPE.FEW_SHOT and isinstance(few_shot, int) and few_shot > 0:
             raise ValueError("If prompt_type is not 'few_shot', few_shot must be None or 0.")
         
         

@@ -23,7 +23,7 @@ class Model:
     def __init__(self, model_name, **kwargs):
         """
         task:task.Task : { # Task object for which the plan was generated
-            prompt_type:task.Task.PROMPT_TYPE : { # Prompt type used for generation, e.g., "io", "cot", ...
+            prompt_type:config.PROMPT_TYPE : { # Prompt type used for generation, e.g., "io", "cot", ...
                 "raw" : list[str], # List of raw generated plans
                 "pddl" : list[str] # List of PDDL generated plans
                 "is_valid" : list[Optional[bool]] # List of booleans indicating if the plan is valid. If None, the plan is not validated.
@@ -40,7 +40,7 @@ class Model:
                 os.rmdir(self._model_dir_path)
         os.makedirs(self._model_dir_path, exist_ok=True)
 
-    def add_generated_plans(self, t: task.Task, prompt_type: task.Task.PROMPT_TYPE, raw_plans:list[str], pddl_plans:list[str], is_valid:Optional[list[Optional[bool]]] = None, overwrite:bool=False) -> None:
+    def add_generated_plans(self, t: task.Task, prompt_type: config.PROMPT_TYPE, raw_plans:list[str], pddl_plans:list[str], is_valid:Optional[list[Optional[bool]]] = None, overwrite:bool=False) -> None:
         """
             Adds generated plans to the internal dictionary.
             This method is called after generating plans for a task.
@@ -59,8 +59,8 @@ class Model:
         if is_valid is not None and len(raw_plans) != len(is_valid):
             raise ValueError(f"Length mismatch: raw_plans ({len(raw_plans)}), is_valid ({len(is_valid)})")
 
-        if prompt_type not in list(task.Task.PROMPT_TYPE):
-            raise ValueError(f"Invalid prompt type: {prompt_type}. Must be in [{', '.join(list(task.Task.PROMPT_TYPE))}].")
+        if prompt_type not in list(config.PROMPT_TYPE):
+            raise ValueError(f"Invalid prompt type: {prompt_type}. Must be in [{', '.join(list(config.PROMPT_TYPE))}].")
         
         if t not in self._generated_plans:
             self._generated_plans[t] = {}
@@ -85,7 +85,7 @@ class Model:
             logger.info(f"The {len(raw_plans)} plans added were not validated.")
             self._generated_plans[t][prompt_type]["is_valid"].extend([None] * len(raw_plans))
     
-    def validate_generated_plan(self, t:task.Task, prompt_type: task.Task.PROMPT_TYPE, plan_idx:int, is_valid:bool) -> None:
+    def validate_generated_plan(self, t:task.Task, prompt_type: config.PROMPT_TYPE, plan_idx:int, is_valid:bool) -> None:
         """
         Validates a generated plan for a specific task and prompt type.
         This method is called after generating plans for a task.
@@ -107,7 +107,7 @@ class Model:
             s = "is invalid."
         logger.debug(f"Model {self._model_name} - Task {t} - Prompt Type {prompt_type} - Plan Index {plan_idx}: Plan validated as {s}.")
 
-    def generate(self, t:task.Task, prompt_type:task.Task.PROMPT_TYPE, **generation_kwargs) -> None:
+    def generate(self, t:task.Task, prompt_type:config.PROMPT_TYPE, **generation_kwargs) -> None:
         """
         Generates a plan based on the provided prompt.
         This is a placeholder method and should be implemented in subclasses.
@@ -201,7 +201,7 @@ class Model:
                         loaded_plans[t] = {}
                         number_of_tasks += 1
                     
-                    loaded_plans[t][task.Task.PROMPT_TYPE.get(data.get("prompt_type").upper())] = {
+                    loaded_plans[t][config.PROMPT_TYPE.get(data.get("prompt_type").upper())] = {
                         "raw": data.get("raw_plans", []),
                         "pddl": data.get("pddl_plans", []),
                         "is_valid": data.get("is_valid", []),
@@ -523,7 +523,7 @@ class HuggingFaceModel(Model):
             logger.error(f"Error during training metrics logging or final summary: {e}", exc_info=True)
             # Don't re-raise here if training itself was successful.
 
-    def generate(self, t:task.Task, prompt_type: task.Task.PROMPT_TYPE, **generation_kwargs) -> None:
+    def generate(self, t:task.Task, prompt_type: config.PROMPT_TYPE, **generation_kwargs) -> None:
         """
         Generates text based on a prompt using the Hugging Face model.
 
@@ -669,7 +669,7 @@ class GeminiModel(Model):
     def generate(
             self,
             t:task.Task,
-            prompt_type:task.Task.PROMPT_TYPE,
+            prompt_type:config.PROMPT_TYPE,
             **generation_kwargs:dict[str, Any]
         ) -> None:
         logger.debug(f"Generating with Gemini model {self._model_name}.")

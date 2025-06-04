@@ -5,7 +5,7 @@ import abc
 import re
 import json
 import os
-import learning_to_plan.config as config
+from learning_to_plan import config
 from typing import Optional
 from enum import Enum
 
@@ -23,11 +23,6 @@ class Task(abc.ABC):
     class PAAS_STATUS(Enum):
         OK = "ok"
         ERROR = "error"
-    
-    class PROMPT_TYPE(Enum):
-        IO = "io"
-        COT = "cot"
-        FEW_SHOT = "few_shot"
     
     class DomainTranslator(abc.ABC):
         FACT_PATTERN = r"\(\s*[\w-]+\s*[\w\s-]*\)"
@@ -181,9 +176,9 @@ class Task(abc.ABC):
             "plan": plan_nl
         }
 
-    def get_chat(self, with_plan: bool = True, prompt_type : Task.PROMPT_TYPE = PROMPT_TYPE.IO, **kwargs) -> list[dict[str, str]]:
+    def get_chat(self, with_plan: bool = True, prompt_type : config.PROMPT_TYPE = PROMPT_TYPE.IO, **kwargs) -> list[dict[str, str]]:
         task_components_in_nl = self.get_task_components_in_natural_language(with_plan=with_plan)
-        if prompt_type == Task.PROMPT_TYPE.IO:
+        if prompt_type == config.PROMPT_TYPE.IO:
             # TODO: VERIFICAR SE A MODIFICAÇÃO NÃO CAUSOU ERROS
             initial_state_facts_str = "As initial conditions I have that: " + (", ".join(task_components_in_nl['initial_state_facts']))
             goal_facts_str = "My goal is to have that: " + (", ".join(task_components_in_nl['goal_facts']))      
@@ -194,7 +189,7 @@ class Task(abc.ABC):
             if with_plan:
                 chat.append({"role": "assistant", "content": f"My plan is as follows:\n{config.TOKENS.PLAN_START}\n{task_components_in_nl['plan']}\n{config.TOKENS.PLAN_END}"})
             return chat
-        elif prompt_type == Task.PROMPT_TYPE.FEW_SHOT:
+        elif prompt_type == config.PROMPT_TYPE.FEW_SHOT:
             if self._type == Task.TYPE.TRAIN or self._type == Task.TYPE.VALIDATION:
                 available_task_types = {Task.TYPE.TEST}
             else:
@@ -254,7 +249,7 @@ Provide only the plan for the given instance. Here is a checklist to help you wi
                 chat.append({"role": "assistant", "content": f"{config.TOKENS.PLAN_START}\n{task_components_in_nl['plan']}\n{config.TOKENS.PLAN_END}"})
             return chat
         else:
-            raise ValueError(f"Unsupported prompt type: {prompt_type}. Supported types are: {list(Task.PROMPT_TYPE)}.")
+            raise ValueError(f"Unsupported prompt type: {prompt_type}. Supported types are: {list(config.PROMPT_TYPE)}.")
 
 
 
