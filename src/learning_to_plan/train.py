@@ -6,7 +6,7 @@ import learning_to_plan.config as config
 logger = config.get_logger(__name__)
 from learning_to_plan import task
 
-def get_tokenized_dataset(model: models.Model, tasks:set[task.Task], max_seq_length=1024, cot_examples:set[task.Task]= set(), **kwargs):
+def get_tokenized_dataset(model: models.Model, tasks:set[task.Task], max_seq_length:int=1024, **kwargs):
     """
     Create a dataset from the tasks and model.
     """
@@ -16,7 +16,7 @@ def get_tokenized_dataset(model: models.Model, tasks:set[task.Task], max_seq_len
         'attention_mask': [],
     }
     for t in tasks:
-        chat = t.get_chat(with_plan=True, cot_examples=cot_examples)
+        chat = t.get_chat(with_plan=True, **kwargs)
         tokenized_chat = model.tokenize_chat(chat, max_seq_length=max_seq_length)
         data['input_ids'].append(tokenized_chat['input_ids'])
         data['labels'].append(tokenized_chat['labels'])
@@ -61,7 +61,7 @@ def save_dataset_samples(dataset:datasets.Dataset, model:models.Model, checkpoin
         logger.error(f"Error saving sample {dataset_name} data to {sample_file_path}: {e}", exc_info=True)
 
 
-def run_training_procedure(model_name, domain,  **train_kwargs):
+def run_training_procedure(model_name: str, domain: str, **train_kwargs):
     start_time = datetime.datetime.now()
     start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
     logger.info(f"Starting training at {start_time_str}")
@@ -78,8 +78,8 @@ def run_training_procedure(model_name, domain,  **train_kwargs):
     # --- Load and Prepare Dataset ---
     try:
         logger.info(f"Loading training and validation datasets for domain: {domain}.")
-        train_tasks:set[task.Task] = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.TRAIN)
-        validation_tasks:set[task.Task] = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.VALIDATION)
+        train_tasks:set[task.Task] = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.TYPE.TRAIN)
+        validation_tasks:set[task.Task] = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.TYPE.VALIDATION)
 
         logger.info(f"Tokenizing datasets for training and validation.")
         tokenized_train_dataset = get_tokenized_dataset(model, train_tasks, **train_kwargs)

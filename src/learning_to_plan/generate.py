@@ -20,12 +20,9 @@ def generate_batch(
         model_name: str, 
         domain:str, 
         number_of_instances:Union[str, int] = "all", 
-        few_shot:int = 0, 
         random_seed:int = 42,
-        prompt_type:task.Task.PromptType = task.Task.PromptType.IO,
         **generation_kwargs):
     start_time = datetime.datetime.now()
-    rng = np.random.RandomState(random_seed)
 
     logger.info(
         f"Starting generation batch with model '{model_name}' – time: {start_time}" # Use logger
@@ -35,13 +32,13 @@ def generate_batch(
     # --- Get tasks from dataset ---
     try:
         if number_of_instances == "all":
-            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.TEST)
+            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.TYPE.TEST)
         elif number_of_instances == "basic":
-            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.TEST, is_longer_plan=False)
+            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.TYPE.TEST, is_longer_plan=False)
         elif number_of_instances == "long":
-            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.TEST, is_longer_plan=True)
+            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.TYPE.TEST, is_longer_plan=True)
         elif isinstance(number_of_instances, int):
-            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.Type.TEST, number_of_instances=number_of_instances)
+            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.TYPE.TEST, number_of_instances=number_of_instances)
         else:
             raise ValueError(f"Invalid value for number_of_instances: {number_of_instances}. Must be 'all', 'basic', 'long', or a positive integer.")
         assert len(tasks) > 0, f"No tasks found for generation."
@@ -49,33 +46,14 @@ def generate_batch(
     except Exception as e:
         logger.error(f"Error getting tasks for generation: {e}", exc_info=True)
         raise e
-    
-    try:
-        possible_few_shot_examples = set()
-        if few_shot > 0:
-            val = task.get_tasks(domain=domain, type=task.Task.Type.VALIDATION, is_longer_plan=True)
-            train = task.get_tasks(domain=domain, type=task.Task.Type.TRAIN, is_longer_plan=True)
-            possible_few_shot_examples = set(val + train)
-    except Exception as e:
-        logger.error(f"Error getting possible CoT examples: {e}", exc_info=True)
-        raise e
 
     # --- Generate Plans ---
     logger.info("Starting plan generation loop...") # Use logger
     for t in tqdm(tasks, total=len(tasks), desc="Generating plans"):
-        few_shot_examples = set()
-        if few_shot > 0:
-            few_shot_examples = set(
-                rng.choice(
-                    list(possible_few_shot_examples),
-                    size=min(few_shot, len(possible_few_shot_examples)),
-                    replace=False
-                )
-            )
         try:
             model.generate(
                 task=t,
-                few_shot_examples=few_shot_examples,
+                random_seed=random_seed,
                 **generation_kwargs
             )
         except Exception as e:

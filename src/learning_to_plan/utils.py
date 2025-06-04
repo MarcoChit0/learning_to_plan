@@ -59,7 +59,7 @@ async def call_paas(
 
     try:
         logger.info(f"Domain {domain} already exists. Loading tasks from dataset.")
-        tasks_to_process = {t for t in task.get_tasks(filter_by_domain=domain) if t._paas_status == task.Task.PlanningAsAServiceStatus.ERROR}
+        tasks_to_process = {t for t in task.get_tasks(filter_by_domain=domain) if t._paas_status == task.Task.PAAS_STATUS.ERROR}
     except Exception as e:
         logger.error(f"Error loading tasks from dataset: {e}", exc_info=True)
         logger.info(f"Creating new tasks for domain: {domain}.")
@@ -85,7 +85,7 @@ def split_dataset(
         logger.error(f"No tasks found in file {config.TASKS_DATASET_FILE_PATH}.", exc_info=True)
         raise e
 
-    valid_tasks:set[task.Task] = {t for t in tasks if t._paas_status == task.Task.PlanningAsAServiceStatus.OK}
+    valid_tasks:set[task.Task] = {t for t in tasks if t._paas_status == task.Task.PAAS_STATUS.OK}
     domains:set[str] = {t._domain for t in valid_tasks}
     tasks_per_domain = {d: [t for t in valid_tasks if t._domain == d] for d in domains}
 
@@ -110,11 +110,11 @@ def split_dataset(
         )
         test_tasks = longer_tasks + basic_test_tasks
         for t in train_tasks:
-            t._type = task.Task.Type.TRAIN
+            t._type = task.Task.TYPE.TRAIN
         for t in validation_tasks:
-            t._type = task.Task.Type.VALIDATION
+            t._type = task.Task.TYPE.VALIDATION
         for t in test_tasks:
-            t._type = task.Task.Type.TEST
+            t._type = task.Task.TYPE.TEST
         
         # Save the final dataset
         task.save()

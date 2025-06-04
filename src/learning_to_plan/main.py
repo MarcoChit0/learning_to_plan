@@ -13,11 +13,11 @@ from learning_to_plan import processing_data
 
 logger = config.get_logger(__name__)
 
-def prompt_type_converter(value: str) -> task.Task.PromptType:
+def prompt_type_converter(value: str) -> task.Task.PROMPT_TYPE:
     try:
-        return task.Task.PromptType[value.upper()]
+        return task.Task.PROMPT_TYPE[value.upper()]
     except KeyError:
-        valid = ", ".join([pt.name.lower() for pt in task.Task.PromptType])
+        valid = ", ".join([pt.name.lower() for pt in task.Task.PROMPT_TYPE])
         raise argparse.ArgumentTypeError(f"Invalid prompt_type: {value}. Valid options are: {valid}.")
 
 def parse_args():
@@ -121,8 +121,8 @@ def parse_args():
     parser.add_argument(
         "--prompt_type",
         type=prompt_type_converter,
-        default=task.Task.PromptType.IO,
-        help=f"Type of prompt to use for plan generation. Options: {list(task.Task.PromptType)}. Default is {task.Task.PromptType.IO.name}."
+        default=task.Task.PROMPT_TYPE.IO,
+        help=f"Type of prompt to use for plan generation. Options: {list(task.Task.PROMPT_TYPE)}. Default is {task.Task.PROMPT_TYPE.IO.name}."
     )
     parser.add_argument(
         "--few_shot",
@@ -196,10 +196,10 @@ if __name__ == "__main__":
     args = parse_args()
     config.initialize(args) # Config initialization likely sets up logging
 
-    if args.prompt_type == task.Task.PromptType.FEW_SHOT and args.few_shot <= 0:
+    if args.prompt_type == task.Task.PROMPT_TYPE.FEW_SHOT and args.few_shot <= 0:
         logger.error("For few-shot prompting, please specify a positive number of few-shot examples with --few_shot <number>.")
         raise ValueError("Few-shot prompting requires a positive number of examples.")
-    if args.few_shot > 0 and args.prompt_type != task.Task.PromptType.FEW_SHOT:
+    if args.few_shot > 0 and args.prompt_type != task.Task.PROMPT_TYPE.FEW_SHOT:
         logger.warning("You specified a few-shot number but not the few-shot prompt type. Defaulting to IO prompt type.")
         raise ValueError("For few-shot prompting, please specify the prompt type as --prompt_type few_shot.")
 

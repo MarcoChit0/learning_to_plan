@@ -20,11 +20,10 @@ import json
 logger = config.get_logger(__name__)
 
 class Model:
-    VALID_PROMPT_TYPES = ["io", "cot"]
     def __init__(self, model_name, **kwargs):
         """
         task:task.Task : { # Task object for which the plan was generated
-            prompt_type:str : { # Prompt type used for generation, e.g., "io", "cot", ...
+            prompt_type:task.Task.PROMPT_TYPE : { # Prompt type used for generation, e.g., "io", "cot", ...
                 "raw" : list[str], # List of raw generated plans
                 "pddl" : list[str] # List of PDDL generated plans
                 "is_valid" : list[Optional[bool]] # List of booleans indicating if the plan is valid. If None, the plan is not validated.
@@ -41,14 +40,14 @@ class Model:
                 os.rmdir(self._model_dir_path)
         os.makedirs(self._model_dir_path, exist_ok=True)
 
-    def add_generated_plans(self, task: task.Task, prompt_type: str, raw_plans:list[str], pddl_plans:list[str], is_valid:Optional[list[Optional[bool]]] = None, overwrite:bool=False) -> None:
+    def add_generated_plans(self, t: task.Task, prompt_type: task.Task.PROMPT_TYPE, raw_plans:list[str], pddl_plans:list[str], is_valid:Optional[list[Optional[bool]]] = None, overwrite:bool=False) -> None:
         """
             Adds generated plans to the internal dictionary.
             This method is called after generating plans for a task.
 
             Parameters:
                 task: The task object for which the plans were generated.
-                prompt_type: The type of prompt used for generation (e.g., "io", "cot").
+                prompt_type: The type of prompt used for generation (e.g., "io", "few_shot").
                 outputs: The generated outputs from the model.
                 input_length: The length of the input tokens.
                 device: The device on which the model is running (e.g., "cuda", "cpu").
@@ -60,55 +59,55 @@ class Model:
         if is_valid is not None and len(raw_plans) != len(is_valid):
             raise ValueError(f"Length mismatch: raw_plans ({len(raw_plans)}), is_valid ({len(is_valid)})")
 
-        if prompt_type not in self.VALID_PROMPT_TYPES:
-            raise ValueError(f"Invalid prompt type: {prompt_type}. Must be in [{', '.join(self.VALID_PROMPT_TYPES)}].")
+        if prompt_type not in list(task.Task.PROMPT_TYPE):
+            raise ValueError(f"Invalid prompt type: {prompt_type}. Must be in [{', '.join(list(task.Task.PROMPT_TYPE))}].")
         
-        if task not in self._generated_plans:
-            self._generated_plans[task] = {}
+        if t not in self._generated_plans:
+            self._generated_plans[t] = {}
         
-        if prompt_type not in self._generated_plans[task] or overwrite:
-            self._generated_plans[task][prompt_type] = {
+        if prompt_type not in self._generated_plans[t] or overwrite:
+            self._generated_plans[t][prompt_type] = {
                 "raw": [],
                 "pddl": [],
                 "is_valid": [],
             }
         
         if overwrite:
-            logger.info(f"Overwriting existing plans for task {task} and prompt type {prompt_type}.")
+            logger.info(f"Overwriting existing plans for task {t} and prompt type {prompt_type}.")
         
-        self._generated_plans[task][prompt_type]["raw"].extend(raw_plans)
-        self._generated_plans[task][prompt_type]["pddl"].extend(pddl_plans)
-        logger.info(f"Added {len(raw_plans)} plans for task {task} and prompt type {prompt_type}.")
+        self._generated_plans[t][prompt_type]["raw"].extend(raw_plans)
+        self._generated_plans[t][prompt_type]["pddl"].extend(pddl_plans)
+        logger.info(f"Added {len(raw_plans)} plans for task {t} and prompt type {prompt_type}.")
         if is_valid is not None:
             logger.info(f"The {len(is_valid)} plans added were validated.")
-            self._generated_plans[task][prompt_type]["is_valid"].extend(is_valid)
+            self._generated_plans[t][prompt_type]["is_valid"].extend(is_valid)
         else:
             logger.info(f"The {len(raw_plans)} plans added were not validated.")
-            self._generated_plans[task][prompt_type]["is_valid"].extend([None] * len(raw_plans))
+            self._generated_plans[t][prompt_type]["is_valid"].extend([None] * len(raw_plans))
     
-    def validate_generated_plan(self, task:task.Task, prompt_type:str, plan_idx:int, is_valid:bool) -> None:
+    def validate_generated_plan(self, t:task.Task, prompt_type: task.Task.PROMPT_TYPE, plan_idx:int, is_valid:bool) -> None:
         """
         Validates a generated plan for a specific task and prompt type.
         This method is called after generating plans for a task.
         """
-        if task not in self._generated_plans:
-            raise ValueError(f"Task {task} not found in generated plans.")
+        if t not in self._generated_plans:
+            raise ValueError(f"Task {t} not found in generated plans.")
         
-        if prompt_type not in self._generated_plans[task]:
-            raise ValueError(f"Prompt type {prompt_type} not found in generated plans for task {task}.")
+        if prompt_type not in self._generated_plans[t]:
+            raise ValueError(f"Prompt type {prompt_type} not found in generated plans for task {t}.")
         
-        if plan_idx < 0 or plan_idx >= len(self._generated_plans[task][prompt_type]["raw"]):
-            raise IndexError(f"Plan index {plan_idx} out of range for task {task} and prompt type {prompt_type}.")
+        if plan_idx < 0 or plan_idx >= len(self._generated_plans[t][prompt_type]["raw"]):
+            raise IndexError(f"Plan index {plan_idx} out of range for task {t} and prompt type {prompt_type}.")
         
-        self._generated_plans[task][prompt_type]["is_valid"][plan_idx] = is_valid
+        self._generated_plans[t][prompt_type]["is_valid"][plan_idx] = is_valid
 
         if is_valid:
             s = "is valid."
         else:
             s = "is invalid."
-        logger.debug(f"Model {self._model_name} - Task {task} - Prompt Type {prompt_type} - Plan Index {plan_idx}: Plan validated as {s}.")
+        logger.debug(f"Model {self._model_name} - Task {t} - Prompt Type {prompt_type} - Plan Index {plan_idx}: Plan validated as {s}.")
 
-    def generate(self, task:task.Task, prompt_type:task.Task.PromptType,  **generation_kwargs) -> None:
+    def generate(self, t:task.Task, prompt_type:task.Task.PROMPT_TYPE, **generation_kwargs) -> None:
         """
         Generates a plan based on the provided prompt.
         This is a placeholder method and should be implemented in subclasses.
@@ -202,7 +201,7 @@ class Model:
                         loaded_plans[t] = {}
                         number_of_tasks += 1
                     
-                    loaded_plans[t][data.get("prompt_type")] = {
+                    loaded_plans[t][task.Task.PROMPT_TYPE.get(data.get("prompt_type").upper())] = {
                         "raw": data.get("raw_plans", []),
                         "pddl": data.get("pddl_plans", []),
                         "is_valid": data.get("is_valid", []),
@@ -524,7 +523,7 @@ class HuggingFaceModel(Model):
             logger.error(f"Error during training metrics logging or final summary: {e}", exc_info=True)
             # Don't re-raise here if training itself was successful.
 
-    def generate(self, task:task.Task, prompt_type:task.Task.PromptType, **generation_kwargs) -> None:
+    def generate(self, t:task.Task, prompt_type: task.Task.PROMPT_TYPE, **generation_kwargs) -> None:
         """
         Generates text based on a prompt using the Hugging Face model.
 
@@ -540,25 +539,25 @@ class HuggingFaceModel(Model):
 
         num_return_sequences = generation_kwargs.get("num_return_sequences", 1)
         overwrite_plans = generation_kwargs.get("overwrite_generated_plans", False)
-        if task in self._generated_plans and prompt_type in self._generated_plans[task]:
+        if t in self._generated_plans and prompt_type in self._generated_plans[t]:
             if not overwrite_plans:
-                num_already_generated_plans = len(self._generated_plans[task][prompt_type]['raw'])
-                logger.info(f"Task {task._id} already has {num_already_generated_plans} generated plans with prompt type {prompt_type}.")
+                num_already_generated_plans = len(self._generated_plans[t][prompt_type]['raw'])
+                logger.info(f"Task {t._id} already has {num_already_generated_plans} generated plans with prompt type {prompt_type}.")
                 if num_already_generated_plans >= num_return_sequences:
-                    logger.info(f"Skipping generation for task {task._id} with prompt type {prompt_type}.")
+                    logger.info(f"Skipping generation for task {t._id} with prompt type {prompt_type}.")
                     return
                 else:
-                    logger.info(f"Task {task._id} has {num_already_generated_plans} generated plans with prompt type {prompt_type}. Generating {num_return_sequences - num_already_generated_plans} more plans to match the requested {num_return_sequences} plans.")
+                    logger.info(f"Task {t._id} has {num_already_generated_plans} generated plans with prompt type {prompt_type}. Generating {num_return_sequences - num_already_generated_plans} more plans to match the requested {num_return_sequences} plans.")
                     num_return_sequences -= num_already_generated_plans
             else:
-                logger.info(f"Overwriting existing plans for task {task._id} with prompt type {prompt_type}.")
+                logger.info(f"Overwriting existing plans for task {t._id} with prompt type {prompt_type}.")
 
         # Ensure model is in evaluation mode
         self._model.eval()
 
         device = next(self._model.parameters()).device
 
-        generation_messages: list[dict[str, str]] = task.get_chat(with_plan=False, prompt_type=prompt_type, **generation_kwargs) 
+        generation_messages: list[dict[str, str]] = t.get_chat(with_plan=False, **generation_kwargs) 
         
         # --- Generation Configuration ---
         gen_kwargs = {
@@ -634,17 +633,17 @@ class HuggingFaceModel(Model):
             #     logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: No start of plan token found in output tokens [{output[:100]}...]")
 
             # TODO: remove this when the model knows how to add the plan start and end tokens
-            pddl_plans.append(task._domain_translator.translate_natural_language_plan_to_pddl(generated_text))
+            pddl_plans.append(t._domain_translator.translate_natural_language_plan_to_pddl(generated_text))
             print(f"Generated PDDL plan:\n{pddl_plans[-1]}")
         self.add_generated_plans(
-            task=task, 
+            t=t, 
             prompt_type=prompt_type, 
             raw_plans=raw_outputs,
             pddl_plans=pddl_plans, 
             overwrite=overwrite_plans
         )
 
-        logger.info(f"Generated {len(raw_outputs)} plans for task {task} with prompt type {prompt_type}.")
+        logger.info(f"Generated {len(raw_outputs)} plans for task {t} with prompt type {prompt_type}.")
 
 
 # # --- Gemini Model (Remains unchanged from previous version) ---
@@ -669,13 +668,13 @@ class GeminiModel(Model):
 
     def generate(
             self,
-            task:task.Task,
-            prompt_type:task.Task.PromptType,
+            t:task.Task,
+            prompt_type:task.Task.PROMPT_TYPE,
             **generation_kwargs:dict[str, Any]
         ) -> None:
         logger.debug(f"Generating with Gemini model {self._model_name}.")
 
-        original_chat_messages: list[dict[str, str]] = task.get_chat(with_plan=False, prompt_type=prompt_type, **generation_kwargs)
+        original_chat_messages: list[dict[str, str]] = t.get_chat(with_plan=False, **generation_kwargs)
 
         system_instruction_parts = []
         gemini_contents = []
@@ -758,16 +757,15 @@ class GeminiModel(Model):
                 logger.error(f"No valid generated texts found in Gemini response. Response: {response}")
                 raise RuntimeError("No valid generated texts found in Gemini response.")
 
-            pddl_plans = [task._domain_translator.translate_natural_language_plan_to_pddl(text) for text in generated_texts]
-            prompt_type = "cot" if len(cot_examples) > 0 else "io"
+            pddl_plans = [t._domain_translator.translate_natural_language_plan_to_pddl(text) for text in generated_texts]
             self.add_generated_plans(
-                task=task,
+                t=t,
                 prompt_type=prompt_type,
                 raw_plans=generated_texts,
                 pddl_plans=pddl_plans,
                 overwrite=generation_kwargs.get("overwrite_generated_plans", False)
             )
-            logger.info(f"Generated {len(generated_texts)} plans for task {task} with prompt type {prompt_type}.")
+            logger.info(f"Generated {len(generated_texts)} plans for task {t} with prompt type {prompt_type}.")
 
         except Exception as e:
             logger.error(f"Failed to generate text with Gemini model '{self._model_name}': {e}", exc_info=True)

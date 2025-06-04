@@ -3,6 +3,7 @@
 import os
 import json
 import logging
+from learning_to_plan import task
 import argparse
 from typing import Optional, Dict, Any
 import dotenv
@@ -185,8 +186,6 @@ def get_config(config_file_path, args: Optional[argparse.Namespace] = None) -> D
     Returns:
         A dictionary containing the loaded configuration.
     """
-
-    # --- 2. Apply Overrides from Args ---
     if not os.path.exists(config_file_path):
         logger.error(f"Config file '{config_file_path}' does not exist.")
         raise FileNotFoundError(f"Config file '{config_file_path}' not found.")
@@ -194,13 +193,36 @@ def get_config(config_file_path, args: Optional[argparse.Namespace] = None) -> D
         with open(config_file_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
         logger.info(msg=f"Successfully loaded configuration from {config_file_path}.")
+        
         if args:
             logger.info("Applying command-line argument overrides to configuration...")
             for key, value in config.items():
                 if hasattr(args, key):
                     if getattr(args, key) is not None:
-                        config[key] = getattr(args, key)
-                        logger.debug(f"Overriding config key '{key}' with value '{getattr(args, key)}' from command line.")    
+                        if key == 'prompt_type':
+                            value = task.Task.PROMPT_TYPE[getattr(args, key).upper()]
+                        else:
+                            value = getattr(args, key)
+                        config[key] = value
+                        logger.debug(f"Overriding config key '{key}' with value '{value}' from command line.")    
+        else:
+            logger.debug("No command-line arguments provided for overrides.")
+            config['prompt_type'] = task.Task.PROMPT_TYPE[config.get('prompt_type', 'io').upper()] # Default to 'io' if not specified
+
+
+        # -- Check for consistency in config values --
+        few_shot = config.get('few_shot', None)
+        prompt_type = config.get('prompt_type', None)
+        if prompt_type == task.Task.PROMPT_TYPE.FEW_SHOT:
+            if isinstance(few_shot, int) and few_shot <= 0:
+                raise ValueError("If prompt_type is 'few_shot', few_shot must be greater than 0.")
+            elif not isinstance(few_shot, int):
+                raise ValueError("If prompt_type is 'few_shot', few_shot must be an integer.")
+
+        elif prompt_type != task.Task.PROMPT_TYPE.FEW_SHOT and isinstance(few_shot, int) and few_shot > 0:
+            raise ValueError("If prompt_type is not 'few_shot', few_shot must be None or 0.")
+        
+        
         return config
     except Exception as e:
         msg = f"Error loading config file {config_file_path}: {e}"

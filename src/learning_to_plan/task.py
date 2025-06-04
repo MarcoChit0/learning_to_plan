@@ -15,16 +15,16 @@ instance_pattern = re.compile(r"instance-(\d+)\.pddl$")
 lock = threading.Lock()
 
 class Task(abc.ABC):
-    class Type(Enum):
+    class TYPE(Enum):
         TRAIN = "train"
         VALIDATION = "validation"
         TEST = "test"
 
-    class PlanningAsAServiceStatus(Enum):
+    class PAAS_STATUS(Enum):
         OK = "ok"
         ERROR = "error"
     
-    class PromptType(Enum):
+    class PROMPT_TYPE(Enum):
         IO = "io"
         COT = "cot"
         FEW_SHOT = "few_shot"
@@ -123,9 +123,9 @@ class Task(abc.ABC):
         self._instance_file_path : str = instance_file_path
         self._is_longer_plan : bool = True if config.LONG_INSTANCES in self._instance_file_path else False
         self._id : int = int(re.search(instance_pattern, self._instance_file_path).group(1))
-        self._paas_status : Optional[Task.PlanningAsAServiceStatus] = None # ok, error
+        self._paas_status : Optional[Task.PAAS_STATUS] = None # ok, error
         self._pddl_plan : Optional[str] = None
-        self._type : Optional[Task.Type] = None # training, validation, test | None
+        self._type : Optional[Task.TYPE] = None # training, validation, test | None
 
         if self._domain == "blocksworld":
             self._domain_translator : Task.DomainTranslator = BlocksworldTranslator()
@@ -181,9 +181,9 @@ class Task(abc.ABC):
             "plan": plan_nl
         }
 
-    def get_chat(self, with_plan: bool = True, prompt_type : Task.PromptType = PromptType.IO, **kwargs) -> list[dict[str, str]]:
+    def get_chat(self, with_plan: bool = True, prompt_type : Task.PROMPT_TYPE = PROMPT_TYPE.IO, **kwargs) -> list[dict[str, str]]:
         task_components_in_nl = self.get_task_components_in_natural_language(with_plan=with_plan)
-        if prompt_type == Task.PromptType.IO:
+        if prompt_type == Task.PROMPT_TYPE.IO:
             # TODO: VERIFICAR SE A MODIFICAÇÃO NÃO CAUSOU ERROS
             initial_state_facts_str = "As initial conditions I have that: " + (", ".join(task_components_in_nl['initial_state_facts']))
             goal_facts_str = "My goal is to have that: " + (", ".join(task_components_in_nl['goal_facts']))      
@@ -194,17 +194,18 @@ class Task(abc.ABC):
             if with_plan:
                 chat.append({"role": "assistant", "content": f"My plan is as follows:\n{config.TOKENS.PLAN_START}\n{task_components_in_nl['plan']}\n{config.TOKENS.PLAN_END}"})
             return chat
-        elif prompt_type == Task.PromptType.FEW_SHOT:
-            few_shot_examples = kwargs.get("few_shot_examples", set())
-            if not few_shot_examples:
-                raise ValueError("Few-shot examples are required for the Few-Shot prompt type.")
-            
-            assert isinstance(few_shot_examples, set), "Few-shot examples must be provided as a set of tasks."
-
-            assert all(isinstance(t, Task) for t in few_shot_examples), "All few-shot examples must be instances of Task."
-
-            assert all(t._domain == self._domain for t in few_shot_examples), "All few-shot examples must belong to the same domain as the current task."
-
+        elif prompt_type == Task.PROMPT_TYPE.FEW_SHOT:
+            if self._type == Task.TYPE.TRAIN or self._type == Task.TYPE.VALIDATION:
+                available_task_types = {Task.TYPE.TEST}
+            else:
+                available_task_types = {Task.TYPE.TRAIN, Task.TYPE.VALIDATION}
+            few_shot_examples = get_few_shot_examples(
+                domain= self._domain,
+                available_task_types = available_task_types, 
+                few_shot = kwargs.get('few_shot', 0),
+                is_longer_plan = False, 
+                random_seed = kwargs.get('random_seed', 42),
+            )
             assert len(few_shot_examples) > 0, "At least one few-shot example is required."
 
             examples = []
@@ -253,7 +254,7 @@ Provide only the plan for the given instance. Here is a checklist to help you wi
                 chat.append({"role": "assistant", "content": f"{config.TOKENS.PLAN_START}\n{task_components_in_nl['plan']}\n{config.TOKENS.PLAN_END}"})
             return chat
         else:
-            raise ValueError(f"Unsupported prompt type: {prompt_type}. Supported types are: {list(Task.PromptType)}.")
+            raise ValueError(f"Unsupported prompt type: {prompt_type}. Supported types are: {list(Task.PROMPT_TYPE)}.")
 
 
 
@@ -294,8 +295,8 @@ Provide only the plan for the given instance. Here is a checklist to help you wi
         # --- Enum Fields ---
         # Use correct internal field names (_pddl_status, _type)
         for field_name, json_key, enum_type in [
-            ("_paas_status", "paas_status", Task.PlanningAsAServiceStatus),
-            ("_type", "type", Task.Type)
+            ("_paas_status", "paas_status", Task.PAAS_STATUS),
+            ("_type", "type", Task.TYPE)
         ]:
             json_value = json_obj.get(json_key)
             if json_value is not None:
@@ -319,7 +320,7 @@ Provide only the plan for the given instance. Here is a checklist to help you wi
         if status == "ok":
             plan = response["result"]["output"]["sas_plan"]
         
-        self._paas_status = Task.PlanningAsAServiceStatus(status) if status in [e.value for e in Task.PlanningAsAServiceStatus] else None
+        self._paas_status = Task.PAAS_STATUS(status) if status in [e.value for e in Task.PAAS_STATUS] else None
         self._pddl_plan = plan
 
     def read_instance(self):
@@ -331,7 +332,6 @@ Provide only the plan for the given instance. Here is a checklist to help you wi
         with lock and open(self._domain_file_path, "r", encoding='utf-8') as f:
             domain_content = f.read()
         return domain_content
-
 
 class BlocksworldTranslator(Task.DomainTranslator):
         def __init__(self):
@@ -669,7 +669,7 @@ def load() -> None:
     logger.info(f"Loaded {len(DATASET)} tasks from {jsonl_file_path}.")
     
 
-def get_tasks(filter_by_domain: Optional[str] = None,  filter_by_type: Optional[Task.Type] = None, is_longer_plan:Optional[bool] = None, number_of_instances: Optional[int] = None) -> set[Task]:
+def get_tasks(filter_by_domain: Optional[str] = None,  filter_by_type: Optional[Task.TYPE] = None, is_longer_plan:Optional[bool] = None, number_of_instances: Optional[int] = None) -> set[Task]:
     global DATASET
     if not DATASET:
         raise ValueError("Dataset is empty. Please load the dataset first.")
@@ -721,3 +721,26 @@ def save()-> None:
                 logger.error(m)
                 raise e
     logger.info(f"Saved {len(DATASET)} tasks to {jsonl_file_path}.")
+
+import numpy as np
+def get_few_shot_examples(domain:str, available_task_types:set[Task.TYPE], few_shot: int, is_longer_plan: bool = False, random_seed:int=42) -> set[Task]:
+    rng = np.random.RandomState(random_seed)
+    try:
+        possible_few_shot_examples = set()
+        for task_type in available_task_types:
+            possible_few_shot_examples.update(get_tasks(domain, type=task_type, is_longer_plan=is_longer_plan))
+    except Exception as e:
+        logger.error(f"Error getting possible CoT examples: {e}", exc_info=True)
+        raise e
+
+    few_shot_examples = set(
+        rng.choice(
+            list(possible_few_shot_examples),
+            size=min(few_shot, len(possible_few_shot_examples)),
+            replace=False
+        )
+    )
+
+    if len(few_shot_examples) < few_shot:
+        logger.warning(f"Requested {few_shot} few-shot examples, but only {len(few_shot_examples)} are available. Returning all available examples.")
+    return few_shot_examples
