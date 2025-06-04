@@ -176,7 +176,7 @@ class Task(abc.ABC):
             "plan": plan_nl
         }
 
-    def get_chat(self, with_plan: bool = True, prompt_type : config.PROMPT_TYPE = PROMPT_TYPE.IO, **kwargs) -> list[dict[str, str]]:
+    def get_chat(self, with_plan: bool = True, prompt_type : config.PROMPT_TYPE = config.PROMPT_TYPE.IO, **kwargs) -> list[dict[str, str]]:
         task_components_in_nl = self.get_task_components_in_natural_language(with_plan=with_plan)
         if prompt_type == config.PROMPT_TYPE.IO:
             # TODO: VERIFICAR SE A MODIFICAÇÃO NÃO CAUSOU ERROS
@@ -250,7 +250,6 @@ Provide only the plan for the given instance. Here is a checklist to help you wi
             return chat
         else:
             raise ValueError(f"Unsupported prompt type: {prompt_type}. Supported types are: {list(config.PROMPT_TYPE)}.")
-
 
 
     def to_json(self):
