@@ -197,13 +197,6 @@ if __name__ == "__main__":
     args = parse_args()
     config.initialize(args) # Config initialization likely sets up logging
 
-    if args.prompt_type == config.PROMPT_TYPE.FEW_SHOT and args.few_shot <= 0:
-        logger.error("For few-shot prompting, please specify a positive number of few-shot examples with --few_shot <number>.")
-        raise ValueError("Few-shot prompting requires a positive number of examples.")
-    if args.few_shot > 0 and args.prompt_type != config.PROMPT_TYPE.FEW_SHOT:
-        logger.warning("You specified a few-shot number but not the few-shot prompt type. Defaulting to IO prompt type.")
-        raise ValueError("For few-shot prompting, please specify the prompt type as --prompt_type few_shot.")
-
     # --- Action Blocks ---
     if args.call_paas:
         logger.info("--- Starting Planning as a Service (PaaS) Calls ---")
