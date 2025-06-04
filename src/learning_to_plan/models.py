@@ -157,7 +157,7 @@ class Model:
                     output = {
                         "domain_file_path": getattr(task_obj, "_domain_file_path", None),
                         "instance_file_path": getattr(task_obj, "_instance_file_path", None),
-                        "prompt_type": prompt_type,
+                        "prompt_type": prompt_type.value if hasattr(prompt_type, 'value') else str(prompt_type),
                         "raw_plans": plan_data.get("raw", []),
                         "pddl_plans": plan_data.get("pddl", []),
                         "is_valid": plan_data.get("is_valid", []),
