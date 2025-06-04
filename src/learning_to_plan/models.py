@@ -557,7 +557,9 @@ class HuggingFaceModel(Model):
         device = next(self._model.parameters()).device
 
         generation_messages: list[dict[str, str]] = t.get_chat(with_plan=False, **generation_kwargs) 
-        
+        print("Generation messages:")
+        print(generation_messages)
+
         # --- Generation Configuration ---
         gen_kwargs = {
             "max_new_tokens": generation_kwargs.get("max_new_tokens", 512),
@@ -608,32 +610,28 @@ class HuggingFaceModel(Model):
         pddl_plans = []
         for output in outputs:
             generated_tokens = (output[input_length:] if output.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device))
-            generated_text = self._tokenizer.decode(generated_tokens, skip_special_tokens=False)
-            raw_outputs.append(generated_text)
 
             # # --- Process Plan ---
-            # TODO: use this in the future when the model knows how to add the plan start and end tokens
-            # START_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.START_OF_PLAN_TOKEN)
-            # END_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.END_OF_PLAN_TOKEN)
+            START_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.TOKENS.PLAN_START.value)
+            END_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.TOKENS.PLAN_END.value)
             
-            # start_of_plan_idx = next((i for i, token in enumerate(output) if token == START_OF_PLAN_TOKEN_ID), None)
-            # if start_of_plan_idx:
-            #     end_of_plan_idx = next((i for i, token in enumerate(output[start_of_plan_idx:]) if token == END_OF_PLAN_TOKEN_ID), None)
-            #     if end_of_plan_idx:
-            #         plan_tokens = output[start_of_plan_idx:end_of_plan_idx + 1]
-            #         plan_text = self._tokenizer.decode(plan_tokens, skip_special_tokens=True)
-            #         processed_outputs.append(plan_text)
-            #         logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: {plan_text}")
-            #     else:
-            #         processed_outputs.append("Generation Error: No end of plan token found.")
-            #         logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: No end of plan token found in output tokens [{output[:100]}...]")
-            # else:
-            #     processed_outputs.append("Generation Error: No start of plan token found.")
-            #     logger.info(f"Generated plan for task {task._id} with prompt type {prompt_type}: No start of plan token found in output tokens [{output[:100]}...]")
+            start_of_plan_idx = next((i for i, token in enumerate(generated_tokens) if token == START_OF_PLAN_TOKEN_ID), None)
+            if start_of_plan_idx:
+                end_of_plan_idx = next((i for i, token in enumerate(generated_tokens[start_of_plan_idx:]) if token == END_OF_PLAN_TOKEN_ID), None)
+                if end_of_plan_idx:
+                    plan_tokens = generated_tokens[start_of_plan_idx:end_of_plan_idx + 1]
+                    plan_text = self._tokenizer.decode(plan_tokens, skip_special_tokens=False)
+                    raw_outputs.append(plan_text)
+                    pddl_plans.append(t._domain_translator.translate_natural_language_plan_to_pddl(plan_text))
+                    logger.info(f"Generated plan for task {t._id} with prompt type {prompt_type}: {plan_text}")
+                    logger.info(f"PDDL plan: {pddl_plans[-1]}")
+                else:
+                   raw_outputs.append("Error: No end of plan token found in output tokens.")
+                   pddl_plans.append("")
+            else:
+                raw_outputs.append("Error: No start of plan token found in output tokens.")
+                pddl_plans.append("")
 
-            # TODO: remove this when the model knows how to add the plan start and end tokens
-            pddl_plans.append(t._domain_translator.translate_natural_language_plan_to_pddl(generated_text))
-            print(f"Generated PDDL plan:\n{pddl_plans[-1]}")
         self.add_generated_plans(
             t=t, 
             prompt_type=prompt_type, 

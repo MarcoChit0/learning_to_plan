@@ -47,9 +47,6 @@ def generate_batch(
         logger.error(f"Error getting tasks for generation: {e}", exc_info=True)
         raise e
 
-    print("$$ Generation Configuration $$")
-    for key, value in generation_kwargs.items():
-        print(f"{key}: {value}")
     # --- Generate Plans ---
     logger.info("Starting plan generation loop...") # Use logger
     for t in tqdm(tasks, total=len(tasks), desc="Generating plans"):
