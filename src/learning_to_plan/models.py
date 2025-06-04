@@ -201,7 +201,7 @@ class Model:
                         loaded_plans[t] = {}
                         number_of_tasks += 1
                     
-                    loaded_plans[t][config.PROMPT_TYPE.get(data.get("prompt_type").upper())] = {
+                    loaded_plans[t][config.PROMPT_TYPE[data.get("prompt_type").upper()]] = {
                         "raw": data.get("raw_plans", []),
                         "pddl": data.get("pddl_plans", []),
                         "is_valid": data.get("is_valid", []),
