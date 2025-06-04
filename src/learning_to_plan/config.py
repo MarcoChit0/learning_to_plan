@@ -209,15 +209,14 @@ def get_config(config_file_path, args: Optional[argparse.Namespace] = None) -> D
                             value = getattr(args, key)
                         config[key] = value
                         logger.debug(f"Overriding config key '{key}' with value '{value}' from command line.")    
-        else:
-            logger.debug("No command-line arguments provided for overrides.")
-            config['prompt_type'] = PROMPT_TYPE[config.get('prompt_type', 'io').upper()] # Default to 'io' if not specified
-
 
         # -- Check for consistency in config values --
         few_shot = config.get('few_shot', None)
         prompt_type = config.get('prompt_type', None)
-        if prompt_type == PROMPT_TYPE.FEW_SHOT:
+        if not prompt_type:
+            config['prompt_type'] = PROMPT_TYPE.IO  # Default to IO if not specified
+        
+        elif prompt_type == PROMPT_TYPE.FEW_SHOT:
             if isinstance(few_shot, int) and few_shot <= 0:
                 raise ValueError("If prompt_type is 'few_shot', few_shot must be greater than 0.")
             elif not isinstance(few_shot, int):

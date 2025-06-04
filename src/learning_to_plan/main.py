@@ -13,13 +13,6 @@ from learning_to_plan import processing_data
 
 logger = config.get_logger(__name__)
 
-def prompt_type_converter(value: str) -> config.PROMPT_TYPE:
-    try:
-        return config.PROMPT_TYPE[value.upper()]
-    except KeyError:
-        valid = ", ".join([pt.name.lower() for pt in config.PROMPT_TYPE])
-        raise argparse.ArgumentTypeError(f"Invalid prompt_type: {value}. Valid options are: {valid}.")
-
 def parse_args():
     parser = argparse.ArgumentParser(description="Learning to Plan")
     parser.add_argument(
@@ -118,16 +111,24 @@ def parse_args():
         default="all",
         help="Number of instances to generate plans for. Can be 'all', 'long', 'basic', or a positive integer."
     )
+    def prompt_type_converter(value: Optional[str] = None) -> Optional[config.PROMPT_TYPE]:
+        if not value:
+            return None
+        try:
+            return config.PROMPT_TYPE[value.upper()]
+        except KeyError:
+            valid = ", ".join([pt.value for pt in config.PROMPT_TYPE])
+            raise argparse.ArgumentTypeError(f"Invalid prompt_type: {value}. Valid options are: {valid}.")
     parser.add_argument(
         "--prompt_type",
         type=prompt_type_converter,
-        default=config.PROMPT_TYPE.IO,
+        default=None,
         help=f"Type of prompt to use for plan generation. Options: {list(config.PROMPT_TYPE)}. Default is {config.PROMPT_TYPE.IO.name}."
     )
     parser.add_argument(
         "--few_shot",
         type=int,
-        default=0,
+        default=None,
         help="Number of few-shot examples to use for generation. Default is 0 (no few-shot examples)."
     )
     parser.add_argument(
