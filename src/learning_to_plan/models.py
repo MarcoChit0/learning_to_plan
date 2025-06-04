@@ -610,14 +610,14 @@ class HuggingFaceModel(Model):
         pddl_plans = []
         for output in outputs:
             generated_tokens = (output[input_length:] if output.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device))
-
+            print(self._tokenizer.decode(generated_tokens, skip_special_tokens=False))
             # # --- Process Plan ---
             START_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.TOKENS.PLAN_START.value)
             END_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.TOKENS.PLAN_END.value)
             
             start_of_plan_idx = next((i for i, token in enumerate(generated_tokens) if token == START_OF_PLAN_TOKEN_ID), None)
             if start_of_plan_idx:
-                end_of_plan_idx = next((i for i, token in enumerate(generated_tokens[start_of_plan_idx:]) if token == END_OF_PLAN_TOKEN_ID), None)
+                end_of_plan_idx = next((i for i, token in enumerate(generated_tokens, start=start_of_plan_idx) if token == END_OF_PLAN_TOKEN_ID), None)
                 if end_of_plan_idx:
                     plan_tokens = generated_tokens[start_of_plan_idx:end_of_plan_idx + 1]
                     plan_text = self._tokenizer.decode(plan_tokens, skip_special_tokens=False)
@@ -626,9 +626,11 @@ class HuggingFaceModel(Model):
                     logger.info(f"Generated plan for task {t._id} with prompt type {prompt_type}: {plan_text}")
                     logger.info(f"PDDL plan: {pddl_plans[-1]}")
                 else:
+                   logger.info(f"Error: No end of plan token found in output tokens for task {t._id}.")
                    raw_outputs.append("Error: No end of plan token found in output tokens.")
                    pddl_plans.append("")
             else:
+                logger.info(f"Error: No start of plan token found in output tokens for task {t._id}.")
                 raw_outputs.append("Error: No start of plan token found in output tokens.")
                 pddl_plans.append("")
 
