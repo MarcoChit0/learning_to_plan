@@ -239,22 +239,21 @@ class HuggingFaceModel(Model):
 
             # --- Add special tokens IF they don't exist ---
             special_tokens_to_add = []
-            all_config_tokens = [getattr(config.TOKENS, attr) for attr in dir(config.TOKENS) if not callable(getattr(config.TOKENS, attr)) and not attr.startswith("__")]
+            all_config_tokens = [att.value for att in config.TOKENS]
 
             for token_str in all_config_tokens:
                 if isinstance(token_str, str) and token_str not in self._tokenizer.get_vocab():
                     special_tokens_to_add.append(token_str)
 
             if special_tokens_to_add:
-                logger.info(f"Added {len(special_tokens_to_add)} special tokens to tokenizer: {special_tokens_to_add}")
+                
+                num_added_tokens = self._tokenizer.add_tokens(special_tokens_to_add, special_tokens=True)
+                assert num_added_tokens == len(special_tokens_to_add), f"Expected to add {len(special_tokens_to_add)} special tokens, but added {num_added_tokens}."
+                logger.info(f"Added {num_added_tokens} special tokens to tokenizer: {special_tokens_to_add}")
 
-            logger.info(f"Tokenizer loaded. Pad token: {self._tokenizer.pad_token}, Padding side: {self._tokenizer.padding_side}")
-
-            for token in special_tokens_to_add:
-                if token not in self._tokenizer.get_vocab():
-                    raise ValueError(f"Special token '{token}' not found in tokenizer vocabulary. It will be added.")
-                else:
-                    logger.info(f"Special token '{token}' added to tokenizer vocabulary.")
+                for token in special_tokens_to_add:
+                    if token not in self._tokenizer.get_vocab():
+                        raise ValueError(f"Special token '{token}' not found in tokenizer vocabulary. It will be added.")
 
         except Exception as e:
             logger.error(f"Error loading or setting up tokenizer from {model_source}: {e}", exc_info=True)
