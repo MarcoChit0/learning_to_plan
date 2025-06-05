@@ -43,6 +43,8 @@ DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
 GENERATED_PLANS_FILE_NAME = "generated_plans.jsonl"
 
+RANDOM_SEED = 42 
+
 from enum import Enum
 class TOKENS(Enum):
     PLAN_START = "<|plan_start|>"
@@ -58,8 +60,15 @@ class TOKENS(Enum):
     
 class PROMPT_TYPE(Enum):
     IO = "io"
-    COT = "cot"
     FEW_SHOT = "few_shot"
+
+def get_special_tokens(prompt_type: PROMPT_TYPE) -> list[str]:
+    if prompt_type == PROMPT_TYPE.IO:
+        return [TOKENS.PLAN_START.value, TOKENS.PLAN_END.value]
+    elif prompt_type == PROMPT_TYPE.FEW_SHOT:
+        return [tok.value for tok in TOKENS]
+    else:
+        raise ValueError(f"Unknown prompt type: {prompt_type}. Must be one of {list(PROMPT_TYPE)}.")
 
 
 # --- End Constants ---

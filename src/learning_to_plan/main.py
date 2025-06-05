@@ -132,12 +132,6 @@ def parse_args():
         help="Number of few-shot examples to use for generation. Default is 0 (no few-shot examples)."
     )
     parser.add_argument(
-        "--random_seed",
-        type=int,
-        default=42,
-        help="Random seed for reproducibility."
-    )
-    parser.add_argument(
         "--dont_use_checkpoint",
         action="store_true",
         help="Do not use the latest checkpoint for training."
@@ -209,7 +203,7 @@ if __name__ == "__main__":
 
     elif args.split_dataset:
         logger.info("--- Starting Dataset Splitting ---")
-        utils.split_dataset(random_seed=args.random_seed)
+        utils.split_dataset()
         logger.info("--- Finished All Dataset Splitting ---")
 
     elif args.train:
@@ -236,7 +230,6 @@ if __name__ == "__main__":
             generate.generate_batch(
                 domain=domain, 
                 number_of_instances=args.number_of_instances, 
-                random_seed=args.random_seed, 
                 few_shot=args.few_shot, 
                 ## --- generation kwargs ---
                 checkpoint_dir=checkpoint_dir, 

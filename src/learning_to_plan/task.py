@@ -199,7 +199,6 @@ class Task(abc.ABC):
                 available_task_types = available_task_types, 
                 few_shot = kwargs.get('few_shot', 0),
                 is_longer_plan = False, 
-                random_seed = kwargs.get('random_seed', 42),
             )
             assert len(few_shot_examples) > 0, "At least one few-shot example is required."
 
@@ -717,8 +716,8 @@ def save()-> None:
     logger.info(f"Saved {len(DATASET)} tasks to {jsonl_file_path}.")
 
 import numpy as np
-def get_few_shot_examples(domain:str, available_task_types:set[Task.TYPE], few_shot: int, is_longer_plan: bool = False, random_seed:int=42) -> set[Task]:
-    rng = np.random.RandomState(random_seed)
+def get_few_shot_examples(domain:str, available_task_types:set[Task.TYPE], few_shot: int, is_longer_plan: bool = False) -> set[Task]:
+    rng = np.random.RandomState(config.RANDOM_SEED)
     try:
         possible_few_shot_examples = set()
         for task_type in available_task_types:

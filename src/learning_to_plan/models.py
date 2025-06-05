@@ -212,7 +212,7 @@ class Model:
         logger.info(f"Loaded {number_of_plans} plans from {number_of_tasks} tasks.")
                 
 class HuggingFaceModel(Model):
-    def __init__(self, model_name, checkpoint_dir: Optional[str] = None, **kwargs):
+    def __init__(self, model_name, prompt_type: config.PROMPT_TYPE, checkpoint_dir: Optional[str] = None,  **kwargs):
         super().__init__(model_name, **kwargs)
         assert config.HUGGINGFACE_TOKEN, "Hugging Face token is required for model loading."
 
@@ -239,14 +239,12 @@ class HuggingFaceModel(Model):
 
             # --- Add special tokens IF they don't exist ---
             special_tokens_to_add = []
-            all_config_tokens = [att.value for att in config.TOKENS]
 
-            for token_str in all_config_tokens:
-                if isinstance(token_str, str) and token_str not in self._tokenizer.get_vocab():
-                    special_tokens_to_add.append(token_str)
+            for tok in config.get_special_tokens(prompt_type=prompt_type):
+                if tok not in self._tokenizer.get_vocab():
+                    special_tokens_to_add.append(tok)
 
             if special_tokens_to_add:
-                
                 num_added_tokens = self._tokenizer.add_tokens(special_tokens_to_add, special_tokens=True)
                 assert num_added_tokens == len(special_tokens_to_add), f"Expected to add {len(special_tokens_to_add)} special tokens, but added {num_added_tokens}."
                 logger.info(f"Added {num_added_tokens} special tokens to tokenizer: {special_tokens_to_add}")
@@ -254,6 +252,8 @@ class HuggingFaceModel(Model):
                 for token in special_tokens_to_add:
                     if token not in self._tokenizer.get_vocab():
                         raise ValueError(f"Special token '{token}' not found in tokenizer vocabulary. It will be added.")
+                    else:
+                        logger.info(f"Special token '{token}' successfully added to tokenizer vocabulary with ID {self._tokenizer.convert_tokens_to_ids(token)}.")
 
         except Exception as e:
             logger.error(f"Error loading or setting up tokenizer from {model_source}: {e}", exc_info=True)

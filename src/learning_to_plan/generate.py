@@ -20,7 +20,6 @@ def generate_batch(
         model_name: str, 
         domain:str, 
         number_of_instances:Union[str, int] = "all", 
-        random_seed:int = 42,
         **generation_kwargs):
     start_time = datetime.datetime.now()
 
@@ -53,7 +52,6 @@ def generate_batch(
         try:
             model.generate(
                 t=t,
-                random_seed=random_seed,
                 **generation_kwargs
             )
         except Exception as e:
