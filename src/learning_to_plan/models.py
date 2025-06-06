@@ -1,3 +1,4 @@
+from __future__ import annotations
 import datetime
 import time
 from typing import Optional, List, Dict, Any
@@ -16,23 +17,135 @@ from learning_to_plan import config, task
 import torch
 import datasets
 import numpy as np
-import json
+import csv
 logger = config.get_logger(__name__)
 
 class Model:
-    def __init__(self, model_name, **kwargs):
-        """
-        task:task.Task : { # Task object for which the plan was generated
-            prompt_type:config.PROMPT_TYPE : { # Prompt type used for generation, e.g., "io", "cot", ...
-                "raw" : list[str], # List of raw generated plans
-                "pddl" : list[str] # List of PDDL generated plans
-                "is_valid" : list[Optional[bool]] # List of booleans indicating if the plan is valid. If None, the plan is not validated.
+    class Content:
+        AVAILABLE_CONTENT_ID_POOL:set[int] = set()
+        NEXT_CONTENT_ID:int = 0
+        SEEN_IDS:set[int] = set()
+        def __init__(self, t: task.Task, prompt_type: config.PROMPT_TYPE, raw_plan: str, pddl_plan: str, id: Optional[int] = None, is_valid: Optional[bool] = None):
+            self._task = t
+            self._prompt_type = prompt_type
+            self.raw_plan = raw_plan
+            self.pddl_plan = pddl_plan
+            self._is_valid = is_valid
+            if id is None:
+                self._id = Model.Content.get_new_id()
+            else:
+                try:
+                    Model.Content.add_new_id(id)
+                    self._id = id
+                except ValueError as e:
+                    logger.error(f"Error adding new ID {id}: {e}")
+                    raise e
+            
+        
+        def add_new_id(cls, new_id: int) -> None:
+            """
+            Adds a new ID to the available content ID pool.
+            This method is used to ensure that IDs are unique and can be reused.
+            """
+            if new_id in cls.SEEN_IDS:
+                raise ValueError(f"ID {new_id} already exists in Model.Content.SEEN_IDS.")
+            if new_id in cls.AVAILABLE_CONTENT_ID_POOL:
+                cls.AVAILABLE_CONTENT_ID_POOL.remove(new_id)
+            cls.SEEN_IDS.add(new_id)
+            if new_id > cls.NEXT_CONTENT_ID:
+                for i in range(cls.NEXT_CONTENT_ID, new_id):
+                    if i not in cls.SEEN_IDS:
+                        cls.AVAILABLE_CONTENT_ID_POOL.add(i)
+                cls.NEXT_CONTENT_ID = new_id + 1
+        
+        def get_new_id(cls) -> int:
+            """
+            Returns a new ID from the available content ID pool or generates a new one.
+            """
+            if cls.AVAILABLE_CONTENT_ID_POOL:
+                new_id = cls.AVAILABLE_CONTENT_ID_POOL.pop()
+            else:
+                new_id = cls.NEXT_CONTENT_ID
+                cls.NEXT_CONTENT_ID += 1
+            cls.SEEN_IDS.add(new_id)
+            return new_id
+
+        def remove_id(cls, id: int) -> None:
+            """
+            Removes an ID from the seen IDs and adds it to the available content ID pool.
+            This is used to recycle IDs when they are no longer needed.
+            """
+            if id not in cls.SEEN_IDS:
+                raise ValueError(f"ID {id} does not exist in Model.Content.SEEN_IDS.")
+            cls.SEEN_IDS.remove(id)
+            cls.AVAILABLE_CONTENT_ID_POOL.add(id)
+
+        def was_validated(self) -> bool:
+            """
+            Returns True if the plan was validated, False otherwise.
+            """
+            return self._is_valid is not None
+
+        def validate(self, is_valid: bool) -> None:
+            """
+            Validates the plan.
+            """
+            self._is_valid = is_valid
+            if is_valid:
+                logger.debug(f"Plan '{self.raw_plan}' validated as valid.")
+            else:
+                logger.debug(f"Plan '{self.raw_plan}' validated as invalid.")
+        
+        def __hash__(self):
+            return hash(self._id)
+        
+        def __eq__(self, other):
+            if not isinstance(other, Model.Content):
+                return False
+            return self._id == other._id
+
+        def __lt__(self, other):
+            if not isinstance(other, Model.Content):
+                return NotImplemented
+            return self._id < other._id
+        
+        def read_from_csv_row(cls, row: Dict[str, str]) -> Model.Content:
+            """
+            Reads a row from a CSV file and creates a Model.Content instance.
+            """
+            t = task.get_task(
+                row['domain_file_path'],
+                row['instance_file_path'],
+            )
+            prompt_type = config.PROMPT_TYPE(row['prompt_type'].upper())
+            id = int(row['id']) if 'id' in row else None
+            remaining_fields = {k: v for k, v in row.items() if k not in ['domain_file_path', 'instance_file_path', 'prompt_type', 'id']}
+            return cls(t=t, prompt_type=prompt_type, id=id, **remaining_fields)
+
+        def write_to_csv_row(self) -> Dict[str, str]:
+            """
+            Writes the Model.Content instance to a dictionary for CSV writing.
+            """
+            return {
+                'domain_file_path': self._task._domain_file_path,
+                'instance_file_path': self._task._instance_file_path,
+                'prompt_type': self._prompt_type.value,
+                'id': str(self._id),
+                'raw_plan': self.raw_plan,
+                'pddl_plan': self.pddl_plan,
+                'is_valid': str(self._is_valid) if self._is_valid is not None else ''
             }
-        }
-        """
+
+        def get_header(cls) -> List[str]:
+            """
+            Returns the header for the CSV file.
+            """
+            return ['domain_file_path', 'instance_file_path', 'prompt_type', 'id', 'raw_plan', 'pddl_plan', 'is_valid']
+
+    def __init__(self, model_name, **kwargs):
         self._model_name = model_name
         self.__dict__.update(kwargs)
-        self._generated_plans:dict[task.Task, dict[str, Any]] = {}
+        self._generated_plans : set[Model.Content] = set()
         self._model_dir_path = os.path.join(config.MODELS_DIR, model_name)
         if kwargs.get("reset_model_dir", False):
             if os.path.exists(self._model_dir_path):
@@ -40,72 +153,24 @@ class Model:
                 os.rmdir(self._model_dir_path)
         os.makedirs(self._model_dir_path, exist_ok=True)
 
-    def add_generated_plans(self, t: task.Task, prompt_type: config.PROMPT_TYPE, raw_plans:list[str], pddl_plans:list[str], is_valid:Optional[list[Optional[bool]]] = None, overwrite:bool=False) -> None:
-        """
-            Adds generated plans to the internal dictionary.
-            This method is called after generating plans for a task.
+    def add_generated_plan(self, newly_generated_plan:Content) -> None:
+        self._generated_plans.add(newly_generated_plan)
+        logger.info(f"Added new plan with ID {newly_generated_plan._id} for task {newly_generated_plan._task} and prompt type {newly_generated_plan._prompt_type} to model {self._model_name}.")
 
-            Parameters:
-                task: The task object for which the plans were generated.
-                prompt_type: The type of prompt used for generation (e.g., "io", "few_shot").
-                outputs: The generated outputs from the model.
-                input_length: The length of the input tokens.
-                device: The device on which the model is running (e.g., "cuda", "cpu").
-        """
-
-        if  len(raw_plans) != len(pddl_plans):
-            raise ValueError(f"Length mismatch: raw_plans ({len(raw_plans)}), pddl_plans ({len(pddl_plans)})")
-        
-        if is_valid is not None and len(raw_plans) != len(is_valid):
-            raise ValueError(f"Length mismatch: raw_plans ({len(raw_plans)}), is_valid ({len(is_valid)})")
-
-        if prompt_type not in list(config.PROMPT_TYPE):
-            raise ValueError(f"Invalid prompt type: {prompt_type}. Must be in [{', '.join(list(config.PROMPT_TYPE))}].")
-        
-        if t not in self._generated_plans:
-            self._generated_plans[t] = {}
-        
-        if prompt_type not in self._generated_plans[t] or overwrite:
-            self._generated_plans[t][prompt_type] = {
-                "raw": [],
-                "pddl": [],
-                "is_valid": [],
-            }
-        
-        if overwrite:
-            logger.info(f"Overwriting existing plans for task {t} and prompt type {prompt_type}.")
-        
-        self._generated_plans[t][prompt_type]["raw"].extend(raw_plans)
-        self._generated_plans[t][prompt_type]["pddl"].extend(pddl_plans)
-        logger.info(f"Added {len(raw_plans)} plans for task {t} and prompt type {prompt_type}.")
-        if is_valid is not None:
-            logger.info(f"The {len(is_valid)} plans added were validated.")
-            self._generated_plans[t][prompt_type]["is_valid"].extend(is_valid)
-        else:
-            logger.info(f"The {len(raw_plans)} plans added were not validated.")
-            self._generated_plans[t][prompt_type]["is_valid"].extend([None] * len(raw_plans))
+    def get_generated_plans(self, t: task.Task, prompt_type: config.PROMPT_TYPE) -> set[Content]:
+        plans = set()
+        for content in self._generated_plans:
+            if content._task == t and content._prompt_type == prompt_type:
+                plans.add(content)
+        return plans
     
-    def validate_generated_plan(self, t:task.Task, prompt_type: config.PROMPT_TYPE, plan_idx:int, is_valid:bool) -> None:
-        """
-        Validates a generated plan for a specific task and prompt type.
-        This method is called after generating plans for a task.
-        """
-        if t not in self._generated_plans:
-            raise ValueError(f"Task {t} not found in generated plans.")
-        
-        if prompt_type not in self._generated_plans[t]:
-            raise ValueError(f"Prompt type {prompt_type} not found in generated plans for task {t}.")
-        
-        if plan_idx < 0 or plan_idx >= len(self._generated_plans[t][prompt_type]["raw"]):
-            raise IndexError(f"Plan index {plan_idx} out of range for task {t} and prompt type {prompt_type}.")
-        
-        self._generated_plans[t][prompt_type]["is_valid"][plan_idx] = is_valid
-
-        if is_valid:
-            s = "is valid."
-        else:
-            s = "is invalid."
-        logger.debug(f"Model {self._model_name} - Task {t} - Prompt Type {prompt_type} - Plan Index {plan_idx}: Plan validated as {s}.")
+    def overwrite_generated_plans(self, t: task.Task, prompt_type: config.PROMPT_TYPE) -> None:
+        counter = 0
+        for content in self._generated_plans:
+            if content._task == t and content._prompt_type == prompt_type:
+                Model.Content.remove_id(content._id)
+                counter += 1
+        logger.info(f"Overwrote {counter} plans for task {t} and prompt type {prompt_type} in model {self._model_name}.")
 
     def generate(self, t:task.Task, prompt_type:config.PROMPT_TYPE, **generation_kwargs) -> None:
         """
@@ -137,79 +202,56 @@ class Model:
     
     def save_generated_plans(self) -> None:
         """
-        Saves the generated plans to a JSONL file.
-        Each line in the file corresponds to a (task, prompt) pair.
-        In each line, there is a JSON object containing:
-        - task domain file path
-        - task instance file path
-        - prompt type
-        - raw plans
-        - pddl plans
-        """
-        file_path = os.path.join(self._model_dir_path, config.GENERATED_PLANS_FILE_NAME)
-        logger.info(f"Saving generated plans to {file_path}.")
-        number_of_tasks = self._generated_plans.keys()
-        number_of_lines = 0
-        number_of_plans = 0
-        with open(file_path, "w", encoding="utf-8") as f:
-            for task_obj, prompts in self._generated_plans.items():
-                for prompt_type, plan_data in prompts.items():
-                    output = {
-                        "domain_file_path": getattr(task_obj, "_domain_file_path", None),
-                        "instance_file_path": getattr(task_obj, "_instance_file_path", None),
-                        "prompt_type": prompt_type.value if hasattr(prompt_type, 'value') else str(prompt_type),
-                        "raw_plans": plan_data.get("raw", []),
-                        "pddl_plans": plan_data.get("pddl", []),
-                        "is_valid": plan_data.get("is_valid", []),
-                    }
-                    f.write(json.dumps(output) + "\n")
-                    number_of_lines += 1
-                    number_of_plans += len(plan_data.get("raw", []))
-        logger.info(f"Saved {number_of_lines} lines to {file_path}.")
-        logger.info(f"Saved {number_of_plans} plans from {len(number_of_tasks)} tasks.")
-    
-    def load_generated_plans(self) -> None:
-        """
-        Loads generated plans from a JSONL file and overwrites the current generated_plans.
-        Assumes each line in the file is a JSON object with:
+        Saves generated plans to a CSV file in the model directory.
+        The file will contain:
         - domain_file_path
         - instance_file_path
         - prompt_type
-        - raw_plans
-        - pddl_plans
+        - id
+        - content specific fields (raw_plans, pddl_plans, is_valid)
+        """
+        file_path = os.path.join(self._model_dir_path, config.GENERATED_PLANS_FILE_NAME)
+        logger.info(f"Saving generated plans to {file_path}.")
+        with open(file_path, "w", encoding="utf-8", newline='') as f:
+            writer = csv.writer(f, delimiter=',')
+            header = Model.Content.get_header()
+            writer.writerow(header)  # Write the header
+            for content in sorted(self._generated_plans):
+                try:
+                    row = content.write_to_csv_row()
+                    writer.writerow([row.get(h, '') for h in header])  # Write the row with all headers
+                except Exception as e:
+                    raise ValueError(f"Error writing content {content} to CSV: {e}")
+        logger.info(f"Successfully saved {len(self._generated_plans)} plans to {file_path}.")
+    
+    def load_generated_plans(self) -> None:
+        """
+        Loads generated plans CSV file from the model directory.
+        - domain_file_path
+        - instance_file_path
+        - prompt_type
+        - id
+        - content specific fields (raw_plans, pddl_plans, is_valid)
         A pseudo task key is created as a tuple (domain_file_path, instance_file_path).
         """
-        loaded_plans = {}
         file_path = os.path.join(self._model_dir_path, config.GENERATED_PLANS_FILE_NAME)
         logger.info(f"Loading generated plans from {file_path}.")
-        number_of_tasks = 0
-        number_of_plans = 0
-        number_of_lines = 0
         if not os.path.exists(file_path):
             logger.warning(f"File {file_path} does not exist. No plans loaded.")
             return
+        lines_read = 0
         with open(file_path, "r", encoding="utf-8") as f:
-            for line in f:
-                number_of_lines += 1
-                if line.strip():
-                    data = json.loads(line)
-                    t = task.get_task(
-                        domain_file_path=data.get("domain_file_path"),
-                        instance_file_path=data.get("instance_file_path"),
-                    )
-                    if t not in loaded_plans:
-                        loaded_plans[t] = {}
-                        number_of_tasks += 1
-                    
-                    loaded_plans[t][config.PROMPT_TYPE[data.get("prompt_type").upper()]] = {
-                        "raw": data.get("raw_plans", []),
-                        "pddl": data.get("pddl_plans", []),
-                        "is_valid": data.get("is_valid", []),
-                    }
-                    number_of_plans += len(data.get("raw_plans", []))
-        self._generated_plans = loaded_plans
-        logger.info(f"{number_of_lines} lines read from {file_path}.")
-        logger.info(f"Loaded {number_of_plans} plans from {number_of_tasks} tasks.")
+            reader = csv.reader(f, delimiter=',')
+            header = next(reader)  # Read the header
+            logger.info(f"Header found: {header}")
+            for row in reader:
+                try:
+                    content = Model.Content.read_from_csv_row(row)
+                    self._generated_plans.add(content)
+                    lines_read += 1
+                except Exception as e:
+                    raise ValueError(f"Error reading row {row}: {e}")
+        logger.info(f"Successfully loaded {lines_read} plans from {file_path}.")
                 
 class HuggingFaceModel(Model):
     def __init__(self, model_name, prompt_type: config.PROMPT_TYPE, checkpoint_dir: Optional[str] = None,  **kwargs):
@@ -538,18 +580,20 @@ class HuggingFaceModel(Model):
 
         num_return_sequences = generation_kwargs.get("num_return_sequences", 1)
         overwrite_plans = generation_kwargs.get("overwrite_generated_plans", False)
-        if t in self._generated_plans and prompt_type in self._generated_plans[t]:
-            if not overwrite_plans:
-                num_already_generated_plans = len(self._generated_plans[t][prompt_type]['raw'])
-                logger.info(f"Task {t._id} already has {num_already_generated_plans} generated plans with prompt type {prompt_type}.")
-                if num_already_generated_plans >= num_return_sequences:
-                    logger.info(f"Skipping generation for task {t._id} with prompt type {prompt_type}.")
-                    return
-                else:
-                    logger.info(f"Task {t._id} has {num_already_generated_plans} generated plans with prompt type {prompt_type}. Generating {num_return_sequences - num_already_generated_plans} more plans to match the requested {num_return_sequences} plans.")
-                    num_return_sequences -= num_already_generated_plans
+        if overwrite_plans:
+            logger.info(f"Overwriting existing generated plans for task {t._id} with prompt type {prompt_type}.")
+            self.overwrite_generated_plans(t, prompt_type)
+
+        generated_plans_for_task_with_prompt_type = self.get_generated_plans(t, prompt_type)
+        if num_return_sequences <= len(generated_plans_for_task_with_prompt_type):
+            logger.info(f"Skipping generation as num_return_sequences is {num_return_sequences} and there are already {len(generated_plans_for_task_with_prompt_type)} plans for the task {t._id} with prompt type {prompt_type}.")
+            return
+        else:
+            if len(generated_plans_for_task_with_prompt_type) > 0:
+                logger.info(f"Task {t._id} with prompt type {prompt_type} already has {len(generated_plans_for_task_with_prompt_type)}/{num_return_sequences} generated plans. Generating additional {num_return_sequences - len(generated_plans_for_task_with_prompt_type)} plans.") 
+                num_return_sequences -= len(generated_plans_for_task_with_prompt_type)
             else:
-                logger.info(f"Overwriting existing plans for task {t._id} with prompt type {prompt_type}.")
+                logger.info(f"Task {t._id} with prompt type {prompt_type} has no generated plans yet. Generating {num_return_sequences} plans.")        
 
         # Ensure model is in evaluation mode
         self._model.eval()
@@ -606,8 +650,6 @@ class HuggingFaceModel(Model):
                 raise RuntimeError(f"Error during model.generate: {e_generate}") from e_generate
         
         # --- Process Outputs ---
-        raw_outputs = []
-        pddl_plans = []
         for output in outputs:
             generated_tokens = (output[input_length:] if output.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device))
             print(self._tokenizer.decode(generated_tokens, skip_special_tokens=False))
@@ -620,29 +662,22 @@ class HuggingFaceModel(Model):
                 end_of_plan_idx = next((i for i, token in enumerate(generated_tokens, start=start_of_plan_idx) if token == END_OF_PLAN_TOKEN_ID), None)
                 if end_of_plan_idx:
                     plan_tokens = generated_tokens[start_of_plan_idx:end_of_plan_idx + 1]
-                    plan_text = self._tokenizer.decode(plan_tokens, skip_special_tokens=False)
-                    raw_outputs.append(plan_text)
-                    pddl_plans.append(t._domain_translator.translate_natural_language_plan_to_pddl(plan_text))
-                    logger.info(f"Generated plan for task {t._id} with prompt type {prompt_type}: {plan_text}")
-                    logger.info(f"PDDL plan: {pddl_plans[-1]}")
+                    raw_plan = self._tokenizer.decode(plan_tokens, skip_special_tokens=False)   
+                    pddl_plan = t._domain_translator.translate_natural_language_plan_to_pddl(raw_plan)
+                    logger.info(f"Generated plan for task {t._id} with prompt type {prompt_type}: {raw_plan}")
+                    logger.info(f"PDDL plan: {pddl_plan}")
                 else:
                    logger.info(f"Error: No end of plan token found in output tokens for task {t._id}.")
-                   raw_outputs.append("Error: No end of plan token found in output tokens.")
-                   pddl_plans.append("")
+                   raw_plan = f"Error: No end of plan token found in output tokens.\n{self._tokenizer.decode(generated_tokens, skip_special_tokens=False)}"
+                   pddl_plan = ""
             else:
                 logger.info(f"Error: No start of plan token found in output tokens for task {t._id}.")
-                raw_outputs.append("Error: No start of plan token found in output tokens.")
-                pddl_plans.append("")
+                raw_plan = f"Error: No start of plan token found in output tokens.\n{self._tokenizer.decode(generated_tokens, skip_special_tokens=False)}"
+                pddl_plan = ""
 
-        self.add_generated_plans(
-            t=t, 
-            prompt_type=prompt_type, 
-            raw_plans=raw_outputs,
-            pddl_plans=pddl_plans, 
-            overwrite=overwrite_plans
-        )
-
-        logger.info(f"Generated {len(raw_outputs)} plans for task {t} with prompt type {prompt_type}.")
+            content = Model.Content(t, prompt_type, raw_plan, pddl_plan, is_valid=False)
+            self._generated_plans.add(content)
+        logger.info(f"Generated {len(outputs)} plans for task {t._id} with prompt type {prompt_type}.")
 
 
 # # --- Gemini Model (Remains unchanged from previous version) ---
@@ -756,14 +791,16 @@ class GeminiModel(Model):
                 logger.error(f"No valid generated texts found in Gemini response. Response: {response}")
                 raise RuntimeError("No valid generated texts found in Gemini response.")
 
-            pddl_plans = [t._domain_translator.translate_natural_language_plan_to_pddl(text) for text in generated_texts]
-            self.add_generated_plans(
-                t=t,
-                prompt_type=prompt_type,
-                raw_plans=generated_texts,
-                pddl_plans=pddl_plans,
-                overwrite=generation_kwargs.get("overwrite_generated_plans", False)
-            )
+            for text in generated_texts:
+                try:
+                    raw_plan = text.strip()
+                    pddl_plan = t._domain_translator.translate_natural_language_plan_to_pddl(text)
+                except Exception as e:
+                    logger.debug(f"Failed to translate generated text to PDDL: {text}. Error: {e}", exc_info=True)
+                    raw_plan = f"Error translating to PDDL: {e}\n{text}"
+                    pddl_plan = ""
+                content = Model.Content(t, prompt_type, raw_plan, pddl_plan, is_valid=False)
+                self._generated_plans.add(content)
             logger.info(f"Generated {len(generated_texts)} plans for task {t} with prompt type {prompt_type}.")
 
         except Exception as e:

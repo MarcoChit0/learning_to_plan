@@ -41,7 +41,7 @@ LONG_INSTANCES = "generated_basic_longer_plan_len"
 TASKS_DATASET_FILE_NAME = "tasks.jsonl"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
-GENERATED_PLANS_FILE_NAME = "generated_plans.jsonl"
+GENERATED_PLANS_FILE_NAME = "generated_plans.csv"
 
 RANDOM_SEED = 42 
 
