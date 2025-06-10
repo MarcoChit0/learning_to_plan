@@ -52,7 +52,7 @@ class Model:
             if new_id in cls.AVAILABLE_CONTENT_ID_POOL:
                 cls.AVAILABLE_CONTENT_ID_POOL.remove(new_id)
             cls.SEEN_IDS.add(new_id)
-            if new_id > cls.NEXT_CONTENT_ID:
+            if new_id >= cls.NEXT_CONTENT_ID:
                 for i in range(cls.NEXT_CONTENT_ID, new_id):
                     if i not in cls.SEEN_IDS:
                         cls.AVAILABLE_CONTENT_ID_POOL.add(i)
@@ -120,7 +120,7 @@ class Model:
                 row['domain_file_path'],
                 row['instance_file_path'],
             )
-            prompt_type = config.PROMPT_TYPE(row['prompt_type'].upper())
+            prompt_type = config.PROMPT_TYPE[row['prompt_type'].upper()]
             id = int(row['id']) if 'id' in row else None
             remaining_fields = {k: v for k, v in row.items() if k not in ['domain_file_path', 'instance_file_path', 'prompt_type', 'id']}
             return cls(t=t, prompt_type=prompt_type, id=id, **remaining_fields)
