@@ -41,7 +41,7 @@ class Model:
                     logger.error(f"Error adding new ID {id}: {e}")
                     raise e
             
-        
+        @classmethod
         def add_new_id(cls, new_id: int) -> None:
             """
             Adds a new ID to the available content ID pool.
@@ -58,6 +58,7 @@ class Model:
                         cls.AVAILABLE_CONTENT_ID_POOL.add(i)
                 cls.NEXT_CONTENT_ID = new_id + 1
         
+        @classmethod
         def get_new_id(cls) -> int:
             """
             Returns a new ID from the available content ID pool or generates a new one.
@@ -70,6 +71,7 @@ class Model:
             cls.SEEN_IDS.add(new_id)
             return new_id
 
+        @classmethod
         def remove_id(cls, id: int) -> None:
             """
             Removes an ID from the seen IDs and adds it to the available content ID pool.
@@ -109,6 +111,7 @@ class Model:
                 return NotImplemented
             return self._id < other._id
         
+        @classmethod
         def read_from_csv_row(cls, row: Dict[str, str]) -> Model.Content:
             """
             Reads a row from a CSV file and creates a Model.Content instance.
@@ -136,6 +139,7 @@ class Model:
                 'is_valid': str(self._is_valid) if self._is_valid is not None else ''
             }
 
+        @classmethod
         def get_header(cls) -> List[str]:
             """
             Returns the header for the CSV file.
