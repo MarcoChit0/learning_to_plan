@@ -16,8 +16,7 @@ from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_t
 from learning_to_plan import config, task
 import torch
 import datasets
-import numpy as np
-import pandas as pd
+import json
 logger = config.get_logger(__name__)
 
 class Model:
@@ -25,12 +24,14 @@ class Model:
         AVAILABLE_CONTENT_ID_POOL:set[int] = set()
         NEXT_CONTENT_ID:int = 0
         SEEN_IDS:set[int] = set()
-        def __init__(self, t: task.Task, prompt_type: config.PROMPT_TYPE, raw_plan: str, pddl_plan: str, id: Optional[int] = None, is_valid: Optional[bool] = None):
+        def __init__(self, t: task.Task, prompt_type: config.PROMPT_TYPE, raw_plan: str, pddl_plan: str, id: Optional[int] = None, is_valid: Optional[bool] = None, model_metadata: Optional[Dict[str, Any]] = None, prompt_metadata: Optional[Dict[str, Any]] = None, date: Optional[datetime.datetime] = None):
             self._task = t
             self._prompt_type = prompt_type
             self.raw_plan = raw_plan
             self.pddl_plan = pddl_plan
             self._is_valid = is_valid
+            self._model_metadata = model_metadata if model_metadata is not None else {}
+            self._prompt_metadata = prompt_metadata if prompt_metadata is not None else {}
             if id is None:
                 self._id = Model.Content.get_new_id()
             else:
@@ -112,31 +113,51 @@ class Model:
             return self._id < other._id
         
         @classmethod
-        def read_from_csv_row(cls, row: Dict[str, str]) -> Model.Content:
+        def read_from_json_row(cls, row: Dict[str, Any]) -> Model.Content:
             """
-            Reads a row from a CSV file and creates a Model.Content instance.
+            Reads a JSON‐serializable dict (from your .jsonl) and returns a Content.
             """
             t = task.get_task(
-                row['domain_file_path'],
-                row['instance_file_path'],
+            row['domain_file_path'],
+            row['instance_file_path'],
             )
             prompt_type = config.PROMPT_TYPE[row['prompt_type'].upper()]
-            id = int(row['id']) if 'id' in row else None
-            remaining_fields = {k: v for k, v in row.items() if k not in ['domain_file_path', 'instance_file_path', 'prompt_type', 'id']}
-            return cls(t=t, prompt_type=prompt_type, id=id, **remaining_fields)
+            _id = row.get('id')
+            raw_plan       = row.get('raw_plan', '')
+            pddl_plan      = row.get('pddl_plan', '')
+            is_valid       = row.get('is_valid')
+            model_metadata = row.get('model_metadata', {})
+            prompt_metadata= row.get('prompt_metadata', {})
+            date_str       = row.get('date')
+            date           = datetime.datetime.fromisoformat(date_str) if date_str else None
 
-        def write_to_csv_row(self) -> Dict[str, str]:
+            return cls(
+            t=t,
+            prompt_type=prompt_type,
+            raw_plan=raw_plan,
+            pddl_plan=pddl_plan,
+            id=_id,
+            is_valid=is_valid,
+            model_metadata=model_metadata,
+            prompt_metadata=prompt_metadata,
+            date=date,
+            )
+
+        def write_to_json_row(self) -> Dict[str, Any]:
             """
-            Writes the Model.Content instance to a dictionary for CSV writing.
+            Serializes this Content to a JSON‐serializable dict for .jsonl writing.
             """
             return {
-                'domain_file_path': self._task._domain_file_path,
-                'instance_file_path': self._task._instance_file_path,
-                'prompt_type': self._prompt_type.value,
-                'id': str(self._id),
-                'raw_plan': self.raw_plan,
-                'pddl_plan': self.pddl_plan,
-                'is_valid': str(self._is_valid) if self._is_valid is not None else ''
+            'domain_file_path': self._task._domain_file_path,
+            'instance_file_path': self._task._instance_file_path,
+            'prompt_type':       self._prompt_type.value,
+            'id':                self._id,
+            'raw_plan':          self.raw_plan,
+            'pddl_plan':         self.pddl_plan,
+            'is_valid':          self._is_valid,
+            'model_metadata':    self._model_metadata,
+            'prompt_metadata':   self._prompt_metadata,
+            'date':              (self._date or datetime.datetime.now()).isoformat(),
             }
 
         @classmethod
@@ -204,64 +225,102 @@ class Model:
         """
         raise NotImplementedError("Subclasses should implement this method.")
     
+
+    # def save()-> None:
+    #     jsonl_file_path = config.TASKS_DATASET_FILE_PATH
+    #     global DATASET
+    #     if not DATASET:
+    #         raise ValueError("Dataset is empty. Please load the dataset first.")
+    #     logger.info(f"Saving {len(DATASET)} tasks to {jsonl_file_path}.")
+    #     with open(jsonl_file_path, "w", encoding='utf-8') as f:
+    #         for task in sorted(DATASET):
+    #             try:
+    #                 json_str = task.to_json() # Get the JSON string representation
+    #                 f.write(json_str + "\n") # Write the JSON string followed by a newline
+    #             except Exception as e:
+    #                 m = f"Error saving task to file {jsonl_file_path}: {e}"
+    #                 # Changed config.log to logger.error
+    #                 logger.error(m)
+    #                 raise e
+    #     logger.info(f"Saved {len(DATASET)} tasks to {jsonl_file_path}.")
+    
     def save_generated_plans(self) -> None:
         """
-        Saves generated plans to a CSV file in the model directory using pandas.
-        The file will contain:
-        - domain_file_path
-        - instance_file_path
-        - prompt_type
-        - id
-        - content specific fields (raw_plans, pddl_plans, is_valid)
+        Saves generated plans to a JSONL file in the model directory.
+        Each line is one JSON object corresponding to a Model.Content.
         """
         file_path = os.path.join(self._model_dir_path, config.GENERATED_PLANS_FILE_NAME)
         logger.info(f"Saving generated plans to {file_path}.")
-        
-        # Create a list of dictionaries for pandas DataFrame
-        rows = []
-        for content in sorted(self._generated_plans):
-            try:
-                row = content.write_to_csv_row()
-                rows.append(row)
-            except Exception as e:
-                raise ValueError(f"Error processing content {content} for CSV: {e}")
-        
-        # Convert to pandas DataFrame and save
-        df = pd.DataFrame(rows)
-        df.to_csv(file_path, index=False, encoding="utf-8")
-        
-        logger.info(f"Successfully saved {len(self._generated_plans)} plans to {file_path}.")
-    
+        try:
+            with open(file_path, "w", encoding="utf-8") as fout:
+                for content in sorted(self._generated_plans):
+                    row = content.write_to_csv_row()
+                    fout.write(json.dumps(row, ensure_ascii=False) + "\n")
+            logger.info(f"Successfully saved {len(self._generated_plans)} plans to {file_path}.")
+        except Exception as e:
+            logger.error(f"Error saving plans to {file_path}: {e}", exc_info=True)
+            raise
+
+    # def load() -> None:
+    #     jsonl_file_path = config.TASKS_DATASET_FILE_PATH
+    #     global DATASET
+    #     if not os.path.exists(jsonl_file_path):
+    #         raise ValueError(f"JSONL file not found: {jsonl_file_path}")
+    #     tasks = set()
+    #     logger.info(f"Loading tasks from {jsonl_file_path}.")
+    #     with open(jsonl_file_path, "r", encoding='utf-8') as f:
+    #         for line in f:
+    #             try:
+    #                 json_obj = json.loads(line)
+    #                 domain = json_obj.get("domain", None)
+    #                 instance_file_path = json_obj.get("instance_file_path", None)
+    #                 domain_file_path = json_obj.get("domain_file_path", None)
+    #                 assert domain, "Domain is not specified in the JSON object."
+    #                 assert instance_file_path, "Instance file path is not specified in the JSON object."
+    #                 assert domain_file_path, "Domain file path is not specified in the JSON object."
+    #                 task = Task(
+    #                     domain,
+    #                     domain_file_path,
+    #                     instance_file_path
+    #                 )
+    #                 task.from_json(json_obj)
+    #                 tasks.add(task)
+    #             except Exception as e:
+    #                 m = f"Error processing task from file {jsonl_file_path}: {e}"
+    #                 # Changed config.log to logger.error
+    #                 logger.error(m)
+    #                 raise e
+    #     DATASET = tasks
+    #     logger.info(f"Loaded {len(DATASET)} tasks from {jsonl_file_path}.")
+
     def load_generated_plans(self) -> None:
         """
-        Loads generated plans from a CSV file in the model directory.
-        The file contains:
-        - domain_file_path
-        - instance_file_path
-        - prompt_type
-        - id
-        - content specific fields (raw_plans, pddl_plans, is_valid)
+        Loads generated plans from a JSONL file in the model directory.
         """
         file_path = os.path.join(self._model_dir_path, config.GENERATED_PLANS_FILE_NAME)
         logger.info(f"Loading generated plans from {file_path}.")
         if not os.path.exists(file_path):
-            logger.warning(f"File {file_path} does not exist. No plans loaded.")
+            logger.warning(f"No file at {file_path}, skipping load.")
             return
-        
+
+        loaded_count = 0
         try:
-            df = pd.read_csv(file_path, encoding="utf-8")
-            loaded_count = 0
-            for row in df.to_dict(orient='records'):
-                try:
-                    content = Model.Content.read_from_csv_row(row)
-                    self._generated_plans.add(content)
-                    loaded_count += 1
-                except Exception as e:
-                    logger.error(f"Error reading row {row}: {e}")
+            with open(file_path, "r", encoding="utf-8") as fin:
+                for line in fin:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                        content = Model.Content.read_from_csv_row(obj)
+                        self._generated_plans.add(content)
+                        loaded_count += 1
+                    except Exception as e:
+                        logger.error(f"Failed to parse line as Content JSON: {line}\n{e}", exc_info=True)
             logger.info(f"Successfully loaded {loaded_count} plans from {file_path}.")
         except Exception as e:
-            logger.error(f"Error loading plans from {file_path}: {e}")
-            raise RuntimeError(f"Failed to load generated plans: {e}") from e
+            logger.error(f"Error reading plans from {file_path}: {e}", exc_info=True)
+            raise
 
 class HuggingFaceModel(Model):
     def __init__(self, model_name, prompt_type: config.PROMPT_TYPE, checkpoint_dir: Optional[str] = None,  **kwargs):
@@ -610,7 +669,7 @@ class HuggingFaceModel(Model):
 
         device = next(self._model.parameters()).device
 
-        generation_messages: list[dict[str, str]] = t.get_chat(with_plan=False, **generation_kwargs) 
+        generation_messages: list[dict[str, str]] = t.get_chat(with_plan=False, prompt_type=prompt_type, **generation_kwargs) 
         print("Generation messages:")
         print(generation_messages)
 
@@ -718,31 +777,15 @@ class GeminiModel(Model):
         ) -> None:
         logger.debug(f"Generating with Gemini model {self._model_name}.")
 
-        original_chat_messages: list[dict[str, str]] = t.get_chat(with_plan=False, **generation_kwargs)
+        original_chat_messages: list[dict[str, str]] = t.get_chat(with_plan=False, prompt_type=prompt_type, **generation_kwargs)
 
-        system_instruction_parts = []
-        gemini_contents = []
-
+        prompt = ""
         for msg in original_chat_messages:
-            role = msg.get("role", "").lower()
-            content = msg.get("content", "")
-
-            if role == "system":
-                system_instruction_parts.append(content)
-            elif role == "user":
-                gemini_contents.append({
-                    "role": "user",
-                    "parts": [{"text": content}]
-                })
-            elif role == "assistant": # Map "assistant" to "model" for Gemini
-                gemini_contents.append({
-                    "role": "model",
-                    "parts": [{"text": content}]
-                })
-            else:
-                logger.warning(f"Unsupported role '{role}' in chat for Gemini model. Skipping message: '{content[:50]}...'")
-        
-        final_system_instruction = "\n".join(system_instruction_parts) if system_instruction_parts else None
+            if msg.get("role") == "system":
+                system_instruction = msg.get("content", "You are a helpful assistant.")
+            elif msg.get("role") == "user":
+                user_message = msg.get("content", "")
+                prompt += f"{user_message}\n"
         
         generation_config = genai.types.GenerationConfig( # Use GenerationConfig object
             temperature=generation_kwargs.get("temperature", 0.7),
@@ -759,7 +802,7 @@ class GeminiModel(Model):
             model = genai.GenerativeModel(
                 self._model_name,
                 generation_config=generation_config,
-                system_instruction=final_system_instruction,
+                system_instruction=system_instruction,
             )
         except Exception as e:
             logger.error(f"Failed to initialize Gemini model '{self._model_name}': {e}", exc_info=True)
@@ -774,7 +817,7 @@ class GeminiModel(Model):
             logger.debug("Calling Gemini model.generate_content...")
             # The prompt should ideally include PLAN_START_TOKEN if Gemini needs it to trigger plan generation
             # Example: prompt_text_full = prompt_text + PLAN_START_TOKEN
-            response = model.generate_content(gemini_contents) # Use original prompt_text for now
+            response = model.generate_content(prompt) # Use original prompt_text for now
             logger.debug("Gemini API call completed.")
 
 

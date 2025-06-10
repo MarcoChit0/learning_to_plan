@@ -128,7 +128,7 @@ def parse_args():
     parser.add_argument(
         "--few_shot",
         type=int,
-        default=None,
+        default=0,
         help="Number of few-shot examples to use for generation. Default is 0 (no few-shot examples)."
     )
     parser.add_argument(
@@ -230,7 +230,6 @@ if __name__ == "__main__":
             generate.generate_batch(
                 domain=domain, 
                 number_of_instances=args.number_of_instances, 
-                few_shot=args.few_shot, 
                 ## --- generation kwargs ---
                 checkpoint_dir=checkpoint_dir, 
                 overwrite_generated_plans=args.overwrite_generated_plans, 

@@ -1,0 +1,12 @@
+domain_file_path,instance_file_path,prompt_type,id,raw_plan,pddl_plan,is_valid
+data/raw/blocksworld/generated_domain.pddl,data/raw/blocksworld/generated_basic/instance-26.pddl,few_shot,0,"<|plan_start|>
+unstack the blue block from on top of the red block
+put down the blue block
+pick up the yellow block
+stack the yellow block on top of the red block
+pick up the blue block
+stack the blue block on top of the yellow block","(put-down b)
+(pick-up c)
+(stack c a)
+(pick-up b)
+(stack b c)",False

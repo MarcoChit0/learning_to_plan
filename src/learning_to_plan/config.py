@@ -41,7 +41,7 @@ LONG_INSTANCES = "generated_basic_longer_plan_len"
 TASKS_DATASET_FILE_NAME = "tasks.jsonl"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
-GENERATED_PLANS_FILE_NAME = "generated_plans.csv"
+GENERATED_PLANS_FILE_NAME = "generated_plans.jsonl"
 
 RANDOM_SEED = 42 
 
@@ -206,34 +206,33 @@ def get_config(config_file_path, args: Optional[argparse.Namespace] = None) -> D
         with open(config_file_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
         logger.info(msg=f"Successfully loaded configuration from {config_file_path}.")
-        
+
+        print(f"Config: {config}")
+
+        if config.get('prompt_type', None) is None:
+            config['prompt_type'] = PROMPT_TYPE.IO
+        if config.get('few_shot', None) is None:
+            config['few_shot'] = 0
+
         if args:
             logger.info("Applying command-line argument overrides to configuration...")
             for key, value in config.items():
-                if hasattr(args, key):
-                    if getattr(args, key) is not None:
-                        if key == 'prompt_type':
-                            value = PROMPT_TYPE[getattr(args, key).upper()]
-                        else:
-                            value = getattr(args, key)
-                        config[key] = value
-                        logger.debug(f"Overriding config key '{key}' with value '{value}' from command line.")    
+                if hasattr(args, key) and getattr(args, key) is not None:
+                    value = getattr(args, key)
+                    config[key] = value
+                    logger.debug(f"Overriding config key '{key}' with value '{value}' from command line.")    
 
         # -- Check for consistency in config values --
         few_shot = config.get('few_shot', None)
         prompt_type = config.get('prompt_type', None)
-        if not prompt_type:
-            config['prompt_type'] = PROMPT_TYPE.IO  # Default to IO if not specified
         
-        elif prompt_type == PROMPT_TYPE.FEW_SHOT:
-            if isinstance(few_shot, int) and few_shot <= 0:
-                raise ValueError("If prompt_type is 'few_shot', few_shot must be greater than 0.")
-            elif not isinstance(few_shot, int):
-                raise ValueError("If prompt_type is 'few_shot', few_shot must be an integer.")
+        if prompt_type == PROMPT_TYPE.FEW_SHOT:
+            assert few_shot is not None, "If prompt_type is 'few_shot', few_shot must be set."
+            assert isinstance(few_shot, int) and few_shot >= 0, "If prompt_type is 'few_shot', few_shot must be a non-negative integer."
 
-        elif prompt_type != PROMPT_TYPE.FEW_SHOT and isinstance(few_shot, int) and few_shot > 0:
-            raise ValueError("If prompt_type is not 'few_shot', few_shot must be None or 0.")
-        
+        else:
+            assert few_shot is None or (isinstance(few_shot, int) and few_shot == 0), "If prompt_type is not 'few_shot', few_shot must be None or 0."
+        print(config)
         
         return config
     except Exception as e:
