@@ -206,7 +206,7 @@ class Model:
     
     def save_generated_plans(self) -> None:
         """
-        Saves generated plans to a CSV file in the model directory.
+        Saves generated plans to a CSV file in the model directory using pandas.
         The file will contain:
         - domain_file_path
         - instance_file_path
@@ -216,16 +216,20 @@ class Model:
         """
         file_path = os.path.join(self._model_dir_path, config.GENERATED_PLANS_FILE_NAME)
         logger.info(f"Saving generated plans to {file_path}.")
-        with open(file_path, "w", encoding="utf-8", newline='') as f:
-            writer = csv.writer(f, delimiter=',')
-            header = Model.Content.get_header()
-            writer.writerow(header)  # Write the header
-            for content in sorted(self._generated_plans):
-                try:
-                    row = content.write_to_csv_row()
-                    writer.writerow([row.get(h, '') for h in header])  # Write the row with all headers
-                except Exception as e:
-                    raise ValueError(f"Error writing content {content} to CSV: {e}")
+        
+        # Create a list of dictionaries for pandas DataFrame
+        rows = []
+        for content in sorted(self._generated_plans):
+            try:
+                row = content.write_to_csv_row()
+                rows.append(row)
+            except Exception as e:
+                raise ValueError(f"Error processing content {content} for CSV: {e}")
+        
+        # Convert to pandas DataFrame and save
+        df = pd.DataFrame(rows)
+        df.to_csv(file_path, index=False, encoding="utf-8")
+        
         logger.info(f"Successfully saved {len(self._generated_plans)} plans to {file_path}.")
     
     def load_generated_plans(self) -> None:
