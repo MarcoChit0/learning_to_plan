@@ -17,7 +17,7 @@ from learning_to_plan import config, task
 import torch
 import datasets
 import numpy as np
-import csv
+import pandas as pd
 logger = config.get_logger(__name__)
 
 class Model:
@@ -230,33 +230,35 @@ class Model:
     
     def load_generated_plans(self) -> None:
         """
-        Loads generated plans CSV file from the model directory.
+        Loads generated plans from a CSV file in the model directory.
+        The file contains:
         - domain_file_path
         - instance_file_path
         - prompt_type
         - id
         - content specific fields (raw_plans, pddl_plans, is_valid)
-        A pseudo task key is created as a tuple (domain_file_path, instance_file_path).
         """
         file_path = os.path.join(self._model_dir_path, config.GENERATED_PLANS_FILE_NAME)
         logger.info(f"Loading generated plans from {file_path}.")
         if not os.path.exists(file_path):
             logger.warning(f"File {file_path} does not exist. No plans loaded.")
             return
-        lines_read = 0
-        with open(file_path, "r", encoding="utf-8") as f:
-            reader = csv.reader(f, delimiter=',')
-            header = next(reader)  # Read the header
-            logger.info(f"Header found: {header}")
-            for row in reader:
+        
+        try:
+            df = pd.read_csv(file_path, encoding="utf-8")
+            loaded_count = 0
+            for row in df.to_dict(orient='records'):
                 try:
                     content = Model.Content.read_from_csv_row(row)
                     self._generated_plans.add(content)
-                    lines_read += 1
+                    loaded_count += 1
                 except Exception as e:
-                    raise ValueError(f"Error reading row {row}: {e}")
-        logger.info(f"Successfully loaded {lines_read} plans from {file_path}.")
-                
+                    logger.error(f"Error reading row {row}: {e}")
+            logger.info(f"Successfully loaded {loaded_count} plans from {file_path}.")
+        except Exception as e:
+            logger.error(f"Error loading plans from {file_path}: {e}")
+            raise RuntimeError(f"Failed to load generated plans: {e}") from e
+
 class HuggingFaceModel(Model):
     def __init__(self, model_name, prompt_type: config.PROMPT_TYPE, checkpoint_dir: Optional[str] = None,  **kwargs):
         super().__init__(model_name, **kwargs)
