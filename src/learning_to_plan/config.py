@@ -238,7 +238,7 @@ def get_config(config_file_path, args: Optional[argparse.Namespace] = None) -> D
             assert few_shot is None or (isinstance(few_shot, int) and few_shot == 0), "If prompt_type is not 'few_shot', few_shot must be None or 0."
 
         assert isinstance(config['num_samples'], int) and config['num_samples'] > 0, "num_samples must be a positive integer."
-        logger.info(json.dumps(config))
+        logger.info("Configs: %s", config)
         
         return config
     except Exception as e:

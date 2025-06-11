@@ -1,19 +1,14 @@
 # generate.py 
 
 import datetime
-import os
-import torch
 from tqdm import tqdm
 from learning_to_plan import models
-import google.generativeai as genai
 
 # Import project modules
 import learning_to_plan.config as config
 from learning_to_plan import task # Import task module
-import numpy as np
-
 logger = config.get_logger(__name__)
-from typing import Union, Optional
+from typing import Union
 # --- Batch Generation from File (Modified) ---
 
 def generate_batch(
@@ -54,7 +49,7 @@ def generate_batch(
         prompt_type = generation_kwargs.get("prompt_type", None)
         assert prompt_type is not None, "Prompt type must be specified in generation_kwargs."
         
-        prompt_metadata = t.get_prompt_metadata(prompt_type=prompt_type, **generation_kwargs)
+        prompt_metadata = t.get_prompt_metadata(**generation_kwargs)
         model_metadata = model.get_metadata()
         if overwrite_plans:
             logger.info(f"Overwriting existing generated plans for task {t._id} with prompt type {prompt_type}.")
@@ -93,7 +88,7 @@ def generate_batch(
             unit="sample",
             leave=False
         ):
-            chat = t.get_chat(with_plan=False, prompt_type=prompt_type, **generation_kwargs)
+            chat = t.get_chat(with_plan=False, **generation_kwargs)
             try:
                 response = model.generate_single_sample(
                     chat=chat,
@@ -132,7 +127,7 @@ def generate_batch(
                     error_message = None
                     validity = model.Content.VALIDITY.UNCHECKED
                 content = model.Content(
-                        task=t,
+                        t=t,
                         prompt_type=prompt_type,
                         status=status,
                         pddl_plan=pddl_plan,

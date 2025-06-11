@@ -42,7 +42,7 @@ class Model:
                 raw_plan: Optional[str] = None,
                 pddl_plan: Optional[str] = None,
                 id: Optional[int] = None,
-                _validity: VALIDITY = VALIDITY.UNCHECKED,
+                validity: VALIDITY = VALIDITY.UNCHECKED,
                 model_metadata: Optional[Dict[str, Any]] = None,
                 prompt_metadata: Optional[Dict[str, Any]] = None,
                 date: Optional[datetime.datetime] = None,
@@ -61,7 +61,7 @@ class Model:
             else:
                 assert self._error_message, "Error message must be provided when status is ERROR."
                 assert raw_plan is None and pddl_plan is None, "raw_plan and pddl_plan must be None when status is ERROR."
-            self._validity = _validity
+            self._validity = validity
             self._model_metadata = model_metadata if model_metadata is not None else {}
             self._prompt_metadata = prompt_metadata if prompt_metadata is not None else {}
             if id is None:
@@ -227,9 +227,9 @@ class Model:
             "model_name": model_name,
         }
 
-    def add_generated_plan(self, newly_generated_plan:Content) -> None:
-        self._generated_plans.add(newly_generated_plan)
-        logger.info(f"Added new plan with ID {newly_generated_plan._id} for task {newly_generated_plan._task} and prompt type {newly_generated_plan._prompt_type} to model {self._model_name}.")
+    def add_generated_plan(self, content:Content) -> None:
+        self._generated_plans.add(content)
+        logger.info(f"Added new plan with ID {content._id} for task {content._task} and prompt type {content._prompt_type} to model {self._model_name}.")
 
     def get_generated_plans(self, t: task.Task, prompt_type: config.PROMPT_TYPE, model_metadata:Optional[dict[str, any]] = None, prompt_metadata:Optional[dict[str, any]] = None) -> set[Content]:
         plans = set()
