@@ -41,6 +41,7 @@ class Model:
                 except ValueError as e:
                     logger.error(f"Error adding new ID {id}: {e}")
                     raise e
+            self._date = date if date is not None else datetime.datetime.now()
             
         @classmethod
         def add_new_id(cls, new_id: int) -> None:
@@ -254,7 +255,7 @@ class Model:
         try:
             with open(file_path, "w", encoding="utf-8") as fout:
                 for content in sorted(self._generated_plans):
-                    row = content.write_to_csv_row()
+                    row = content.write_to_json_row()
                     fout.write(json.dumps(row, ensure_ascii=False) + "\n")
             logger.info(f"Successfully saved {len(self._generated_plans)} plans to {file_path}.")
         except Exception as e:
@@ -312,7 +313,7 @@ class Model:
                         continue
                     try:
                         obj = json.loads(line)
-                        content = Model.Content.read_from_csv_row(obj)
+                        content = Model.Content.read_from_json_row(obj)
                         self._generated_plans.add(content)
                         loaded_count += 1
                     except Exception as e:
