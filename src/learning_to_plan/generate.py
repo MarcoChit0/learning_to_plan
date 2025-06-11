@@ -49,14 +49,101 @@ def generate_batch(
     # --- Generate Plans ---
     logger.info("Starting plan generation loop...") # Use logger
     for t in tqdm(tasks, total=len(tasks), desc="Generating plans"):
-        try:
-            model.generate(
+        num_samples = generation_kwargs.get("num_samples", 1)
+        overwrite_plans = generation_kwargs.get("overwrite_generated_plans", False)
+        prompt_type = generation_kwargs.get("prompt_type", None)
+        assert prompt_type is not None, "Prompt type must be specified in generation_kwargs."
+        
+        prompt_metadata = t.get_prompt_metadata(prompt_type=prompt_type, **generation_kwargs)
+        model_metadata = model.get_metadata()
+        if overwrite_plans:
+            logger.info(f"Overwriting existing generated plans for task {t._id} with prompt type {prompt_type}.")
+            model.overwrite_generated_plans(
                 t=t,
-                **generation_kwargs
+                prompt_type=prompt_type,
+                model_metadata=model_metadata,
+                prompt_metadata=prompt_metadata
             )
-        except Exception as e:
-            logger.error(f"Error generating plan for task {t._id} with model {model_name}: {e}", exc_info=True)
-    logger.info(f"Plan generation loop completed for {len(tasks)} instances.")
+        generated_plans_for_task_with_prompt_type = model.get_generated_plans(
+            t=t,
+            prompt_type=prompt_type,
+            model_metadata=model_metadata,
+            prompt_metadata=prompt_metadata
+        )
+        # Determine how many new samples we need
+        existing_count = len(generated_plans_for_task_with_prompt_type)
+        if num_samples <= existing_count:
+            logger.info(
+                f"Skipping generation: requested {num_samples} samples but already have {existing_count} for task {t._id} with prompt {prompt_type}."
+            )
+            continue
+        to_generate = num_samples - existing_count
+        if existing_count > 0:
+            logger.info(
+                f"Task {t._id} with prompt {prompt_type} has {existing_count}/{num_samples} plans; "
+                f"generating {to_generate} more."
+            )
+        else:
+            logger.info(
+                f"Task {t._id} with prompt {prompt_type} has no plans; generating {to_generate} samples."
+            )
+        for _ in tqdm(
+            range(to_generate),
+            desc=f"Generating samples for task {t._id}",
+            unit="sample",
+            leave=False
+        ):
+            chat = t.get_chat(with_plan=False, prompt_type=prompt_type, **generation_kwargs)
+            try:
+                response = model.generate_single_sample(
+                    chat=chat,
+                    generation_kwargs=generation_kwargs,
+                )
+                status = model.Content.STATUS.ERROR
+                plan_start_idx = response.index(config.TOKENS.PLAN_START.value)
+                plan_end_idx = response.index(config.TOKENS.PLAN_END.value)
+                if response == "":
+                    error_message = "Empty response from model."
+                elif plan_start_idx == -1 or plan_end_idx == -1:
+                    error_message = "Response does not contain plan start or end tokens."
+                elif plan_start_idx >= plan_end_idx:
+                    error_message = "Plan start token is after the end token in the response."
+                else:
+                    raw_plan = response[plan_start_idx:plan_end_idx].strip()
+                    try:
+                        pddl_plan = t._domain_translator.translate_natural_language_plan_to_pddl(raw_plan)
+                        status = model.Content.STATUS.OK
+                    except Exception as e:
+                        error_message = "Error translating plan to PDDL: " + str(e)
+            
+            except Exception as e:
+                error_message = "Error generating sample : " + str(e)
+            finally:
+                if status == model.Content.STATUS.ERROR:
+                    logger.warning(
+                        f"Failed to generate valid plan for task {t._id} with prompt {prompt_type}: {error_message}",
+                        exc_info=True
+                    )
+                    pddl_plan = None
+                    raw_plan = None
+                    validity = model.Content.VALIDITY.INVALID
+                else:
+                    logger.info(f"Generated valid plan for task {t._id} with prompt {prompt_type}.")
+                    error_message = None
+                    validity = model.Content.VALIDITY.UNCHECKED
+                content = model.Content(
+                        task=t,
+                        prompt_type=prompt_type,
+                        status=status,
+                        pddl_plan=pddl_plan,
+                        raw_plan=raw_plan,
+                        validity=validity,
+                        error_message=error_message,
+                        model_metadata=model_metadata,
+                        prompt_metadata=prompt_metadata
+                    )
+                model.add_generated_plan(content=content)
+    logger.info("Plan generation loop completed.") # Use logger
     try:
         logger.info(f"Saving generated plans to {model._model_dir_path}")
         model.save_generated_plans()

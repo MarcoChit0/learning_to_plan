@@ -244,6 +244,14 @@ Here is a checklist to help you with your task:
         else:
             raise ValueError(f"Unsupported prompt type: {prompt_type}. Supported types are: {list(config.PROMPT_TYPE)}.")
 
+    def get_prompt_metadata(self, prompt_type: config.PROMPT_TYPE = config.PROMPT_TYPE.IO, **kwargs) -> dict[str, any]:
+        if prompt_type == config.PROMPT_TYPE.IO:
+            return {}
+        elif prompt_type == config.PROMPT_TYPE.FEW_SHOT:
+            few_shot = kwargs.get("few_shot", 1)
+            return {"few_shot": few_shot}
+        else:
+            raise ValueError(f"Unsupported prompt type: {prompt_type}. Supported types are: {list(config.PROMPT_TYPE)}.")
 
     def to_json(self):
         try:

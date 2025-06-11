@@ -6,6 +6,7 @@ import logging
 import argparse
 from typing import Optional, Dict, Any
 import dotenv
+import json
 
 # --- Global Variables for Paths and Token (Set during initialization) ---
 DATA_DIR = "data/"
@@ -131,6 +132,7 @@ def initialize(
 
     # --- Load Task Dataset ---
     from learning_to_plan import task
+
     if os.path.exists(TASKS_DATASET_FILE_PATH):
         try:
             task.load()
@@ -213,6 +215,8 @@ def get_config(config_file_path, args: Optional[argparse.Namespace] = None) -> D
             config['prompt_type'] = PROMPT_TYPE.IO
         if config.get('few_shot', None) is None:
             config['few_shot'] = 0
+        if config.get('num_samples', None) is None:
+            config['num_samples'] = 1
 
         if args:
             logger.info("Applying command-line argument overrides to configuration...")
@@ -232,7 +236,9 @@ def get_config(config_file_path, args: Optional[argparse.Namespace] = None) -> D
 
         else:
             assert few_shot is None or (isinstance(few_shot, int) and few_shot == 0), "If prompt_type is not 'few_shot', few_shot must be None or 0."
-        print(config)
+
+        assert isinstance(config['num_samples'], int) and config['num_samples'] > 0, "num_samples must be a positive integer."
+        logger.info(json.dumps(config))
         
         return config
     except Exception as e:

@@ -149,6 +149,12 @@ def parse_args():
         default=None,
         help="Google API Key (overrides GOOGLE_API_KEY env var)."
     )
+    parser.add_argument(
+        "-s", "--num_samples",
+        type=int,
+        default=1,
+        help="Number of samples to generate per task. Default is 1."
+    )
 
     return parser.parse_args()
 

@@ -17,6 +17,7 @@ from learning_to_plan import config, task
 import torch
 import datasets
 import json
+from enum import Enum
 logger = config.get_logger(__name__)
 
 class Model:
@@ -24,12 +25,43 @@ class Model:
         AVAILABLE_CONTENT_ID_POOL:set[int] = set()
         NEXT_CONTENT_ID:int = 0
         SEEN_IDS:set[int] = set()
-        def __init__(self, t: task.Task, prompt_type: config.PROMPT_TYPE, raw_plan: str, pddl_plan: str, id: Optional[int] = None, is_valid: Optional[bool] = None, model_metadata: Optional[Dict[str, Any]] = None, prompt_metadata: Optional[Dict[str, Any]] = None, date: Optional[datetime.datetime] = None):
+
+        class STATUS(Enum):
+            OK = "ok"
+            ERROR = "error"
+        
+        class VALIDITY(Enum):
+            VALID = "valid"
+            INVALID = "invalid"
+            UNCHECKED = "unchecked"
+
+        def __init__(
+                self,
+                t: task.Task,
+                prompt_type: config.PROMPT_TYPE,
+                raw_plan: Optional[str] = None,
+                pddl_plan: Optional[str] = None,
+                id: Optional[int] = None,
+                _validity: VALIDITY = VALIDITY.UNCHECKED,
+                model_metadata: Optional[Dict[str, Any]] = None,
+                prompt_metadata: Optional[Dict[str, Any]] = None,
+                date: Optional[datetime.datetime] = None,
+                status: STATUS = STATUS.OK,
+                error_message: Optional[str] = None
+            ):
             self._task = t
             self._prompt_type = prompt_type
-            self.raw_plan = raw_plan
-            self.pddl_plan = pddl_plan
-            self._is_valid = is_valid
+            self._raw_plan = raw_plan
+            self._pddl_plan = pddl_plan
+            self._error_message = error_message
+            self._status = status
+            if self._status == Model.Content.STATUS.OK:
+                assert raw_plan and pddl_plan, "Both raw_plan and pddl_plan must be provided when status is OK."
+                assert self._error_message is None, "Error message must be None when status is OK."
+            else:
+                assert self._error_message, "Error message must be provided when status is ERROR."
+                assert raw_plan is None and pddl_plan is None, "raw_plan and pddl_plan must be None when status is ERROR."
+            self._validity = _validity
             self._model_metadata = model_metadata if model_metadata is not None else {}
             self._prompt_metadata = prompt_metadata if prompt_metadata is not None else {}
             if id is None:
@@ -88,18 +120,30 @@ class Model:
             """
             Returns True if the plan was validated, False otherwise.
             """
-            return self._is_valid is not None
+            return self._validity != Model.Content.VALIDITY.UNCHECKED
 
         def validate(self, is_valid: bool) -> None:
             """
             Validates the plan.
             """
-            self._is_valid = is_valid
             if is_valid:
-                logger.debug(f"Plan '{self.raw_plan}' validated as valid.")
+                logger.debug(f"Plan '{self._raw_plan}' validated as valid.")
+                self._validity = Model.Content.VALIDITY.VALID
             else:
-                logger.debug(f"Plan '{self.raw_plan}' validated as invalid.")
+                logger.debug(f"Plan '{self._raw_plan}' validated as invalid.")
+                self._validity = Model.Content.VALIDITY.INVALID
         
+        def is_valid(self) -> bool:
+            """
+            Returns True if the plan is valid, False otherwise.
+            """
+            if self._validity == Model.Content.VALIDITY.VALID:
+                return True
+            elif self._validity == Model.Content.VALIDITY.INVALID:
+                return False
+            else:
+                raise ValueError(f"Validity status is {self._validity}, which is not valid for checking plan validity.")
+
         def __hash__(self):
             return hash(self._id)
         
@@ -124,13 +168,17 @@ class Model:
             )
             prompt_type = config.PROMPT_TYPE[row['prompt_type'].upper()]
             _id = row.get('id')
-            raw_plan       = row.get('raw_plan', '')
-            pddl_plan      = row.get('pddl_plan', '')
-            is_valid       = row.get('is_valid')
+            raw_plan       = row.get('raw_plan', None)
+            pddl_plan      = row.get('pddl_plan', None)
+            is_valid_str       = row.get('is_valid', Model.Content.VALIDITY.UNCHECKED.value)
+            is_valid = Model.Content.VALIDITY[is_valid_str.upper()]
             model_metadata = row.get('model_metadata', {})
             prompt_metadata= row.get('prompt_metadata', {})
             date_str       = row.get('date')
             date           = datetime.datetime.fromisoformat(date_str) if date_str else None
+            status_str = row.get('status', Model.Content.STATUS.OK.value)
+            status = Model.Content.STATUS[status_str.upper()]
+            error_message = row.get('error_message', None)
 
             return cls(
             t=t,
@@ -142,6 +190,8 @@ class Model:
             model_metadata=model_metadata,
             prompt_metadata=prompt_metadata,
             date=date,
+            status=status,
+            error_message=error_message
             )
 
         def write_to_json_row(self) -> Dict[str, Any]:
@@ -153,20 +203,15 @@ class Model:
             'instance_file_path': self._task._instance_file_path,
             'prompt_type':       self._prompt_type.value,
             'id':                self._id,
-            'raw_plan':          self.raw_plan,
-            'pddl_plan':         self.pddl_plan,
-            'is_valid':          self._is_valid,
+            'raw_plan':          self._raw_plan,
+            'pddl_plan':         self._pddl_plan,
+            'is_valid':          self._validity,
             'model_metadata':    self._model_metadata,
             'prompt_metadata':   self._prompt_metadata,
             'date':              (self._date or datetime.datetime.now()).isoformat(),
+            'status':            self._status.value,
+            'error_message':     self._error_message,
             }
-
-        @classmethod
-        def get_header(cls) -> List[str]:
-            """
-            Returns the header for the CSV file.
-            """
-            return ['domain_file_path', 'instance_file_path', 'prompt_type', 'id', 'raw_plan', 'pddl_plan', 'is_valid']
 
     def __init__(self, model_name, **kwargs):
         self._model_name = model_name
@@ -178,27 +223,38 @@ class Model:
                 logger.info(f"Deleting existing model directory: {self._model_dir_path}")
                 os.rmdir(self._model_dir_path)
         os.makedirs(self._model_dir_path, exist_ok=True)
+        self._metadata = {
+            "model_name": model_name,
+        }
 
     def add_generated_plan(self, newly_generated_plan:Content) -> None:
         self._generated_plans.add(newly_generated_plan)
         logger.info(f"Added new plan with ID {newly_generated_plan._id} for task {newly_generated_plan._task} and prompt type {newly_generated_plan._prompt_type} to model {self._model_name}.")
 
-    def get_generated_plans(self, t: task.Task, prompt_type: config.PROMPT_TYPE) -> set[Content]:
+    def get_generated_plans(self, t: task.Task, prompt_type: config.PROMPT_TYPE, model_metadata:Optional[dict[str, any]] = None, prompt_metadata:Optional[dict[str, any]] = None) -> set[Content]:
         plans = set()
         for content in self._generated_plans:
             if content._task == t and content._prompt_type == prompt_type:
+                if model_metadata is not None and content._model_metadata != model_metadata:
+                    continue
+                if prompt_metadata is not None and content._prompt_metadata != prompt_metadata:
+                    continue
                 plans.add(content)
         return plans
     
-    def overwrite_generated_plans(self, t: task.Task, prompt_type: config.PROMPT_TYPE) -> None:
+    def overwrite_generated_plans(self, t: task.Task, prompt_type: config.PROMPT_TYPE, model_metadata:Optional[dict[str, any]] = None, prompt_metadata:Optional[dict[str, any]] = None) -> None:
         counter = 0
         for content in self._generated_plans:
             if content._task == t and content._prompt_type == prompt_type:
+                if model_metadata is not None and content._model_metadata != model_metadata:
+                    continue
+                if prompt_metadata is not None and content._prompt_metadata != prompt_metadata:
+                    continue
                 Model.Content.remove_id(content._id)
                 counter += 1
         logger.info(f"Overwrote {counter} plans for task {t} and prompt type {prompt_type} in model {self._model_name}.")
 
-    def generate(self, t:task.Task, prompt_type:config.PROMPT_TYPE, **generation_kwargs) -> None:
+    def generate_single_sample(self, chat:list[dict[str, str]], **generation_kwargs) -> str:
         """
         Generates a plan based on the provided prompt.
         This is a placeholder method and should be implemented in subclasses.
@@ -225,6 +281,13 @@ class Model:
         This is a placeholder method and should be implemented in subclasses.
         """
         raise NotImplementedError("Subclasses should implement this method.")
+
+    def get_metadata(self) -> Dict[str, Any]:
+        """
+        Returns metadata about the model.
+        This is a placeholder method and should be implemented in subclasses.
+        """
+        return self._metadata
     
 
     # def save()-> None:
@@ -341,6 +404,7 @@ class HuggingFaceModel(Model):
         else:
             logger.info(f"Loading model {model_name} -- base model from Hugging Face Hub.")
 
+        self._metadata["checkpoint"] = last_checkpoint
         # --- Tokenizer Setup ---
         try:
             self._tokenizer = AutoTokenizer.from_pretrained(
@@ -366,7 +430,7 @@ class HuggingFaceModel(Model):
                         raise ValueError(f"Special token '{token}' not found in tokenizer vocabulary. It will be added.")
                     else:
                         logger.info(f"Special token '{token}' successfully added to tokenizer vocabulary with ID {self._tokenizer.convert_tokens_to_ids(token)}.")
-
+            self._metadata['vocab_size'] = self._tokenizer.vocab_size
         except Exception as e:
             logger.error(f"Error loading or setting up tokenizer from {model_source}: {e}", exc_info=True)
             raise e
@@ -374,11 +438,13 @@ class HuggingFaceModel(Model):
         # --- Model Loading ---
         try:
             torch_dtype = torch.bfloat16 if self.__dict__.get("bf16", False) else torch.float16
-            
+            self._metadata['torch_dtype'] = str(torch_dtype)
+
             quantization_config_param = None
             if self.__dict__.get("load_in_8bit", False): # Check if load_in_8bit is true from train_config.json
                 quantization_config_param = BitsAndBytesConfig(load_in_8bit=True)
                 logger.info("8-bit quantization enabled for model loading.")
+                self._metadata['quantization_config'] = quantization_config_param.to_dict()
 
             self._model = AutoModelForCausalLM.from_pretrained(
                 pretrained_model_name_or_path=model_name,
@@ -634,7 +700,7 @@ class HuggingFaceModel(Model):
             logger.error(f"Error during training metrics logging or final summary: {e}", exc_info=True)
             # Don't re-raise here if training itself was successful.
 
-    def generate(self, t:task.Task, prompt_type: config.PROMPT_TYPE, **generation_kwargs) -> None:
+    def generate_single_sample(self, chat:list[dict[str, str]], **generation_kwargs) -> str:
         """
         Generates text based on a prompt using the Hugging Face model.
 
@@ -648,31 +714,10 @@ class HuggingFaceModel(Model):
         """
         logger.debug("Generating with Hugging Face model.")
 
-        num_return_sequences = generation_kwargs.get("num_return_sequences", 1)
-        overwrite_plans = generation_kwargs.get("overwrite_generated_plans", False)
-        if overwrite_plans:
-            logger.info(f"Overwriting existing generated plans for task {t._id} with prompt type {prompt_type}.")
-            self.overwrite_generated_plans(t, prompt_type)
-
-        generated_plans_for_task_with_prompt_type = self.get_generated_plans(t, prompt_type)
-        if num_return_sequences <= len(generated_plans_for_task_with_prompt_type):
-            logger.info(f"Skipping generation as num_return_sequences is {num_return_sequences} and there are already {len(generated_plans_for_task_with_prompt_type)} plans for the task {t._id} with prompt type {prompt_type}.")
-            return
-        else:
-            if len(generated_plans_for_task_with_prompt_type) > 0:
-                logger.info(f"Task {t._id} with prompt type {prompt_type} already has {len(generated_plans_for_task_with_prompt_type)}/{num_return_sequences} generated plans. Generating additional {num_return_sequences - len(generated_plans_for_task_with_prompt_type)} plans.") 
-                num_return_sequences -= len(generated_plans_for_task_with_prompt_type)
-            else:
-                logger.info(f"Task {t._id} with prompt type {prompt_type} has no generated plans yet. Generating {num_return_sequences} plans.")        
-
         # Ensure model is in evaluation mode
         self._model.eval()
 
         device = next(self._model.parameters()).device
-
-        generation_messages: list[dict[str, str]] = t.get_chat(with_plan=False, prompt_type=prompt_type, **generation_kwargs) 
-        print("Generation messages:")
-        print(generation_messages)
 
         # --- Generation Configuration ---
         gen_kwargs = {
@@ -683,14 +728,14 @@ class HuggingFaceModel(Model):
             "top_k": generation_kwargs.get("top_k", 50),
             "eos_token_id": self._tokenizer.eos_token_id,
             "pad_token_id": self._tokenizer.pad_token_id,
-            "num_return_sequences": num_return_sequences,
+            "num_return_sequences": 1,
         }
         gen_kwargs = {k: v for k, v in gen_kwargs.items() if v is not None}
         logger.debug(f"Generation parameters: {gen_kwargs}")
         try:
             # Set add_generation_prompt=False so the model continues from the provided assistant prompt
             inputs = self._tokenizer.apply_chat_template(
-                generation_messages,
+                chat,
                 add_generation_prompt=True,
                 padding=False,              
                 truncation=True,            
@@ -711,44 +756,17 @@ class HuggingFaceModel(Model):
             
             try:
                 with torch.autocast(device_type=device.type, dtype=dtype, enabled=use_autocast):
-                    outputs = self._model.generate(
+                    output = self._model.generate(
                         input_ids=inputs.input_ids,
                         attention_mask=inputs.attention_mask,
                         **gen_kwargs
                     )
             except Exception as e_generate:
                 raise RuntimeError(f"Error during model.generate: {e_generate}") from e_generate
-        
-        # --- Process Outputs ---
-        for output in outputs:
-            generated_tokens = (output[input_length:] if output.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device))
-            print(self._tokenizer.decode(generated_tokens, skip_special_tokens=False))
-            # # --- Process Plan ---
-            START_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.TOKENS.PLAN_START.value)
-            END_OF_PLAN_TOKEN_ID = self._tokenizer.convert_tokens_to_ids(config.TOKENS.PLAN_END.value)
+        logger.info(f"Generation completed. Output shape: {output.shape}")
+        generated_tokens = (output[input_length:] if output.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device))
+        return self._tokenizer.decode(generated_tokens, skip_special_tokens=False)
             
-            start_of_plan_idx = next((i for i, token in enumerate(generated_tokens) if token == START_OF_PLAN_TOKEN_ID), None)
-            if start_of_plan_idx:
-                end_of_plan_idx = next((i for i, token in enumerate(generated_tokens, start=start_of_plan_idx) if token == END_OF_PLAN_TOKEN_ID), None)
-                if end_of_plan_idx:
-                    plan_tokens = generated_tokens[start_of_plan_idx:end_of_plan_idx + 1]
-                    raw_plan = self._tokenizer.decode(plan_tokens, skip_special_tokens=False)   
-                    pddl_plan = t._domain_translator.translate_natural_language_plan_to_pddl(raw_plan)
-                    logger.info(f"Generated plan for task {t._id} with prompt type {prompt_type}: {raw_plan}")
-                    logger.info(f"PDDL plan: {pddl_plan}")
-                else:
-                   logger.info(f"Error: No end of plan token found in output tokens for task {t._id}.")
-                   raw_plan = f"Error: No end of plan token found in output tokens.\n{self._tokenizer.decode(generated_tokens, skip_special_tokens=False)}"
-                   pddl_plan = ""
-            else:
-                logger.info(f"Error: No start of plan token found in output tokens for task {t._id}.")
-                raw_plan = f"Error: No start of plan token found in output tokens.\n{self._tokenizer.decode(generated_tokens, skip_special_tokens=False)}"
-                pddl_plan = ""
-
-            content = Model.Content(t, prompt_type, raw_plan, pddl_plan, is_valid=False)
-            self._generated_plans.add(content)
-        logger.info(f"Generated {len(outputs)} plans for task {t._id} with prompt type {prompt_type}.")
-
 
 # # --- Gemini Model (Remains unchanged from previous version) ---
 import google.generativeai as genai
@@ -763,6 +781,7 @@ class GeminiModel(Model):
             logger.error(f"Failed to configure Gemini model: {e}", exc_info=True)
             raise RuntimeError(f"Failed to configure Gemini model: {e}")
 
+
     def train(self, dataset:datasets.DatasetDict, **train_kwargs) -> None: # Changed type hint
         """
         Training is not applicable for Gemini model as it is a hosted service.
@@ -770,18 +789,15 @@ class GeminiModel(Model):
         logger.warning("Training is not applicable for Gemini models.")
         raise NotImplementedError("Training is not applicable for Gemini model.")
 
-    def generate(
+    def generate_single_sample(
             self,
-            t:task.Task,
-            prompt_type:config.PROMPT_TYPE,
+            chat:list[dict[str, str]],
             **generation_kwargs:dict[str, Any]
-        ) -> None:
+        ) -> str:
         logger.debug(f"Generating with Gemini model {self._model_name}.")
 
-        original_chat_messages: list[dict[str, str]] = t.get_chat(with_plan=False, prompt_type=prompt_type, **generation_kwargs)
-
         prompt = ""
-        for msg in original_chat_messages:
+        for msg in chat:
             if msg.get("role") == "system":
                 system_instruction = msg.get("content", "You are a helpful assistant.")
             elif msg.get("role") == "user":
@@ -793,7 +809,7 @@ class GeminiModel(Model):
             top_p=generation_kwargs.get("top_p", 0.93),
             top_k=generation_kwargs.get("top_k", 50),
             max_output_tokens=generation_kwargs.get("max_output_tokens", 2048),
-            candidate_count=generation_kwargs.get("candidate_count", 1), # Map num_return_sequences
+            candidate_count=1, # Default to 1 candidate
             stop_sequences=[config.TOKENS.PLAN_END.value] # Add plan end token as stop sequence
         )
         logger.debug(f"Gemini generation config: {generation_config}")
@@ -821,45 +837,13 @@ class GeminiModel(Model):
             response = model.generate_content(prompt) # Use original prompt_text for now
             logger.debug("Gemini API call completed.")
 
-
-            generated_texts = []
-            if response and response.candidates:
-                for candidate in response.candidates:
-                    if candidate.content and candidate.content.parts:
-                        text = "".join(part.text for part in candidate.content.parts if hasattr(part, 'text'))
-                        generated_texts.append(text.strip())
-                    elif candidate.content and not candidate.content.parts:
-                         logger.warning(f"Gemini candidate content has no parts: {candidate.content}")
-                    else:
-                         logger.warning(f"Gemini candidate has no content: {candidate}")
-
-            if hasattr(response, 'prompt_feedback') and response.prompt_feedback.block_reason:
-                 logger.error(f"Gemini request blocked. Reason: {response.prompt_feedback.block_reason}")
-                 raise RuntimeError(f"Gemini request blocked. Reason: {response.prompt_feedback.block_reason}")
-            if not generated_texts and response.candidates:
-                 finish_reasons = [c.finish_reason for c in response.candidates]
-                 logger.warning(f"No text extracted from Gemini response. Finish reasons: {finish_reasons}")
-
-
-            if not generated_texts:
-                logger.error(f"No valid generated texts found in Gemini response. Response: {response}")
-                raise RuntimeError("No valid generated texts found in Gemini response.")
-
-            for text in generated_texts:
-                try:
-                    raw_plan = text.strip()
-                    pddl_plan = t._domain_translator.translate_natural_language_plan_to_pddl(text)
-                except Exception as e:
-                    logger.debug(f"Failed to translate generated text to PDDL: {text}. Error: {e}", exc_info=True)
-                    raw_plan = f"Error translating to PDDL: {e}\n{text}"
-                    pddl_plan = ""
-                content = Model.Content(t, prompt_type, raw_plan, pddl_plan, is_valid=False)
-                self._generated_plans.add(content)
-            logger.info(f"Generated {len(generated_texts)} plans for task {t} with prompt type {prompt_type}.")
-
+            generated_text = response.candidates[0].text if response.candidates else ""
+            if not generated_text:
+                raise ValueError("No candidates returned from Gemini model generation.")
+            return generated_text
         except Exception as e:
-            logger.error(f"Failed to generate text with Gemini model '{self._model_name}': {e}", exc_info=True)
-            raise RuntimeError(f"Failed to generate text with Gemini model '{self._model_name}': {e}") from e
+            logger.error(f"Error during Gemini model generation: {e}", exc_info=True)
+            raise RuntimeError(f"Error during Gemini model generation: {e}") from e
 
 # --- get_model function (Remains unchanged) ---
 def get_model(model_name: str, **kwargs) -> Model:

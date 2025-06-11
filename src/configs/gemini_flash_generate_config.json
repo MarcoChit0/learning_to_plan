@@ -1,7 +1,6 @@
 {
     "model_name": "gemini-2.5-flash-preview-05-20",
     "max_output_tokens": 2048,
-    "candidate_count": 1,
     "top_k": 50,
     "top_p": 0.93,
     "wait_time": 20
