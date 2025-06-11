@@ -170,8 +170,8 @@ class Model:
             _id = row.get('id')
             raw_plan       = row.get('raw_plan', None)
             pddl_plan      = row.get('pddl_plan', None)
-            is_valid_str       = row.get('is_valid', Model.Content.VALIDITY.UNCHECKED.value)
-            is_valid = Model.Content.VALIDITY[is_valid_str.upper()]
+            validity_str       = row.get('validity', Model.Content.VALIDITY.UNCHECKED.value)
+            validity = Model.Content.VALIDITY[validity_str.upper()]
             model_metadata = row.get('model_metadata', {})
             prompt_metadata= row.get('prompt_metadata', {})
             date_str       = row.get('date')
@@ -186,7 +186,7 @@ class Model:
             raw_plan=raw_plan,
             pddl_plan=pddl_plan,
             id=_id,
-            is_valid=is_valid,
+            validity=validity,
             model_metadata=model_metadata,
             prompt_metadata=prompt_metadata,
             date=date,
