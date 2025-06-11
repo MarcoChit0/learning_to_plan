@@ -90,12 +90,16 @@ def generate_batch(
         ):
             chat = t.get_chat(with_plan=False, **generation_kwargs)
             try:
+                status = model.Content.STATUS.ERROR
+                error_message = None
+                pddl_plan = None
+                raw_plan = None
+
                 response = model.generate_single_sample(
                     chat=chat,
                     generation_kwargs=generation_kwargs,
                 )
                 print(f"Response received for task {t._id} with prompt {prompt_type} : {response}")
-                status = model.Content.STATUS.ERROR
                 if response == "":
                     error_message = "Empty response from model."
                 elif config.TOKENS.PLAN_START.value not in response:
@@ -108,7 +112,7 @@ def generate_batch(
                     if plan_start_idx >= plan_end_idx:
                         error_message = "Plan start token is after the end token in the response."
                     else:
-                        raw_plan = response[plan_start_idx:plan_end_idx].strip()
+                        raw_plan = response[plan_start_idx+1:plan_end_idx].strip()
                         try:
                             pddl_plan = t._domain_translator.translate_natural_language_plan_to_pddl(raw_plan)
                             status = model.Content.STATUS.OK
