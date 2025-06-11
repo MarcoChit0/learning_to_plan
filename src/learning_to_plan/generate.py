@@ -94,23 +94,30 @@ def generate_batch(
                     chat=chat,
                     generation_kwargs=generation_kwargs,
                 )
+                print(f"Response received for task {t._id} with prompt {prompt_type} : {response}")
                 status = model.Content.STATUS.ERROR
-                plan_start_idx = response.index(config.TOKENS.PLAN_START.value)
-                plan_end_idx = response.index(config.TOKENS.PLAN_END.value)
                 if response == "":
                     error_message = "Empty response from model."
-                elif plan_start_idx == -1 or plan_end_idx == -1:
-                    error_message = "Response does not contain plan start or end tokens."
-                elif plan_start_idx >= plan_end_idx:
-                    error_message = "Plan start token is after the end token in the response."
+                elif config.TOKENS.PLAN_START.value not in response:
+                    error_message = f"Plan start token '{config.TOKENS.PLAN_START.value}' not found in response."
+                elif config.TOKENS.PLAN_END.value not in response:
+                    error_message = f"Plan end token '{config.TOKENS.PLAN_END.value}' not found in response."
                 else:
-                    raw_plan = response[plan_start_idx:plan_end_idx].strip()
-                    try:
-                        pddl_plan = t._domain_translator.translate_natural_language_plan_to_pddl(raw_plan)
-                        status = model.Content.STATUS.OK
-                    except Exception as e:
-                        error_message = "Error translating plan to PDDL: " + str(e)
-            
+                    plan_start_idx = response.index(config.TOKENS.PLAN_START.value)
+                    plan_end_idx = response.index(config.TOKENS.PLAN_END.value)
+                    if plan_start_idx >= plan_end_idx:
+                        error_message = "Plan start token is after the end token in the response."
+                    else:
+                        raw_plan = response[plan_start_idx:plan_end_idx].strip()
+                        try:
+                            pddl_plan = t._domain_translator.translate_natural_language_plan_to_pddl(raw_plan)
+                            status = model.Content.STATUS.OK
+                        except Exception as e:
+                            error_message = "Error translating plan to PDDL: " + str(e)
+                print(f"Status for task {t._id} with prompt {prompt_type} : {status}")
+                print(f"Raw plan for task {t._id} with prompt {prompt_type} : {raw_plan}")
+                print(f"PDDL plan for task {t._id} with prompt {prompt_type} : {pddl_plan}")
+                print(f"Error message for task {t._id} with prompt {prompt_type} : {error_message}")
             except Exception as e:
                 error_message = "Error generating sample : " + str(e)
             finally:

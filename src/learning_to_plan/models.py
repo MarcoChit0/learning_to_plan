@@ -205,7 +205,7 @@ class Model:
             'id':                self._id,
             'raw_plan':          self._raw_plan,
             'pddl_plan':         self._pddl_plan,
-            'is_valid':          self._validity,
+            'is_valid':          self._validity.value,
             'model_metadata':    self._model_metadata,
             'prompt_metadata':   self._prompt_metadata,
             'date':              (self._date or datetime.datetime.now()).isoformat(),
