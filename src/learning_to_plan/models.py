@@ -839,11 +839,14 @@ class GeminiModel(Model):
             # Example: prompt_text_full = prompt_text + PLAN_START_TOKEN
             response = model.generate_content(prompt) # Use original prompt_text for now
             logger.debug("Gemini API call completed.")
+            if not response.candidates or len(response.candidates) == 0:
+                raise ValueError("No candidates returned from Gemini model.")
 
-            generated_text = response.candidates[0].text if response.candidates else ""
+            generated_text = "".join(part.text for part in response.candidates[0].content.parts if part.text)
             if not generated_text:
-                raise ValueError("No candidates returned from Gemini model generation.")
-            return generated_text
+                raise ValueError("Empty text in response from Gemini model.")
+            else:
+                return generated_text.strip()  # Return the generated text without leading/trailing whitespace
         except Exception as e:
             logger.error(f"Error during Gemini model generation: {e}", exc_info=True)
             raise RuntimeError(f"Error during Gemini model generation: {e}") from e

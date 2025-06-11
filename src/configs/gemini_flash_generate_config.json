@@ -3,5 +3,5 @@
     "max_output_tokens": 2048,
     "top_k": 50,
     "top_p": 0.93,
-    "wait_time": 20
+    "wait_time": 1
 }

@@ -6,3 +6,4 @@
 .vscode/
 *.egg-info/
 data/logs.log
+data/models/*
