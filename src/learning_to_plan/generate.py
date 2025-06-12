@@ -99,6 +99,7 @@ def generate_batch(
                     chat=chat,
                     generation_kwargs=generation_kwargs,
                 )
+                print(f"Chat: {chat}")
                 print(f"Response received for task {t._id} with prompt {prompt_type} : {response}")
                 if response == "":
                     error_message = "Empty response from model."
