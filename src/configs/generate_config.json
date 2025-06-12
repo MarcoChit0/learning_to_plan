@@ -1,7 +1,7 @@
 {
-    "model_name": "Qwen/Qwen2.5-7B-Instruct",
-    "max_seq_length": 512,
-    "max_new_tokens": 512,
+    "model_name": "Qwen/Qwen2.5-0.5B-Instruct",
+    "max_seq_length": 1024,
+    "max_new_tokens": 1024,
     "bf16": true,
     "load_in_8bit": false,
     "do_sample": true,
