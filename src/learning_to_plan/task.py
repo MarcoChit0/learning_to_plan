@@ -213,7 +213,7 @@ class Task(abc.ABC):
             
             examples_content = "\n".join(examples)
             
-            content = f"""Your task is to find a plan for a Blocksworld problem based on the provided domain and instance. The following examples show the required output format. Your response should contain only the plan.
+            content = f"""Your task is to find a plan for a Blocksworld problem based on the provided domain and instance. The following examples show the required output format. Your response should contain only the plan arround the tags "{config.TOKENS.PLAN_START.value}...{config.TOKENS.PLAN_END.value}".
 
 {config.TOKENS.DOMAIN_START.value}
 {task_components_in_nl['domain_description']}
@@ -228,9 +228,9 @@ class Task(abc.ABC):
 {examples_content}
 
 Here is a checklist to help you with your task:
-1) Provide only the plan, without any additional text.
+1) Do not provide any additional text or explanations outside the plan tags.
 2) The plan must be in the same format as the examples above.
-3) Use the tags "{config.TOKENS.PLAN_START.value}...{config.TOKENS.PLAN_END.value}" around the plan.
+3) The plan should be preceded by the {config.TOKENS.PLAN_START.value} tag and should be followed by the {config.TOKENS.PLAN_END.value} tag.
 4) The actions in the plan must be from the set of actions in the domain described above, that is, they must use the same name and the same number of parameters as one of the action schemas.
 5) The plan must be valid, that is, each action must be applicable in the state it is applied, and the plan must end in a goal state.
 """
