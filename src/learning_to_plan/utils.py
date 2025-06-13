@@ -145,7 +145,7 @@ def get_model_names_from_models_dir():
 
 def apply_function_to_all_models(
     function: Callable[..., None],
-    **kwargs
+    **fn_kwargs
 ):
     model_names = get_model_names_from_models_dir()
     if not model_names:
@@ -154,7 +154,7 @@ def apply_function_to_all_models(
     logger.info(f"Applying function '{function.__name__}' to all models...")
     for model_name in model_names:
         try:
-            model = models.get_model(model_name=model_name, **kwargs)
+            model = models.get_model(model_name=model_name)
             if not model:
                 logger.warning(f"Model '{model_name}' not found or could not be loaded.")
                 continue
@@ -162,6 +162,6 @@ def apply_function_to_all_models(
             logger.error(f"Error loading model '{model_name}': {e}", exc_info=True)
             continue
         try:
-            function(model=model, **kwargs)
+            function(model=model, **fn_kwargs)
         except Exception as e:
             raise ValueError(f"Error applying function '{function.__name__}' to model '{model_name}': {e}") from e

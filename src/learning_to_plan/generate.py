@@ -15,14 +15,23 @@ def generate_batch(
         model_name: str, 
         domain:str, 
         number_of_instances:Union[str, int] = "all", 
+        num_samples:int = 1,
+        overwrite_generated_plans:bool = False,
         **generation_kwargs):
     start_time = datetime.datetime.now()
 
     logger.info(
         f"Starting generation batch with model '{model_name}' – time: {start_time}" # Use logger
     )
-    generation_kwargs['is_trainable'] = False
-    model = models.get_model(model_name=model_name, **generation_kwargs)
+    prompt_type = generation_kwargs.get("prompt_type", None)
+    assert prompt_type is not None, "Prompt type must be specified in generation_kwargs."
+    try:
+        model = models.get_model(model_name=model_name)
+        generation_kwargs['is_trainable'] = False
+        model.setup(**generation_kwargs)
+    except Exception as e:
+        logger.error(f"Error initializing model '{model_name}': {e}", exc_info=True)
+        raise e
     # --- Get tasks from dataset ---
     try:
         if number_of_instances == "all":
@@ -44,14 +53,9 @@ def generate_batch(
     # --- Generate Plans ---
     logger.info("Starting plan generation loop...") # Use logger
     for t in tqdm(tasks, total=len(tasks), desc="Generating plans"):
-        num_samples = generation_kwargs.get("num_samples", 1)
-        overwrite_plans = generation_kwargs.get("overwrite_generated_plans", False)
-        prompt_type = generation_kwargs.get("prompt_type", None)
-        assert prompt_type is not None, "Prompt type must be specified in generation_kwargs."
-        
         prompt_metadata = t.get_prompt_metadata(**generation_kwargs)
         model_metadata = model.get_metadata()
-        if overwrite_plans:
+        if overwrite_generated_plans:
             logger.info(f"Overwriting existing generated plans for task {t._id} with prompt type {prompt_type}.")
             model.overwrite_generated_plans(
                 t=t,
@@ -113,12 +117,15 @@ def generate_batch(
                     if plan_start_idx >= plan_end_idx:
                         error_message = "Plan start token is after the end token in the response."
                     else:
-                        raw_plan = response[plan_start_idx+1:plan_end_idx].strip()
+                        raw_plan = response[plan_start_idx + len(config.TOKENS.PLAN_START.value):plan_end_idx].strip()
                         try:
                             pddl_plan = t._domain_translator.translate_natural_language_plan_to_pddl(raw_plan)
-                            status = model.Content.STATUS.OK
+                            translated = True
                         except Exception as e:
+                            translated = False
                             error_message = "Error translating plan to PDDL: " + str(e)
+                        if translated:
+                            status = model.Content.STATUS.OK
                 print(f"Status for task {t._id} with prompt {prompt_type} : {status}")
                 print(f"Raw plan for task {t._id} with prompt {prompt_type} : {raw_plan}")
                 print(f"PDDL plan for task {t._id} with prompt {prompt_type} : {pddl_plan}")

@@ -10,6 +10,7 @@ from learning_to_plan import task
 from learning_to_plan import config
 from learning_to_plan import generate
 from learning_to_plan import processing_data
+from learning_to_plan import models
 
 logger = config.get_logger(__name__)
 
@@ -52,6 +53,13 @@ def parse_args():
         action="store_true",
         help="Compute metrics for the generated plans."
     )
+    parser.add_argument(
+        "--clear_model_dir",
+        action="store_true",
+        help="Clear the models directory before training or generation."
+    )
+    # TODO: CREATE A FUNCTION TO SAVE THE MOST RECENT CHECKPOINT FOR ALL MODELS (OR A SINGLE MODEL).
+    # IT SHOULD SAVE THE FILE NAME, THE DATE, THE CHECKPOINT AND SOME OTHER METADATA.
     # --- Configuration & Overrides ---
     parser.add_argument(
         "-c", "--config_file_path",
@@ -87,11 +95,6 @@ def parse_args():
         type=str,
         default=None,
         help="Path to the tasks dataset file (e.g., 'data/tasks.jsonl'). Defaults to './data/tasks.jsonl'."
-    )
-    parser.add_argument(
-        "--reset_model_dir",
-        action="store_true",
-        help="Reset the model directory, used for storing model generated plans and processed data."
     )
     parser.add_argument(
         "--overwrite_generated_plans",
@@ -239,7 +242,6 @@ if __name__ == "__main__":
                 ## --- generation kwargs ---
                 checkpoint_dir=checkpoint_dir, 
                 overwrite_generated_plans=args.overwrite_generated_plans, 
-                reset_model_dir=args.reset_model_dir, 
                 **generate_kwargs)
             logger.info(f"Finished generation for domain: {domain}")
         logger.info("--- Finished All Generation ---")
@@ -247,19 +249,29 @@ if __name__ == "__main__":
     elif args.validate:
         logger.info("--- Starting Plan Validation ---")
         utils.apply_function_to_all_models(
-            function=processing_data.validate_plans,
-            is_trainable=False,
+            function=processing_data.validate_plans
         )
         logger.info("--- Finished All Validation ---")
     
     elif args.compute_metrics:
         logger.info("--- Starting Metrics Computation ---")
         utils.apply_function_to_all_models(
-            function=processing_data.compute_metrics,
-            is_trainable=False,
+            function=processing_data.compute_metrics
         )
         logger.info("--- Finished All Metrics Computation ---")
-
+    elif args.clear_models_dir:
+        if args.model_name:
+            try:
+                model = models.get_model(model_name=args.model_name)
+                model.clear_model_dir()
+            except Exception as e:
+                raise "Error clearing model directory: {e}"
+        else:
+            def clear_model_dir_helper(model: models.Model, **kwargs):
+                model.clear_model_dir()
+            utils.apply_function_to_all_models(
+                function=clear_model_dir_helper
+            )
     else:
         logger.warning("No action requested (e.g., --train, --generate). Exiting.")
 

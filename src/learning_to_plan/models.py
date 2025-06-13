@@ -115,10 +115,10 @@ class Model:
                 raise ValueError(f"ID {id} does not exist in Model.Content.SEEN_IDS.")
             cls.SEEN_IDS.remove(id)
             cls.AVAILABLE_CONTENT_ID_POOL.add(id)
-
-        def was_validated(self) -> bool:
+        
+        def was_vaidated(self) -> bool:
             """
-            Returns True if the plan was validated, False otherwise.
+            Returns True if the plan has been validated, False otherwise.
             """
             return self._validity != Model.Content.VALIDITY.UNCHECKED
 
@@ -205,7 +205,7 @@ class Model:
             'id':                self._id,
             'raw_plan':          self._raw_plan,
             'pddl_plan':         self._pddl_plan,
-            'is_valid':          self._validity.value,
+            'validity':          self._validity.value,
             'model_metadata':    self._model_metadata,
             'prompt_metadata':   self._prompt_metadata,
             'date':              (self._date or datetime.datetime.now()).isoformat(),
@@ -213,35 +213,50 @@ class Model:
             'error_message':     self._error_message,
             }
 
-    def __init__(self, model_name, **kwargs):
+    def __init__(self, model_name: str):
         self._model_name = model_name
-        self.__dict__.update(kwargs)
         self._generated_plans : set[Model.Content] = set()
         self._model_dir_path = os.path.join(config.MODELS_DIR, model_name)
-        if kwargs.get("reset_model_dir", False):
-            if os.path.exists(self._model_dir_path):
-                logger.info(f"Deleting existing model directory: {self._model_dir_path}")
-                os.rmdir(self._model_dir_path)
         os.makedirs(self._model_dir_path, exist_ok=True)
         self._metadata = {
             "model_name": model_name,
         }
+        self.load_generated_plans()
+        logger.info(f"Initialized model {self._model_name} with directory {self._model_dir_path}.")
+        logger.info(f"Loaded {len(self._generated_plans)} generated plans from {config.GENERATED_PLANS_FILE_NAME}.")
+        logger.warning(f"If you want to generate content or train the model {self._model_name}, please call the setup method first.")
+
+    def clear_model_dir(self) -> None:
+        if os.path.exists(self._model_dir_path):
+            logger.info(f"Deleting existing model directory: {self._model_dir_path}")
+            os.rmdir(self._model_dir_path)
+        os.makedirs(self._model_dir_path, exist_ok=True)
+        self._generated_plans.clear()
+        logger.info(f"Model directory {self._model_dir_path} has been reset.")
+    
+    def setup(self, **kwargs) -> None:
+        self.__dict__.update(kwargs)
+        return
 
     def add_generated_plan(self, content:Content) -> None:
         self._generated_plans.add(content)
         logger.info(f"Added new plan with ID {content._id} for task {content._task} and prompt type {content._prompt_type} to model {self._model_name}.")
 
-    def get_generated_plans(self, t: task.Task, prompt_type: config.PROMPT_TYPE, model_metadata:Optional[dict[str, any]] = None, prompt_metadata:Optional[dict[str, any]] = None) -> set[Content]:
+    def get_generated_plans(self, t: Optional[task.Task]=None, prompt_type: Optional[config.PROMPT_TYPE]=None, model_metadata:Optional[dict[str, any]] = None, prompt_metadata:Optional[dict[str, any]] = None) -> set[Content]:
         plans = set()
         for content in self._generated_plans:
-            if content._task == t and content._prompt_type == prompt_type:
-                if model_metadata is not None and content._model_metadata != model_metadata:
-                    continue
-                if prompt_metadata is not None and content._prompt_metadata != prompt_metadata:
-                    continue
+            if t is not None and content._task != t:
+                continue
+            if prompt_type is not None and content._prompt_type != prompt_type:
+                continue
+            if model_metadata is not None and content._model_metadata != model_metadata:
+                continue
+            if prompt_metadata is not None and content._prompt_metadata != prompt_metadata:
+                continue
+            else:
                 plans.add(content)
         return plans
-    
+
     def overwrite_generated_plans(self, t: task.Task, prompt_type: config.PROMPT_TYPE, model_metadata:Optional[dict[str, any]] = None, prompt_metadata:Optional[dict[str, any]] = None) -> None:
         counter = 0
         for content in self._generated_plans:
@@ -289,25 +304,6 @@ class Model:
         """
         return self._metadata
     
-
-    # def save()-> None:
-    #     jsonl_file_path = config.TASKS_DATASET_FILE_PATH
-    #     global DATASET
-    #     if not DATASET:
-    #         raise ValueError("Dataset is empty. Please load the dataset first.")
-    #     logger.info(f"Saving {len(DATASET)} tasks to {jsonl_file_path}.")
-    #     with open(jsonl_file_path, "w", encoding='utf-8') as f:
-    #         for task in sorted(DATASET):
-    #             try:
-    #                 json_str = task.to_json() # Get the JSON string representation
-    #                 f.write(json_str + "\n") # Write the JSON string followed by a newline
-    #             except Exception as e:
-    #                 m = f"Error saving task to file {jsonl_file_path}: {e}"
-    #                 # Changed config.log to logger.error
-    #                 logger.error(m)
-    #                 raise e
-    #     logger.info(f"Saved {len(DATASET)} tasks to {jsonl_file_path}.")
-    
     def save_generated_plans(self) -> None:
         """
         Saves generated plans to a JSONL file in the model directory.
@@ -324,38 +320,6 @@ class Model:
         except Exception as e:
             logger.error(f"Error saving plans to {file_path}: {e}", exc_info=True)
             raise
-
-    # def load() -> None:
-    #     jsonl_file_path = config.TASKS_DATASET_FILE_PATH
-    #     global DATASET
-    #     if not os.path.exists(jsonl_file_path):
-    #         raise ValueError(f"JSONL file not found: {jsonl_file_path}")
-    #     tasks = set()
-    #     logger.info(f"Loading tasks from {jsonl_file_path}.")
-    #     with open(jsonl_file_path, "r", encoding='utf-8') as f:
-    #         for line in f:
-    #             try:
-    #                 json_obj = json.loads(line)
-    #                 domain = json_obj.get("domain", None)
-    #                 instance_file_path = json_obj.get("instance_file_path", None)
-    #                 domain_file_path = json_obj.get("domain_file_path", None)
-    #                 assert domain, "Domain is not specified in the JSON object."
-    #                 assert instance_file_path, "Instance file path is not specified in the JSON object."
-    #                 assert domain_file_path, "Domain file path is not specified in the JSON object."
-    #                 task = Task(
-    #                     domain,
-    #                     domain_file_path,
-    #                     instance_file_path
-    #                 )
-    #                 task.from_json(json_obj)
-    #                 tasks.add(task)
-    #             except Exception as e:
-    #                 m = f"Error processing task from file {jsonl_file_path}: {e}"
-    #                 # Changed config.log to logger.error
-    #                 logger.error(m)
-    #                 raise e
-    #     DATASET = tasks
-    #     logger.info(f"Loaded {len(DATASET)} tasks from {jsonl_file_path}.")
 
     def load_generated_plans(self) -> None:
         """
@@ -387,11 +351,12 @@ class Model:
             raise
 
 class HuggingFaceModel(Model):
-    def __init__(self, model_name, prompt_type: config.PROMPT_TYPE, checkpoint_dir: Optional[str] = None,  **kwargs):
-        super().__init__(model_name, **kwargs)
+    def __init__(self, model_name):
+        super().__init__(model_name)
         assert config.HUGGINGFACE_TOKEN, "Hugging Face token is required for model loading."
 
-        model_source = model_name
+    def setup(self, prompt_type: config.PROMPT_TYPE, checkpoint_dir: Optional[str] = None, is_trainable=False,  **kwargs) -> None:
+        model_source = self._model_name
         last_checkpoint = None
         if checkpoint_dir:
             last_checkpoint = get_last_checkpoint(checkpoint_dir)
@@ -400,9 +365,9 @@ class HuggingFaceModel(Model):
             model_source = last_checkpoint
 
         if last_checkpoint:
-            logger.info(f"Loading model {model_name} -- checkpoint: {last_checkpoint}.")
+            logger.info(f"Loading model {self._model_name} -- checkpoint: {last_checkpoint}.")
         else:
-            logger.info(f"Loading model {model_name} -- base model from Hugging Face Hub.")
+            logger.info(f"Loading model {self._model_name} -- base model from Hugging Face Hub.")
 
         self._metadata["checkpoint"] = last_checkpoint
         # --- Tokenizer Setup ---
@@ -437,17 +402,17 @@ class HuggingFaceModel(Model):
 
         # --- Model Loading ---
         try:
-            torch_dtype = torch.bfloat16 if self.__dict__.get("bf16", False) else torch.float16
+            torch_dtype = torch.bfloat16 if kwargs.get("bf16", False) else torch.float16
             self._metadata['torch_dtype'] = str(torch_dtype)
 
             quantization_config_param = None
-            if self.__dict__.get("load_in_8bit", False): # Check if load_in_8bit is true from train_config.json
+            if  kwargs.get("load_in_8bit", False): # Check if load_in_8bit is true from train_config.json
                 quantization_config_param = BitsAndBytesConfig(load_in_8bit=True)
                 logger.info("8-bit quantization enabled for model loading.")
                 self._metadata['quantization_config'] = quantization_config_param.to_dict()
 
             self._model = AutoModelForCausalLM.from_pretrained(
-                pretrained_model_name_or_path=model_name,
+                pretrained_model_name_or_path=self._model_name,
                 trust_remote_code=True,
                 torch_dtype=torch_dtype,
                 token=config.HUGGINGFACE_TOKEN,
@@ -475,7 +440,7 @@ class HuggingFaceModel(Model):
                             token_id = self._tokenizer.convert_tokens_to_ids(token)
                             embedding_layer.weight[token_id].copy_(embedding_layer.weight[reference_token_id])
 
-            if quantization_config_param and kwargs.get("is_trainable", False):
+            if quantization_config_param and is_trainable:
                 logger.info("Preparing model for 8-bit training.")
                 self._model = prepare_model_for_kbit_training(self._model, use_gradient_checkpointing=True)
                 logger.info("Model prepared for 8-bit training.")
@@ -486,7 +451,7 @@ class HuggingFaceModel(Model):
                     self._model,
                     last_checkpoint,
                     token=config.HUGGINGFACE_TOKEN,
-                    is_trainable=kwargs.get("is_trainable", False),
+                    is_trainable=is_trainable,
                 )
                 logger.info(f"Model state loaded from checkpoint: {last_checkpoint}")
 
@@ -566,7 +531,6 @@ class HuggingFaceModel(Model):
         }
 
     def train(self, checkpoint_dir: str, tokenized_train_dataset: datasets.DatasetDict, tokenized_eval_dataset: datasets.DatasetDict, **train_kwargs: Dict[str, Any]) -> None:
-
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
         start_timer = datetime.datetime.now()
         logger.info(f"Training started at {start_timer}.")
@@ -772,18 +736,18 @@ class HuggingFaceModel(Model):
             
 
 # # --- Gemini Model (Remains unchanged from previous version) ---
-import google.generativeai as genai
+from google import genai
+
 class GeminiModel(Model):
-    def __init__(self, model_name, **kwargs):
-        super().__init__(model_name, **kwargs)
+    def __init__(self, model_name):
+        super().__init__(model_name)
         assert config.GOOGLE_API_KEY, "Google API Key is required for Gemini model."
         try:
-            genai.configure(api_key=config.GOOGLE_API_KEY)
-            logger.info("Gemini API configured successfully.")
+            self._client = genai.Client(api_key=config.GOOGLE_API_KEY)
+
         except Exception as e:
             logger.error(f"Failed to configure Gemini model: {e}", exc_info=True)
             raise RuntimeError(f"Failed to configure Gemini model: {e}")
-
 
     def train(self, dataset:datasets.DatasetDict, **train_kwargs) -> None: # Changed type hint
         """
@@ -800,33 +764,33 @@ class GeminiModel(Model):
         logger.debug(f"Generating with Gemini model {self._model_name}.")
 
         prompt = ""
+        system_instruction = "You are an AI researcher speciliazed in planning." \
+        "Your goal is to generate a plan for the given task." \
+        "You will receive the domain description, the initial state, and the goal." \
+        "You will generate a plan that is valid and executable in the given domain."
         for msg in chat:
-            if msg.get("role") == "system":
-                system_instruction = msg.get("content", "You are a helpful assistant.")
-            elif msg.get("role") == "user":
-                user_message = msg.get("content", "")
-                prompt += f"{user_message}\n"
-        
-        generation_config = genai.types.GenerationConfig( # Use GenerationConfig object
-            temperature=generation_kwargs.get("temperature", 0.7),
-            top_p=generation_kwargs.get("top_p", 0.93),
-            top_k=generation_kwargs.get("top_k", 50),
-            max_output_tokens=generation_kwargs.get("max_output_tokens", 2048),
-            candidate_count=1, # Default to 1 candidate
-            stop_sequences=[config.TOKENS.PLAN_END.value] # Add plan end token as stop sequence
-        )
+            if msg["role"] == "system":
+                system_instruction = msg["content"]
+            elif msg["role"] == "user":
+                prompt += msg["content"] + "\n"
+            
+        generation_config = {
+            "temperature":generation_kwargs.get("temperature", 0.7),
+            "top_p":generation_kwargs.get("top_p", 0.93),
+            "top_k":generation_kwargs.get("top_k", 50),
+            "max_output_tokens":generation_kwargs.get("max_output_tokens", 2048),
+            "candidate_count":1,
+        }
         logger.debug(f"Gemini generation config: {generation_config}")
 
-
-        try:
-            model = genai.GenerativeModel(
-                self._model_name,
-                generation_config=generation_config,
-                system_instruction=system_instruction,
-            )
-        except Exception as e:
-            logger.error(f"Failed to initialize Gemini model '{self._model_name}': {e}", exc_info=True)
-            raise RuntimeError(f"Failed to initialize Gemini model '{self._model_name}': {e}") from e
+        if generation_kwargs.get("do_use_thinking", True):
+            thinking_budget = generation_kwargs.get("thinking_budget", None)
+            if thinking_budget is None or thinking_budget > 0:
+                include_thoughts = generation_kwargs.get("include_thoughts", False)
+                generation_config["thinking_config"] = {
+                    "thinking_budget": thinking_budget,
+                    "include_thoughts": include_thoughts
+                }
 
         try:
             wait_time = generation_kwargs.get("wait_time", 0) # Default to 0 wait time unless specified
@@ -837,7 +801,11 @@ class GeminiModel(Model):
             logger.debug("Calling Gemini model.generate_content...")
             # The prompt should ideally include PLAN_START_TOKEN if Gemini needs it to trigger plan generation
             # Example: prompt_text_full = prompt_text + PLAN_START_TOKEN
-            response = model.generate_content(prompt) # Use original prompt_text for now
+            response = self._client.models.generate_content(
+                model=self._model_name,
+                contents=prompt,
+                config=generation_config
+            )
             logger.debug("Gemini API call completed.")
             if not response.candidates or len(response.candidates) == 0:
                 raise ValueError("No candidates returned from Gemini model.")
@@ -852,7 +820,7 @@ class GeminiModel(Model):
             raise RuntimeError(f"Error during Gemini model generation: {e}") from e
 
 # --- get_model function (Remains unchanged) ---
-def get_model(model_name: str, **kwargs) -> Model:
+def get_model(model_name: str) -> Model:
     """
     Factory function to get the appropriate model based on the model name.
     """
@@ -864,10 +832,9 @@ def get_model(model_name: str, **kwargs) -> Model:
         logger.info("Identified as Hugging Face model.")
         model_cls = HuggingFaceModel
     try:
-        model = model_cls(model_name, **kwargs)
+        model = model_cls(model_name)
     except Exception as e:
         logger.error(f"Error creating model instance: {e}", exc_info=True)
         raise e
-    model.load_generated_plans()
     return model
 

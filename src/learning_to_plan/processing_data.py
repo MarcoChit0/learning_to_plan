@@ -7,6 +7,7 @@ import subprocess
 import csv
 from tqdm import tqdm
 logger = config.get_logger(__name__)
+import numpy as np
 # # domin_path = "data/raw/blocksworld/generated_domain.pddl"
 # # problem_path = "data/raw/blocksworld/generated_basic/instance-0.pddl"
 # # plan ="""(unstack a c)
@@ -39,141 +40,167 @@ logger = config.get_logger(__name__)
 
 def validate_plans(model:models.Model, **kwargs):
     logger.info(f"Starting plan validation at {datetime.datetime.now()}.")
-    # Calculate total number of plans to validate
-    total_plans = sum(
-        len(model._generated_plans[task][prompt_type]['pddl'])
-        for task in model._generated_plans
-        for prompt_type in model._generated_plans[task]
-    )
-    progress_bar = tqdm(total=total_plans, desc="Validated Tasks", unit="plan")
-
-    for task in model._generated_plans:
-        for prompt_type in model._generated_plans[task]:
-            pddl_plans = model._generated_plans[task][prompt_type]['pddl']
-            for i, pddl_plan in enumerate(pddl_plans):
+    generated_plans = model.get_generated_plans()
+    for content in tqdm(generated_plans, desc="Validating Plans", unit="plan"):
+        if content.was_vaidated():
+            continue
+        
+        is_plan_valid = False
+        if content._status != models.Model.Content.STATUS.ERROR:
+            try:        
                 temp_plan_file = os.path.join(
-                    model._model_dir_path,
-                    f".temp_plan_{model._model_name}_{task._domain_file_path}_{task._instance_file_path}_{prompt_type}_{i}.txt".replace(" ", "_").replace("/", "_")
+                model._model_dir_path,
+                f".temp_plan_{model._model_name}_{content._task._domain_file_path}_{content._task._instance_file_path}_{content._prompt_type}_{content._id}.txt".replace(" ", "_").replace("/", "_")
                 )
-                try:
-                    with open(temp_plan_file, "w") as f:
-                        f.write(pddl_plan)
-                    logger.debug(f"Created temporary plan file: {temp_plan_file}")
-                    cmd_list = [
-                        "utils/VAL/build/bin/Validate",
-                        "-v",
-                        "-t", "0.001",
-                        task._domain_file_path,
-                        task._instance_file_path,
-                        temp_plan_file
-                    ]
-                    result = subprocess.run(cmd_list, capture_output=True, text=True, check=False)
-                    is_plan_valid = False
-                    for line in result.stdout.splitlines():
-                        if "Plan valid" in line:
-                            is_plan_valid = True
-                            break
-                    model.validate_generated_plan(task=task, prompt_type=prompt_type, plan_idx=i, is_valid=is_plan_valid)
-                    os.remove(temp_plan_file)
-                except Exception as e:
-                    logger.error(f"Error validating plan for task {task._id} - Model '{model._model_name}' - Prompt Type '{prompt_type}': {e}")
-                    raise e
-                progress_bar.update(1)
-    progress_bar.close()
+                with open(temp_plan_file, "w") as f:
+                    f.write(content._pddl_plan)
+                logger.debug(f"Created temporary plan file: {temp_plan_file}")
+                cmd_list = [
+                    "utils/VAL/build/bin/Validate",
+                    "-v",
+                    "-t", "0.001",
+                    content._task._domain_file_path,
+                    content._task._instance_file_path,
+                    temp_plan_file
+                ]
+                result = subprocess.run(cmd_list, capture_output=True, text=True, check=False)
+
+                for line in result.stdout.splitlines():
+                    if "Plan valid" in line:
+                        is_plan_valid = True
+                        break
+                os.remove(temp_plan_file)
+            except Exception as e:
+                logger.error(f"Error validating plan for task {content._task._id} - Model '{model._model_name}' - Prompt Type '{content._prompt_type}': {e}")
+                raise e
+        content.validate(is_plan_valid)
     model.save_generated_plans()
     logger.info(f"Plan validation completed at {datetime.datetime.now()}.")
+
+import pandas as pd
 
 def compute_metrics(
     model:models.Model,
     **kwargs,
 ):
+    logger.info(f"Computing metrics for model {model._model_name} at {datetime.datetime.now()}.")
     data = {}
-    for task in model._generated_plans:
-        for prompt_type in model._generated_plans[task]:
-            valid_plans = model._generated_plans[task][prompt_type]['is_valid']
-            if task._domain not in data:
-                data[task._domain] = {}
-            
-            task_size = "longer" if task._is_longer_plan else "basic"
-            if task_size not in data[task._domain]:
-                data[task._domain][task_size] = {}
-            
-            if prompt_type not in data[task._domain][task_size]:
-                data[task._domain][task_size][prompt_type] = {
-                    'any_valid' : 0,
-                    'all_valid' : 0,
-                    'num_instances' : 0,
-                    'valid_ratio' : [], # list of valid ratios
-                }
-            
-            data[task._domain][task_size][prompt_type]['num_instances'] += 1
-            data[task._domain][task_size][prompt_type]['valid_ratio'].append(sum(valid_plans) / len(valid_plans))
-            if any(valid_plans):
-                data[task._domain][task_size][prompt_type]['any_valid'] += 1
-            if all(valid_plans):
-                data[task._domain][task_size][prompt_type]['all_valid'] += 1
+    for content in model.get_generated_plans():
+        if not content.was_vaidated():
+            print(f"skip -- {content._validity}")
+            continue 
 
-    # --- Calculate final metrics ---
-    for domain in data:
-        for task_size in data[domain]:
-            for prompt_type in data[domain][task_size]:
-                num_instances = data[domain][task_size][prompt_type]['num_instances']
-                if num_instances > 0:
-                    data[domain][task_size][prompt_type]['valid_ratio'] = sum(data[domain][task_size][prompt_type]['valid_ratio']) / len(data[domain][task_size][prompt_type]['valid_ratio'])
-                    data[domain][task_size][prompt_type]['any_valid'] = data[domain][task_size][prompt_type]['any_valid'] / num_instances
-                    data[domain][task_size][prompt_type]['all_valid'] = data[domain][task_size][prompt_type]['all_valid'] / num_instances
-                else:
-                    # Handle cases with no instances to avoid division by zero
-                    data[domain][task_size][prompt_type]['valid_ratio'] = 0.0
-                    data[domain][task_size][prompt_type]['any_valid'] = 0.0
-                    data[domain][task_size][prompt_type]['all_valid'] = 0.0
-
-    logger.info(f"Metrics computed at {datetime.datetime.now()}.")
-
-    # --- Prepare data for CSV and logging ---
-    header = ['Model', 'Domain', 'Task Size', 'Prompt Type', 'Any Valid (%)', 'All Valid (%)', 'Avg Valid Ratio (%)']
-    table_data = [header]
-    for domain in data:
-        for task_size in data[domain]:
-            for prompt_type in data[domain][task_size]:
-                metrics = data[domain][task_size][prompt_type]
-                any_valid_pct = metrics['any_valid'] * 100
-                all_valid_pct = metrics['all_valid'] * 100
-                valid_ratio_pct = metrics['valid_ratio'] * 100
-                table_data.append([
-                    model._model_name,
-                    domain,
-                    task_size,
-                    prompt_type,
-                    f"{any_valid_pct:.2f}",
-                    f"{all_valid_pct:.2f}",
-                    f"{valid_ratio_pct:.2f}"
-                ])
-
-    # --- Save metrics to CSV ---
-    csv_file_path = os.path.join(model._model_dir_path, f"metrics.csv")
-    try:
-        with open(csv_file_path, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerows(table_data)
-        logger.info(f"Metrics table saved to {csv_file_path}")
-    except Exception as e:
-        logger.error(f"Error saving metrics to CSV: {e}")
-
-    # --- Print metrics in a formatted table to logger ---
-    if table_data:
-        # Determine column widths for pretty printing
-        col_widths = [max(len(str(item)) for item in col) for col in zip(*table_data)]
+        if content._prompt_type not in data:
+            data[content._prompt_type] = {}
         
-        # Create a format string
-        header_format_string = " | ".join([f"{{:<{width}}}" for width in col_widths])
-        separator_line = "-+-".join(['-' * width for width in col_widths])
+        if content._task._domain not in data[content._prompt_type]:
+            data[content._prompt_type][content._task._domain] = {}
+        
+        plan_size = "longer_plan" if content._task._is_longer_plan else "basic_plan"
 
-        logger.info("Plan Validation Metrics:")
-        logger.info(header_format_string.format(*table_data[0])) # Header
-        logger.info(separator_line) # Separator
+        if plan_size not in data[content._prompt_type][content._task._domain]:
+            data[content._prompt_type][content._task._domain][plan_size] = {}
 
-        for row in table_data[1:]:
-            logger.info(header_format_string.format(*row))
-    else:
-        logger.info("No metrics data to display.")
+        if content._task._instance_file_path not in data[content._prompt_type][content._task._domain][plan_size]:
+            data[content._prompt_type][content._task._domain][plan_size][content._task._instance_file_path] = {
+                'num_samples': 0,
+                'num_valid_samples': 0,
+            }
+        
+        data[content._prompt_type][content._task._domain][plan_size][content._task._instance_file_path]['num_samples'] += 1
+        if content._validity == models.Model.Content.VALIDITY.VALID:
+            data[content._prompt_type][content._task._domain][plan_size][content._task._instance_file_path]['num_valid_samples'] += 1
+    
+    processed_data = {}
+    for prompt_type in data:
+        for domain in data[prompt_type]:
+            for plan_size in data[prompt_type][domain]:
+                for intance_file_path, metrics in data[prompt_type][domain][plan_size].items():
+                    num_samples = metrics['num_samples']
+                    num_valid_samples = metrics['num_valid_samples']
+                    
+                    if prompt_type not in processed_data:
+                        processed_data[prompt_type] = {}
+                    if domain not in processed_data[prompt_type]:
+                        processed_data[prompt_type][domain] = {}
+                    if plan_size not in processed_data[prompt_type][domain]:
+                        processed_data[prompt_type][domain][plan_size] = {}
+                    
+                    if num_samples not in processed_data[prompt_type][domain][plan_size]:
+                        processed_data[prompt_type][domain][plan_size][num_samples] = {
+                            'list_num_valid_samples': []
+                        }
+                    
+                    processed_data[prompt_type][domain][plan_size][num_samples]['list_num_valid_samples'].append(num_valid_samples)
+
+    def pass_at_k(total_num_samples, num_correct_samples, k):
+        # compute 1 - comb(n - c, k) / comb(n, k)
+        if k > total_num_samples - num_correct_samples:
+            return 1.0
+        return 1 - np.prod(1 - k / np.arange(total_num_samples - num_correct_samples + 1, total_num_samples + 1))
+                    
+    MAX_K = 10
+
+    results_list = []
+    for prompt_type, domains in processed_data.items():
+        for domain, plan_types in domains.items():
+            for plan_type, num_samples_data in plan_types.items():
+                for num_samples_val, metrics in num_samples_data.items():
+                    
+                    accuracy_all_valid = 0.0
+                    accuracy_any_valid = 0.0
+                    std_validity_ratio = 0.0
+                    avg_validity_ratio = 0.0
+                    list_num_valid_samples = metrics['list_num_valid_samples']
+                    number_of_instances = len(list_num_valid_samples)
+                    
+                    if number_of_instances > 0:
+                        all_valid = sum(1 for x in list_num_valid_samples if x == num_samples_val)
+                        accuracy_all_valid = all_valid / number_of_instances
+                        
+                        any_valid = sum(1 for x in list_num_valid_samples if x > 0) 
+                        accuracy_any_valid = any_valid / number_of_instances
+
+                        avg_validity_ratio = sum(list_num_valid_samples) / (number_of_instances * num_samples_val)
+                        std_validity_ratio = (sum((x - avg_validity_ratio) ** 2 for x in list_num_valid_samples) / number_of_instances) ** 0.5
+
+                        
+                        pass_at_k_values_by_k = {k : [] for k in range(1, MAX_K + 1)}
+                        for instance in range(number_of_instances):
+                            for k in range(1, MAX_K + 1):
+                                pass_at_k_values_by_k[k].append(
+                                    pass_at_k(num_samples_val, list_num_valid_samples[instance], k)
+                                )
+                        
+                        k_values = {k: np.mean(pass_at_k_values_by_k[k]) for k in range(1, MAX_K + 1)}
+
+                    
+                    results_list.append({
+                        'prompt_type': prompt_type,
+                        'domain': domain,
+                        'plan_type': plan_type,
+                        'num_samples': num_samples_val,
+                        'accuracy_all_valid': accuracy_all_valid,
+                        'all_valid': all_valid,
+                        'accuracy_any_valid': accuracy_any_valid,
+                        'any_valid': any_valid,
+                        'avg_validity_ratio': avg_validity_ratio,
+                        'std_validity_ratio': std_validity_ratio,
+                        'number_of_instances': number_of_instances,
+                        **{f'pass_at_k_{k}': k_values[k] for k in range(1, MAX_K + 1)}
+                    })
+    
+    # Convert results to DataFrame
+    results_df = pd.DataFrame(results_list, columns=[
+        'prompt_type', 'domain', 'plan_type', 'num_samples',
+        'accuracy_all_valid', 'all_valid', 'accuracy_any_valid',
+        'any_valid', 'avg_validity_ratio', 'std_validity_ratio',
+        'number_of_instances',
+        *[f'pass_at_k_{k}' for k in range(1, MAX_K + 1)]
+    ])
+    results_df = results_df.sort_values(by=['prompt_type', 'domain', 'plan_type', 'num_samples'])
+    results_df.reset_index(drop=True, inplace=True)
+    # Save results to CSV
+    csv_file_path = os.path.join(model._model_dir_path, f"metrics_{model._model_name}.csv".replace(" ", "_").replace("/", "_"))
+    results_df.to_csv(csv_file_path, index=False)
+    logger.info(f"Metrics for model {model._model_name} saved to {csv_file_path} at {datetime.datetime.now()}.")
