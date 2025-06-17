@@ -191,7 +191,32 @@ class Task(abc.ABC):
             return chat
         elif prompt_type == config.PROMPT_TYPE.FEW_SHOT:
             few_shot = kwargs.get("few_shot", 1)
-            few_shot_examples = get_few_shot_examples(few_shot=few_shot)
+
+            # TODO: UNCOMMENT THIS LATER
+            # few_shot_examples = get_few_shot_examples(few_shot=few_shot)
+            
+            # TODO: REMOVE THIS LATER
+            few_shot_examples = get_few_shot_examples(few_shot=few_shot - 1)
+            validation_tasks = get_tasks(
+                filter_by_domain=self._domain,
+                filter_by_type=Task.TYPE.VALIDATION,
+                is_longer_plan=False,
+                number_of_instances=1
+            )
+            validation_task = next(iter(validation_tasks), None)
+            if validation_task is None:
+                raise ValueError(f"No validation task found for domain '{self._domain}'.")
+            validation_data = validation_task.get_task_components_in_natural_language(with_plan=True)
+            few_shot_examples.append(
+                {
+                    "domain_description": validation_data['domain_description'],
+                    "initial_state_facts": "\n".join(validation_data['initial_state_facts']),
+                    "goal_facts": "\n".join(validation_data['goal_facts']),
+                    "plan": validation_data['plan'],
+                }
+            )
+            # TODO: REMOVE UNTIL HERE LATER
+
             examples = []
             initial_state_facts_str = "\n".join(task_components_in_nl['initial_state_facts'])
             goal_facts_str = "\n".join(task_components_in_nl['goal_facts'])
@@ -238,6 +263,14 @@ Here is a checklist to help you with your task:
                 {"role": "system", "content": "You are an expert in AI Planning."},
                 {"role": "user", "content": content}
             ]
+            
+            # TODO: REMOVE THIS LATER
+            filename_for_debuging_prompt = f"debugging_prompt.txt"
+            if not os.path.exists(filename_for_debuging_prompt):
+                with open(filename_for_debuging_prompt, "w", encoding='utf-8') as f:
+                    f.write(content)
+            # TODO: REMOVE UNTIL HERE LATER
+
             if with_plan:
                 chat.append({"role": "assistant", "content": f"{config.TOKENS.PLAN_START.value}\n{task_components_in_nl['plan']}\n{config.TOKENS.PLAN_END.value}"})
             return chat
@@ -519,54 +552,54 @@ class BlocksworldTranslator(Task.DomainTranslator):
                 "unstack": "unstack",
                 "stack": "stack"
             }
+
+            # Regex to match action and extract block IDs
+            pick_up_pattern = re.compile(r"^pick up (\w+)$")
+            put_down_pattern = re.compile(r"^put down (\w+)$")
+            unstack_pattern = re.compile(r"^unstack (\w+)(?: from)? (\w+)$")
+            stack_pattern = re.compile(r"^stack (\w+)(?: (?:on top of|on|over) )?(\w+)$")
+
             for line in nl_plan.replace(";", "\n").strip().split("\n"):
                 action_str = line.strip().lower()
                 if not action_str:
                     continue
+                action_str = action_str.strip().replace("the ", "").replace(" block", "")
 
-                # Regex to match action and extract block IDs
-                action_pattern = re.compile(r"^(pick up|put down|unstack|stack) the (\w+) block(?: from the (\w+) block)?(?: on top of the (\w+) block)?$")
-                match = action_pattern.match(action_str)
-                if not match:
-                    logger.warning(f"Skipping action due to unknown format: {action_str}")
-                    continue
-                    # raise ValueError(f"Unknown or malformed action format: {action_str}")
-                
-                action_name, first_block_color, unstack_block_color, stack_block_color = match.groups()
-                if action_name not in action_mapping:
-                    raise ValueError(f"Unknown action type '{action_name}' in action: {action_str}")
-                
-                first_block_color = first_block_color.strip()
-                id_1 = next((k for k, v in self._color_map.items() if v == first_block_color), None)
-                if not id_1:
-                    raise ValueError(f"Unknown block color '{first_block_color}' in action: {action_str}")
-                
-                if action_name in ["pick up", "put down"]:
-                    if unstack_block_color or stack_block_color:
-                        raise ValueError(f"Action '{action_name}' should not have additional block colors: {action_str}")
-                    pddl_actions.append(f"({action_mapping[action_name]} {id_1})")
-                elif action_name == "unstack":
-                    if not unstack_block_color:
-                        raise ValueError(f"Action '{action_name}' requires a second block color: {action_str}")
-                    if stack_block_color:
-                        raise ValueError(f"Action '{action_name}' should not have additional block colors: {action_str}")
-                    unstack_block_color = unstack_block_color.strip()
-                    id_2 = next((k for k, v in self._color_map.items() if v == unstack_block_color), None)
-                    if not id_2:
-                        raise ValueError(f"Unknown block color '{unstack_block_color}' in action: {action_str}")
-                    pddl_actions.append(f"({action_mapping[action_name]} {id_1} {id_2})")
-                elif action_name == "stack":
-                    if not stack_block_color:
-                        raise ValueError(f"Action '{action_name}' requires a second block color: {action_str}")
-                    if unstack_block_color:
-                        raise ValueError(f"Action '{action_name}' should not have additional block colors: {action_str}")
-                    stack_block_color = stack_block_color.strip()
-                    id_2 = next((k for k, v in self._color_map.items() if v == stack_block_color), None)
-                    if not id_2:
-                        raise ValueError(f"Unknown block color '{stack_block_color}' in action: {action_str}")
-                    pddl_actions.append(f"({action_mapping[action_name]} {id_1} {id_2})")
+                pick_up_match = pick_up_pattern.match(action_str)
+                put_down_match = put_down_pattern.match(action_str)
+                unstack_match = unstack_pattern.match(action_str)
+                stack_match = stack_pattern.match(action_str)
+                if pick_up_match:
+                    block1_color = pick_up_match.group(1)
+                    id1 = next((k for k, v in self._color_map.items() if v == block1_color), None)
+                    if id1 is None:
+                        raise ValueError(f"Unknown block color '{block1_color}' in action: {action_str}")
+                    pddl_actions.append(f"(pick-up {id1})")
+                elif put_down_match:
+                    block1_color = put_down_match.group(1)
+                    id1 = next((k for k, v in self._color_map.items() if v == block1_color), None)
+                    if id1 is None:
+                        raise ValueError(f"Unknown block color '{block1_color}' in action: {action_str}")
+                    pddl_actions.append(f"(put-down {id1})")
+                elif unstack_match:
+                    block1_color = unstack_match.group(1)
+                    block2_color = unstack_match.group(2)
+                    id1 = next((k for k, v in self._color_map.items() if v == block1_color), None)
+                    id2 = next((k for k, v in self._color_map.items() if v == block2_color), None)
+                    if id1 is None or id2 is None:
+                        raise ValueError(f"Unknown block colors '{block1_color}' or '{block2_color}' in action: {action_str}")
+                    pddl_actions.append(f"(unstack {id1} {id2})")
+                elif stack_match:
+                    block1_color = stack_match.group(1)
+                    block2_color = stack_match.group(2)
+                    id1 = next((k for k, v in self._color_map.items() if v == block1_color), None)
+                    id2 = next((k for k, v in self._color_map.items() if v == block2_color), None)
+                    if id1 is None or id2 is None:
+                        raise ValueError(f"Unknown block colors '{block1_color}' or '{block2_color}' in action: {action_str}")
+                    pddl_actions.append(f"(stack {id1} {id2})")
                 else:
-                    raise ValueError(f"Unknown action type '{action_name}' in action: {action_str}")
+                    raise ValueError(f"Unknown or malformed action: {action_str}")
+
 
             # Join actions into a single PDDL string
             pddl_plan = "\n".join(pddl_actions)
@@ -1034,10 +1067,11 @@ shake shaker_23 on left_hand containing ingredient_163 and ingredient_383 to get
 pour from shaker_23 to shot_295 containing cocktail_1 using left_hand from level_2 to level_1"""}
     data = [
         gripper_data,
-        childsnack_data,
         logistics_data,
+        childsnack_data,
         satellite_data,
         barman_data
     ]
-    rng = np.random.RandomState(config.RANDOM_SEED)
-    return rng.choice(data, size=few_shot, replace=False).tolist() 
+    # rng = np.random.RandomState(config.RANDOM_SEED)
+    # return rng.choice(data, size=few_shot, replace=False).tolist() 
+    return data[:min(few_shot, len(data))]  # Return the first 'few_shot' examples or all if fewer than 'few_shot'

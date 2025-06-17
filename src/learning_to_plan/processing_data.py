@@ -146,7 +146,7 @@ def compute_metrics(
         for domain, plan_types in domains.items():
             for plan_type, num_samples_data in plan_types.items():
                 for num_samples_val, metrics in num_samples_data.items():
-                    
+                    k = 0
                     accuracy_all_valid = 0.0
                     accuracy_any_valid = 0.0
                     std_validity_ratio = 0.0
@@ -155,6 +155,8 @@ def compute_metrics(
                     number_of_instances = len(list_num_valid_samples)
                     
                     if number_of_instances > 0:
+                        k = min(MAX_K, num_samples_val)
+
                         all_valid = sum(1 for x in list_num_valid_samples if x == num_samples_val)
                         accuracy_all_valid = all_valid / number_of_instances
                         
@@ -165,14 +167,14 @@ def compute_metrics(
                         std_validity_ratio = (sum((x - avg_validity_ratio) ** 2 for x in list_num_valid_samples) / number_of_instances) ** 0.5
 
                         
-                        pass_at_k_values_by_k = {k : [] for k in range(1, MAX_K + 1)}
+                        pass_at_k_values_by_k = {k : [] for k in range(1, k + 1)}
                         for instance in range(number_of_instances):
-                            for k in range(1, MAX_K + 1):
+                            for k in range(1, k + 1):
                                 pass_at_k_values_by_k[k].append(
                                     pass_at_k(num_samples_val, list_num_valid_samples[instance], k)
                                 )
                         
-                        k_values = {k: np.mean(pass_at_k_values_by_k[k]) for k in range(1, MAX_K + 1)}
+                        k_values = {i: np.mean(pass_at_k_values_by_k[i]) if i <= k else np.nan for i in range(1, MAX_K + 1)}
 
                     
                     results_list.append({
@@ -187,7 +189,7 @@ def compute_metrics(
                         'avg_validity_ratio': avg_validity_ratio,
                         'std_validity_ratio': std_validity_ratio,
                         'number_of_instances': number_of_instances,
-                        **{f'pass_at_k_{k}': k_values[k] for k in range(1, MAX_K + 1)}
+                        **{f'pass_at_k_{i}': k_values[i] for i in range(1, MAX_K + 1)}
                     })
     
     # Convert results to DataFrame

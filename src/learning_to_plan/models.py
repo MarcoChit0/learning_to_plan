@@ -793,7 +793,7 @@ class GeminiModel(Model):
                 }
 
         try:
-            wait_time = generation_kwargs.get("wait_time", 0) # Default to 0 wait time unless specified
+            wait_time = generation_kwargs.get("wait_time", 20) 
             if wait_time > 0:
                 logger.info(f"Waiting for {wait_time} seconds before Gemini API call.")
                 time.sleep(wait_time)
@@ -807,14 +807,25 @@ class GeminiModel(Model):
                 config=generation_config
             )
             logger.debug("Gemini API call completed.")
-            if not response.candidates or len(response.candidates) == 0:
-                raise ValueError("No candidates returned from Gemini model.")
 
-            generated_text = "".join(part.text for part in response.candidates[0].content.parts if part.text)
-            if not generated_text:
-                raise ValueError("Empty text in response from Gemini model.")
+            if not response.candidates:
+                logger.error(f"Generation failed, no candidates returned. Prompt feedback: {response.prompt_feedback}")
+                raise ValueError("No candidates returned from Gemini model, the prompt may have been blocked.")
+
+            candidate = response.candidates[0]
+
+            if not candidate.content or not candidate.content.parts:
+                logger.error(f"Candidate finished with reason: {candidate.finish_reason}")
+                logger.error(f"Candidate safety ratings: {candidate.safety_ratings}")
+                raise ValueError("No content parts in the candidate, the response was likely blocked for safety reasons.")
+            
+    
+            generated_text = "".join(part.text for part in candidate.content.parts if hasattr(part, 'text'))
+
+            if generated_text:
+                return generated_text.strip()
             else:
-                return generated_text.strip()  # Return the generated text without leading/trailing whitespace
+                raise ValueError("Empty generated text from Gemini model.")
         except Exception as e:
             logger.error(f"Error during Gemini model generation: {e}", exc_info=True)
             raise RuntimeError(f"Error during Gemini model generation: {e}") from e
