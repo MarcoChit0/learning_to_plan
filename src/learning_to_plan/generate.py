@@ -101,10 +101,11 @@ def generate_batch(
 
                 response = model.generate_single_sample(
                     chat=chat,
-                    generation_kwargs=generation_kwargs,
+                    **generation_kwargs,
                 )
-                print(f"Chat: {chat}")
-                print(f"Response received for task {t._id} with prompt {prompt_type} : {response}")
+                print("----.")
+                print(response)
+                print(".----")
                 if response == "":
                     error_message = "Empty response from model."
                 elif config.TOKENS.PLAN_START.value not in response:
@@ -118,20 +119,25 @@ def generate_batch(
                         error_message = "Plan start token is after the end token in the response."
                     else:
                         raw_plan = response[plan_start_idx + len(config.TOKENS.PLAN_START.value):plan_end_idx].strip()
-                        try:
-                            pddl_plan = t._domain_translator.translate_natural_language_plan_to_pddl(raw_plan)
-                            translated = True
-                        except Exception as e:
-                            translated = False
-                            error_message = "Error translating plan to PDDL: " + str(e)
-                        if translated:
+                        if prompt_type == config.PROMPT_TYPE.PDDL:
+                            # The raw plan is already in PDDL format
+                            pddl_plan = raw_plan
                             status = model.Content.STATUS.OK
+                        else:
+                            try:
+                                pddl_plan = t._domain_translator.translate_natural_language_plan_to_pddl(raw_plan)
+                                if pddl_plan.replace(" ", "").replace("\n", "") == "":
+                                    error_message = "Translated PDDL plan is empty."
+                                else:
+                                    status = model.Content.STATUS.OK
+                            except Exception as e:
+                                error_message = "Error translating plan to PDDL: " + str(e)
                 print(f"Status for task {t._id} with prompt {prompt_type} : {status}")
                 print(f"Raw plan for task {t._id} with prompt {prompt_type} : {raw_plan}")
                 print(f"PDDL plan for task {t._id} with prompt {prompt_type} : {pddl_plan}")
                 print(f"Error message for task {t._id} with prompt {prompt_type} : {error_message}")
             except Exception as e:
-                error_message = "Error generating sample : " + str(e)
+                error_message = "Error generating sample : " + str(object=e)
             finally:
                 if status == model.Content.STATUS.ERROR:
                     logger.warning(

@@ -736,14 +736,14 @@ class HuggingFaceModel(Model):
             
 
 # # --- Gemini Model (Remains unchanged from previous version) ---
-from google import genai
+import google.generativeai as genai
 
 class GeminiModel(Model):
     def __init__(self, model_name):
         super().__init__(model_name)
         assert config.GOOGLE_API_KEY, "Google API Key is required for Gemini model."
         try:
-            self._client = genai.Client(api_key=config.GOOGLE_API_KEY)
+            genai.configure(api_key=config.GOOGLE_API_KEY)
 
         except Exception as e:
             logger.error(f"Failed to configure Gemini model: {e}", exc_info=True)
@@ -759,7 +759,7 @@ class GeminiModel(Model):
     def generate_single_sample(
             self,
             chat:list[dict[str, str]],
-            **generation_kwargs:dict[str, Any]
+            **generation_kwargs
         ) -> str:
         logger.debug(f"Generating with Gemini model {self._model_name}.")
 
@@ -769,10 +769,7 @@ class GeminiModel(Model):
         "You will receive the domain description, the initial state, and the goal." \
         "You will generate a plan that is valid and executable in the given domain."
         for msg in chat:
-            if msg["role"] == "system":
-                system_instruction = msg["content"]
-            elif msg["role"] == "user":
-                prompt += msg["content"] + "\n"
+            prompt += f"{msg['content']}"
             
         generation_config = {
             "temperature":generation_kwargs.get("temperature", 0.7),
@@ -780,17 +777,17 @@ class GeminiModel(Model):
             "top_k":generation_kwargs.get("top_k", 50),
             "max_output_tokens":generation_kwargs.get("max_output_tokens", 2048),
             "candidate_count":1,
+            "response_mime_type": "text/plain",
         }
         logger.debug(f"Gemini generation config: {generation_config}")
 
-        if generation_kwargs.get("do_use_thinking", True):
-            thinking_budget = generation_kwargs.get("thinking_budget", None)
-            if thinking_budget is None or thinking_budget > 0:
-                include_thoughts = generation_kwargs.get("include_thoughts", False)
-                generation_config["thinking_config"] = {
-                    "thinking_budget": thinking_budget,
-                    "include_thoughts": include_thoughts
-                }
+
+        # TODO: REMOVE THIS AFTER DEBUGGING
+        filename = "temp__prompt__debug.txt"
+        if not os.path.exists(filename):
+            with open(filename, "w", encoding="utf-8") as f:
+                f.write(prompt)
+            logger.info(f"Prompt saved to {filename} for debugging.")
 
         try:
             wait_time = generation_kwargs.get("wait_time", 20) 
@@ -801,31 +798,22 @@ class GeminiModel(Model):
             logger.debug("Calling Gemini model.generate_content...")
             # The prompt should ideally include PLAN_START_TOKEN if Gemini needs it to trigger plan generation
             # Example: prompt_text_full = prompt_text + PLAN_START_TOKEN
-            response = self._client.models.generate_content(
-                model=self._model_name,
-                contents=prompt,
-                config=generation_config
-            )
-            logger.debug("Gemini API call completed.")
-
-            if not response.candidates:
-                logger.error(f"Generation failed, no candidates returned. Prompt feedback: {response.prompt_feedback}")
-                raise ValueError("No candidates returned from Gemini model, the prompt may have been blocked.")
-
-            candidate = response.candidates[0]
-
-            if not candidate.content or not candidate.content.parts:
-                logger.error(f"Candidate finished with reason: {candidate.finish_reason}")
-                logger.error(f"Candidate safety ratings: {candidate.safety_ratings}")
-                raise ValueError("No content parts in the candidate, the response was likely blocked for safety reasons.")
-            
-    
-            generated_text = "".join(part.text for part in candidate.content.parts if hasattr(part, 'text'))
-
-            if generated_text:
-                return generated_text.strip()
-            else:
-                raise ValueError("Empty generated text from Gemini model.")
+            model = genai.GenerativeModel(model_name=self._model_name, generation_config=generation_config)
+            token_count = model.count_tokens(prompt)
+            logger.info(f"Token count for prompt: {token_count}")
+            logger.info(f"Generating content with Gemini model: {self._model_name}.")
+            response = model.generate_content(prompt)
+            logger.info("Gemini model generation completed successfully.")
+            logger.info(f"gemini's metadata: {response.usage_metadata}")
+            logger.info(f"gemini's response: {response}")
+            try:
+                text = response.text.strip()
+                if not text:
+                    raise ValueError("Empty response text from Gemini model.")
+                return text
+            except Exception as e:
+                logger.error(f"Error extracting text from Gemini response: {e}", exc_info=True)
+                raise RuntimeError(f"Error extracting text from Gemini response: {e}") from e
         except Exception as e:
             logger.error(f"Error during Gemini model generation: {e}", exc_info=True)
             raise RuntimeError(f"Error during Gemini model generation: {e}") from e

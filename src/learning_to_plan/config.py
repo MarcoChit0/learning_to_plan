@@ -58,18 +58,52 @@ class TOKENS(Enum):
     INITIAL_STATE_END = "<|initial_state_end|>"
     EXAMPLE_START = "<|example_start|>"
     EXAMPLE_END = "<|example_end|>"
-    
+    INSTANCE_START = "<|instance_start|>"
+    INSTANCE_END = "<|instance_end|>"
+
+# TO ADD A NEW PROMPT TYPE, YOU MUST CHANGE THE FOLLOWING METHODS:
+# 1. PROMPT_TYPE Enum to include the new type.
+# 2. config.get_special_tokens function to return the appropriate tokens for the new type.
+# 3. task.Task.get_prompt_metadata method to handle the new prompt type.
 class PROMPT_TYPE(Enum):
     IO = "io"
     FEW_SHOT = "few_shot"
+    PDDL = "pddl"
 
 def get_special_tokens(prompt_type: PROMPT_TYPE) -> list[str]:
     if prompt_type == PROMPT_TYPE.IO:
-        return [TOKENS.PLAN_START.value, TOKENS.PLAN_END.value]
+        tokens = [
+            TOKENS.PLAN_START,
+            TOKENS.PLAN_END,
+        ]
     elif prompt_type == PROMPT_TYPE.FEW_SHOT:
-        return [tok.value for tok in TOKENS]
+        tokens = [
+            TOKENS.PLAN_START,
+            TOKENS.PLAN_END,
+            TOKENS.DOMAIN_START,
+            TOKENS.DOMAIN_END,
+            TOKENS.GOAL_START,
+            TOKENS.GOAL_END,
+            TOKENS.INITIAL_STATE_START,
+            TOKENS.INITIAL_STATE_END,
+            TOKENS.EXAMPLE_START,
+            TOKENS.EXAMPLE_END,
+        ]
+    elif prompt_type == PROMPT_TYPE.PDDL:
+        tokens = [
+            TOKENS.PLAN_START,
+            TOKENS.PLAN_END,
+            TOKENS.DOMAIN_START,
+            TOKENS.DOMAIN_END,
+            TOKENS.EXAMPLE_START,
+            TOKENS.EXAMPLE_END,
+            TOKENS.INSTANCE_START,
+            TOKENS.INSTANCE_END,
+        ]
     else:
         raise ValueError(f"Unknown prompt type: {prompt_type}. Must be one of {list(PROMPT_TYPE)}.")
+    return [token.value for token in tokens]
+    
 
 
 # --- End Constants ---
@@ -208,8 +242,7 @@ def get_config(config_file_path, args: Optional[argparse.Namespace] = None) -> D
         with open(config_file_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
         logger.info(msg=f"Successfully loaded configuration from {config_file_path}.")
-
-        print(f"Config: {config}")
+        logger.debug(f"Config content: {config}")
 
         if config.get('prompt_type', None) is None:
             config['prompt_type'] = PROMPT_TYPE.IO
@@ -240,6 +273,7 @@ def get_config(config_file_path, args: Optional[argparse.Namespace] = None) -> D
         assert isinstance(config['num_samples'], int) and config['num_samples'] > 0, "num_samples must be a positive integer."
         logger.info("Configs: %s", config)
         
+        logger.info(f"Final configuration: {config}")
         return config
     except Exception as e:
         msg = f"Error loading config file {config_file_path}: {e}"
