@@ -120,18 +120,18 @@ def generate_batch(
                     else:
                         raw_plan = response[plan_start_idx + len(config.TOKENS.PLAN_START.value):plan_end_idx].strip()
                         if prompt_type == config.PROMPT_TYPE.PDDL:
-                            # The raw plan is already in PDDL format
                             pddl_plan = raw_plan
-                            status = model.Content.STATUS.OK
                         else:
                             try:
                                 pddl_plan = t._domain_translator.translate_natural_language_plan_to_pddl(raw_plan)
-                                if pddl_plan.replace(" ", "").replace("\n", "") == "":
-                                    error_message = "Translated PDDL plan is empty."
-                                else:
-                                    status = model.Content.STATUS.OK
                             except Exception as e:
                                 error_message = "Error translating plan to PDDL: " + str(e)
+                    if error_message is None:
+                        if pddl_plan.replace(" ", "").replace("\n", "") == "":
+                            error_message = "Generated plan is empty after translation."
+                        else:
+                            status = model.Content.STATUS.OK
+
                 print(f"Status for task {t._id} with prompt {prompt_type} : {status}")
                 print(f"Raw plan for task {t._id} with prompt {prompt_type} : {raw_plan}")
                 print(f"PDDL plan for task {t._id} with prompt {prompt_type} : {pddl_plan}")
