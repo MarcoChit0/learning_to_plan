@@ -1,0 +1,224 @@
+Your task is to find a plan for a Blocksworld problem based on the provided domain and instance. The following examples show the required output format. Your response should contain only the plan arround the tags "<|plan_start|>...<|plan_end|>".
+
+<|domain_start|>
+I am playing with a set of blocks where I need to arrange the blocks into stacks.
+Here are the actions that can be performed:
+Pick up a block
+Unstack a block from on top of another block
+Put down a block
+Stack a block on top of another block
+The following are the restrictions on the actions:
+I can only pick up or unstack one block at a time.
+I can only pick up or unstack a block if my hand is empty.
+I can only pick up a block if the block is on the table and the block is clear. A block is clear if the block has no other blocks on top of it and if the block is not picked up.
+I can only unstack a block from on top of another block if the block I am unstacking was really on top of the other block.
+I can only unstack a block from on top of another block if the block I am unstacking is clear.
+Once I pick up or unstack a block, I am holding the block.
+I can only put down a block that I am holding.
+I can only stack a block on top of another block if I am holding the block being stacked.
+I can only stack a block on top of another block if the block onto which I am stacking is clear.
+Once I put down or stack a block, my hand becomes empty.
+Once you stack a block on top of a second block, the second block is no longer clear.
+<|domain_end|>
+<|initial_state_start|>
+the hand is empty
+the red block is on top of the green block
+the blue block is on top of the yellow block
+the yellow block is on the table
+the orange block is on top of the pink block
+the green block is on top of the blue block
+the purple block is on top of the orange block
+the pink block is on top of the red block
+the brown block is on top of the purple block
+the brown block is clear
+<|initial_state_end|>
+<|goal_start|>
+the red block is on top of the green block
+the blue block is on top of the orange block
+the yellow block is on top of the pink block
+the green block is on top of the blue block
+the pink block is on top of the brown block
+the brown block is on top of the red block
+<|goal_end|>
+
+<|example_start|>
+<|domain_start|>
+I have to plan how to move objects between rooms using a robot with grippers. The robot can move between rooms and pick up or drop objects using its grippers.
+Here are the actions that can be performed:
+Move the robot from one room to another room.
+A robot pick up an object from a room.
+A robot drop an object in a room.
+The following are the restrictions on the actions:
+A robot can move from one room to another room only if the robot is in the from-room.
+Once the robot has moved from one room to another room, the robot is no longer in the from-room and is in the to-room.
+A robot can pick up an object from a room only if the robot is in the room and the object is also in the same room.
+A robot can pick up an object from a room only if the robot's gripper is free.
+Once the robot has picked up an object from a room, the object is no longer in the room and is carried by the robot.
+Once the robot has picked up an object from a room, the robot's gripper is no longer free.
+A robot can drop an object in a room only if the robot is in the room and the robot is carrying the object.
+Once the robot has dropped an object in a room, the object is in the room and is no longer carried by the robot.
+Once the robot has dropped an object in a room, the robot's gripper is free.
+<|domain_end|>
+<|initial_state_start|>
+ball_1 is at room_1
+ball_2 is at room_1
+ball_3 is at room_2
+ball_4 is at room_2
+ball_5 is at room_1
+ball_6 is at room_1
+ball_7 is at room_2
+ball_8 is at room_1
+ball_9 is at room_1
+robot_1 is at room_2
+robot_2 is at room_2
+robot_3 is at room_2
+robot_4 is at room_2
+robot_1's left_gripper_1 is free
+robot_1's right_gripper_1 is free
+robot_2's left_gripper_2 is free
+robot_2's right_gripper_2 is free
+robot_3's left_gripper_3 is free
+robot_3's right_gripper_3 is free
+robot_4's left_gripper_4 is free
+robot_4's right_gripper_4 is free
+<|initial_state_end|>
+<|goal_start|>
+ball_1 is at room_2
+ball_2 is at room_2
+ball_3 is at room_1
+ball_4 is at room_2
+ball_5 is at room_2
+ball_6 is at room_1
+ball_7 is at room_2
+ball_8 is at room_1
+ball_9 is at room_1
+<|goal_end|>
+<|plan_start|>
+robot_4 picks ball_3 at room_2 with left_gripper_4
+move robot_4 from room_2 to room_1
+robot_4 drops ball_3 at room_1 with left_gripper_4
+robot_4 picks ball_1 at room_1 with left_gripper_4
+move robot_4 from room_1 to room_2
+robot_4 drops ball_1 at room_2 with left_gripper_4
+move robot_1 from room_2 to room_1
+robot_1 picks ball_2 at room_1 with left_gripper_1
+robot_1 picks ball_5 at room_1 with right_gripper_1
+move robot_1 from room_1 to room_2
+robot_1 drops ball_2 at room_2 with left_gripper_1
+robot_1 drops ball_5 at room_2 with right_gripper_1
+<|plan_end|>
+<|example_end|>
+
+<|example_start|>
+<|domain_start|>
+I have to plan logistics to transport packages within cities via trucks and between cities via airplanes. Locations within a city are directly connected (trucks can move between any two such locations), and so are the cities. In each city there is exactly one truck and each city has one location that serves as an airport.
+Here are the actions that can be performed:
+Load a package into a truck.
+Load a package into an airplane.
+Unload a package from a truck.
+Unload a package from an airplane.
+Drive a truck from one location to another location.
+Fly an airplane from one city to another city.
+The following are the restrictions on the actions:
+A package can be loaded into a truck only if the package and the truck are in the same location.
+Once a package is loaded into a truck, the package is not at the location and is in the truck.
+A package can be loaded into an airplane only if the package and the airplane are in the same location.
+Once a package is loaded into an airplane, the package is not at the location and is in the airplane.
+A package can be unloaded from a truck only if the package is in the truck.
+Once a package is unloaded from a truck, the package is not in the truck and is at the location of the truck.
+A package can be unloaded from an airplane only if the package is in the airplane.
+Once a package is unloaded from an airplane, the package is not in the airplane and is at the location of the airplane.
+A truck can be driven from one location to another if the truck is at the from-location and both from-location and to-location are locations in the same city.
+Once a truck is driven from one location to another, it is not at the from-location and is at the to-location.
+An airplane can be flown from one city to another if the from-location and the to-location are airports and the airplane is at the from-location.
+Once an airplane is flown from one city to another the airplane is not at the from-location and is at the to-location.
+<|domain_end|>
+<|initial_state_start|>
+location_0-0 is an airport
+location_1-0 is an airport
+airplane_0 is at location_0-0
+airplane_1 is at location_0-0
+airplane_2 is at location_1-0
+package_0 is at location_1-0
+package_1 is at location_0-1
+package_2 is at location_1-0
+package_3 is at location_0-0
+package_4 is at location_0-1
+truck_0 is at location_0-0
+truck_1 is at location_1-1
+location_0-0 is in the city city_0
+location_0-1 is in the city city_0
+location_1-0 is in the city city_1
+location_1-1 is in the city city_1
+<|initial_state_end|>
+<|goal_start|>
+package_0 is at location_1-1
+package_1 is at location_0-0
+package_2 is at location_1-1
+package_3 is at location_0-1
+package_4 is at location_0-1
+<|goal_end|>
+<|plan_start|>
+load package_3 into truck_0 at location_0-0
+drive truck_1 from location_1-1 to location_1-0 in city_1
+load package_2 into truck_1 at location_1-0
+load package_0 into truck_1 at location_1-0
+drive truck_1 from location_1-0 to location_1-1 in city_1
+unload package_2 from truck_1 at location_1-1
+unload package_0 from truck_1 at location_1-1
+drive truck_0 from location_0-0 to location_0-1 in city_0
+unload package_3 from truck_0 at location_0-1
+load package_1 into truck_0 at location_0-1
+drive truck_0 from location_0-1 to location_0-0 in city_0
+unload package_1 from truck_0 at location_0-0
+<|plan_end|>
+<|example_end|>
+
+<|example_start|>
+<|domain_start|>
+I am playing with a set of blocks where I need to arrange the blocks into stacks.
+Here are the actions that can be performed:
+Pick up a block
+Unstack a block from on top of another block
+Put down a block
+Stack a block on top of another block
+The following are the restrictions on the actions:
+I can only pick up or unstack one block at a time.
+I can only pick up or unstack a block if my hand is empty.
+I can only pick up a block if the block is on the table and the block is clear. A block is clear if the block has no other blocks on top of it and if the block is not picked up.
+I can only unstack a block from on top of another block if the block I am unstacking was really on top of the other block.
+I can only unstack a block from on top of another block if the block I am unstacking is clear.
+Once I pick up or unstack a block, I am holding the block.
+I can only put down a block that I am holding.
+I can only stack a block on top of another block if I am holding the block being stacked.
+I can only stack a block on top of another block if the block onto which I am stacking is clear.
+Once I put down or stack a block, my hand becomes empty.
+Once you stack a block on top of a second block, the second block is no longer clear.
+<|domain_end|>
+<|initial_state_start|>
+the hand is empty
+the red block is on top of the yellow block
+the blue block is on the table
+the yellow block is on the table
+the red block is clear
+the blue block is clear
+<|initial_state_end|>
+<|goal_start|>
+the red block is on top of the blue block
+the yellow block is on top of the red block
+<|goal_end|>
+<|plan_start|>
+unstack the red block from the yellow block
+stack the red block on top of the blue block
+pick up the yellow block
+stack the yellow block on top of the red block
+<|plan_end|>
+<|example_end|>
+
+
+Here is a checklist to help you with your task:
+1) Do not provide any additional text or explanations outside the plan tags.
+2) The plan must be in the same format as the examples above.
+3) The plan should be preceded by the <|plan_start|> tag and should be followed by the <|plan_end|> tag.
+4) The actions in the plan must be from the set of actions in the domain described above, that is, they must use the same name and the same number of parameters as one of the action schemas.
+5) The plan must be valid, that is, each action must be applicable in the state it is applied, and the plan must end in a goal state.

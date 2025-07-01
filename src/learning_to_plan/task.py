@@ -192,31 +192,8 @@ class Task(abc.ABC):
         elif prompt_type == config.PROMPT_TYPE.FEW_SHOT:
             few_shot = kwargs.get("few_shot", 1)
 
-            # TODO: UNCOMMENT THIS LATER
-            # few_shot_examples = get_few_shot_examples(few_shot=few_shot)
+            few_shot_examples = get_few_shot_examples(few_shot=few_shot)
             
-            # TODO: REMOVE THIS LATER
-            few_shot_examples = get_few_shot_examples(few_shot=few_shot - 1)
-            validation_tasks = get_tasks(
-                filter_by_domain=self._domain,
-                filter_by_type=Task.TYPE.VALIDATION,
-                is_longer_plan=False,
-                number_of_instances=1
-            )
-            validation_task = next(iter(validation_tasks), None)
-            if validation_task is None:
-                raise ValueError(f"No validation task found for domain '{self._domain}'.")
-            validation_data = validation_task.get_task_components_in_natural_language(with_plan=True)
-            few_shot_examples.append(
-                {
-                    "domain_description": validation_data['domain_description'],
-                    "initial_state_facts": "\n".join(validation_data['initial_state_facts']),
-                    "goal_facts": "\n".join(validation_data['goal_facts']),
-                    "plan": validation_data['plan'],
-                }
-            )
-            # TODO: REMOVE UNTIL HERE LATER
-
             examples = []
             initial_state_facts_str = "\n".join(task_components_in_nl['initial_state_facts'])
             goal_facts_str = "\n".join(task_components_in_nl['goal_facts'])

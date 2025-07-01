@@ -70,6 +70,11 @@ class PROMPT_TYPE(Enum):
     FEW_SHOT = "few_shot"
     PDDL = "pddl"
 
+    def __lt__(self, other):
+        if isinstance(other, PROMPT_TYPE):
+            return self.value < other.value
+        return NotImplemented
+
 def get_special_tokens(prompt_type: PROMPT_TYPE) -> list[str]:
     if prompt_type == PROMPT_TYPE.IO:
         tokens = [
