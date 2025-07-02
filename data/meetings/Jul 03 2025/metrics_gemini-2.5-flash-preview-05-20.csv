@@ -1,0 +1,9 @@
+prompt_type,prompt_metadata,model_metadatadomain,plan_type,num_samples,accuracy_all_valid,all_valid,accuracy_any_valid,any_valid,avg_validity_ratio,std_validity_ratio,number_of_instances,pass_at_k_1,pass_at_k_2,pass_at_k_3,pass_at_k_4,pass_at_k_5,pass_at_k_6,pass_at_k_7,pass_at_k_8,pass_at_k_9,pass_at_k_10
+PROMPT_TYPE.FEW_SHOT,"{'few_shot': 2, 'has_blockworld_example': False}",,basic_plan,1,0.47,94,0.47,94,0.47,0.49909918853871166,200,0.47,,,,,,,,,
+PROMPT_TYPE.FEW_SHOT,"{'few_shot': 2, 'has_blockworld_example': False}",,longer_plan,1,0.59,118,0.59,118,0.59,0.4918333050943181,200,0.59,,,,,,,,,
+PROMPT_TYPE.FEW_SHOT,"{'few_shot': 3, 'has_blockworld_example': False}",,basic_plan,1,0.77,154,0.77,154,0.77,0.42083250825001667,200,0.77,,,,,,,,,
+PROMPT_TYPE.FEW_SHOT,"{'few_shot': 3, 'has_blockworld_example': False}",,longer_plan,1,0.78,156,0.78,156,0.78,0.41424630354415987,200,0.78,,,,,,,,,
+PROMPT_TYPE.FEW_SHOT,"{'few_shot': 3, 'has_blockworld_example': True}",,basic_plan,1,0.945,189,0.945,189,0.945,0.2279802623035595,200,0.945,,,,,,,,,
+PROMPT_TYPE.FEW_SHOT,"{'few_shot': 3, 'has_blockworld_example': True}",,longer_plan,1,0.855,171,0.855,171,0.855,0.3521008378291654,200,0.855,,,,,,,,,
+PROMPT_TYPE.PDDL,{'has_blockworld_example': False},,basic_plan,1,0.98,196,0.98,196,0.98,0.13999999999999985,200,0.98,,,,,,,,,
+PROMPT_TYPE.PDDL,{'has_blockworld_example': False},,longer_plan,1,0.885,177,0.885,177,0.885,0.31902194281898527,200,0.885,,,,,,,,,
