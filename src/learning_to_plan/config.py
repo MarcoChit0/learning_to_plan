@@ -170,11 +170,11 @@ def initialize(
     logger.info("Data directories ensured/created.")
 
     # --- Load Task Dataset ---
-    from learning_to_plan import task
+    from learning_to_plan import database
 
     if os.path.exists(TASKS_DATASET_FILE_PATH):
         try:
-            task.load()
+            database.load()
             logger.info(f"Task dataset loaded from {TASKS_DATASET_FILE_PATH}.")
         except Exception as e:
             logger.error(f"Failed to load task dataset from {TASKS_DATASET_FILE_PATH}: {e}", exc_info=True)

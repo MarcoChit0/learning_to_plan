@@ -5,6 +5,8 @@ from learning_to_plan import models
 import learning_to_plan.config as config
 logger = config.get_logger(__name__)
 from learning_to_plan import task
+from learning_to_plan import prompt_building
+from learning_to_plan import database
 
 def get_tokenized_dataset(model: models.Model, tasks:set[task.Task], max_seq_length:int=1024, **kwargs):
     """
@@ -16,7 +18,7 @@ def get_tokenized_dataset(model: models.Model, tasks:set[task.Task], max_seq_len
         'attention_mask': [],
     }
     for t in tasks:
-        chat = t.get_chat(with_plan=True, **kwargs)
+        chat = prompt_building.get_chat(t, with_plan=True, **kwargs)
         tokenized_chat = model.tokenize_chat(chat, max_seq_length=max_seq_length)
         data['input_ids'].append(tokenized_chat['input_ids'])
         data['labels'].append(tokenized_chat['labels'])
@@ -81,8 +83,8 @@ def run_training_procedure(model_name: str, domain: str, **train_kwargs):
     # --- Load and Prepare Dataset ---
     try:
         logger.info(f"Loading training and validation datasets for domain: {domain}.")
-        train_tasks:set[task.Task] = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.TYPE.TRAIN)
-        validation_tasks:set[task.Task] = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.TYPE.VALIDATION)
+        train_tasks:set[task.Task] = database.get_tasks(filter_by_domain=domain, filter_by_task_type=task.Task.TYPE.TRAIN)
+        validation_tasks:set[task.Task] = database.get_tasks(filter_by_domain=domain, filter_by_task_type=task.Task.TYPE.VALIDATION)
 
         logger.info(f"Tokenizing datasets for training and validation.")
         tokenized_train_dataset = get_tokenized_dataset(model, train_tasks, **train_kwargs)
@@ -118,7 +120,7 @@ def run_training_procedure(model_name: str, domain: str, **train_kwargs):
     # --- Train ---
     try:
         logger.info("Calling model.train() at %s", datetime.datetime.now())
-        model.train(checkpoint_dir=model_checkpoint_dir, tokenized_train_dataset=tokenized_train_dataset, tokenized_eval_dataset=tokenized_eval_dataset, **train_kwargs)
+        model.train(tokenized_train_dataset=tokenized_train_dataset, tokenized_eval_dataset=tokenized_eval_dataset, **train_kwargs)
         end_time = datetime.datetime.now()
         logger.info(f"Training completed at {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
     except Exception as e:

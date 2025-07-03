@@ -6,9 +6,12 @@ from learning_to_plan import models
 
 # Import project modules
 import learning_to_plan.config as config
-from learning_to_plan import task # Import task module
+from learning_to_plan import task
 logger = config.get_logger(__name__)
 from typing import Union
+from learning_to_plan import database
+from learning_to_plan import prompt_building
+from learning_to_plan.domain_translators import utils
 # --- Batch Generation from File (Modified) ---
 
 def generate_batch(
@@ -35,13 +38,13 @@ def generate_batch(
     # --- Get tasks from dataset ---
     try:
         if number_of_instances == "all":
-            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.TYPE.TEST)
+            tasks = database.get_tasks(filter_by_domain=domain, filter_by_task_type=task.Task.TYPE.TEST)
         elif number_of_instances == "basic":
-            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.TYPE.TEST, is_longer_plan=False)
+            tasks = database.get_tasks(filter_by_domain=domain, filter_by_task_type=task.Task.TYPE.TEST, is_longer_plan=False)
         elif number_of_instances == "long":
-            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.TYPE.TEST, is_longer_plan=True)
+            tasks = database.get_tasks(filter_by_domain=domain, filter_by_task_type=task.Task.TYPE.TEST, is_longer_plan=True)
         elif isinstance(number_of_instances, int):
-            tasks = task.get_tasks(filter_by_domain=domain, filter_by_type=task.Task.TYPE.TEST, number_of_instances=number_of_instances)
+            tasks = database.get_tasks(filter_by_domain=domain, filter_by_task_type=task.Task.TYPE.TEST, number_of_instances=number_of_instances)
         else:
             raise ValueError(f"Invalid value for number_of_instances: {number_of_instances}. Must be 'all', 'basic', 'long', or a positive integer.")
         assert len(tasks) > 0, f"No tasks found for generation."
@@ -53,7 +56,7 @@ def generate_batch(
     # --- Generate Plans ---
     logger.info("Starting plan generation loop...") # Use logger
     for t in tqdm(tasks, total=len(tasks), desc="Generating plans"):
-        prompt_metadata = t.get_prompt_metadata(**generation_kwargs)
+        prompt_metadata = prompt_building.get_prompt_metadata(**generation_kwargs)
         model_metadata = model.get_metadata()
         if overwrite_generated_plans:
             logger.info(f"Overwriting existing generated plans for task {t._id} with prompt type {prompt_type}.")
@@ -92,7 +95,7 @@ def generate_batch(
             unit="sample",
             leave=False
         ):
-            chat = t.get_chat(with_plan=False, **generation_kwargs)
+            chat = prompt_building.get_chat(t=t, with_plan=False, **generation_kwargs)
             try:
                 status = model.Content.STATUS.ERROR
                 error_message = None
@@ -123,7 +126,7 @@ def generate_batch(
                             pddl_plan = raw_plan
                         else:
                             try:
-                                pddl_plan = t._domain_translator.translate_natural_language_plan_to_pddl(raw_plan)
+                                pddl_plan = utils.translate_natural_language_plan_to_pddl(t, raw_plan)
                             except Exception as e:
                                 error_message = "Error translating plan to PDDL: " + str(e)
                     if error_message is None:
@@ -131,11 +134,6 @@ def generate_batch(
                             error_message = "Generated plan is empty after translation."
                         else:
                             status = model.Content.STATUS.OK
-
-                print(f"Status for task {t._id} with prompt {prompt_type} : {status}")
-                print(f"Raw plan for task {t._id} with prompt {prompt_type} : {raw_plan}")
-                print(f"PDDL plan for task {t._id} with prompt {prompt_type} : {pddl_plan}")
-                print(f"Error message for task {t._id} with prompt {prompt_type} : {error_message}")
             except Exception as e:
                 error_message = "Error generating sample : " + str(object=e)
             finally:

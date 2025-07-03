@@ -1,165 +1,18 @@
 # main.py
 import os
-import argparse
 import asyncio
 
 # Import project modules
 from learning_to_plan import train
 from learning_to_plan import utils
-from learning_to_plan import task
+from learning_to_plan import database
 from learning_to_plan import config
 from learning_to_plan import generate
 from learning_to_plan import processing_data
 from learning_to_plan import models
+from learning_to_plan import parser
 
 logger = config.get_logger(__name__)
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Learning to Plan")
-    parser.add_argument(
-        "-d", "--domain",
-        type=str,
-        default="all",
-        help="List of domains separated by commas (e.g., 'blocksworld,logistics') or 'all'."
-    )
-    # --- Action Flags ---
-    parser.add_argument(
-        "--call_paas",
-        action="store_true",
-        help="Call planning as a service to generate plans."
-    )
-    parser.add_argument(
-        "--split_dataset",
-        action="store_true",
-        help="Split the dataset into training, validation, and test sets."
-    )
-    parser.add_argument(
-        "--train",
-        action="store_true",
-        help="Train a model on the finetuning dataset."
-    )
-    parser.add_argument(
-        "--generate",
-        action="store_true",
-        help="Use a trained model to generate plans for test instances."
-    )
-    parser.add_argument(
-        "--validate",
-        action="store_true",
-        help="Validate model generated plans using VAL"
-    )
-    parser.add_argument(
-        "--compute_metrics",
-        action="store_true",
-        help="Compute metrics for the generated plans."
-    )
-    parser.add_argument(
-        "--clear_model_dir",
-        action="store_true",
-        help="Clear the models directory before training or generation."
-    )
-    # TODO: CREATE A FUNCTION TO SAVE THE MOST RECENT CHECKPOINT FOR ALL MODELS (OR A SINGLE MODEL).
-    # IT SHOULD SAVE THE FILE NAME, THE DATE, THE CHECKPOINT AND SOME OTHER METADATA.
-    # --- Configuration & Overrides ---
-    parser.add_argument(
-        "-c", "--config_file_path",
-        type=str,
-        default=None,
-        help="Path to a custom JSON configuration file (overrides defaults)."
-    )
-    parser.add_argument(
-        "-m", "--model_name",
-        type=str,
-        default=None,
-        help="Override model name (e.g., 'Qwen/Qwen2.5-7B-Instruct' or 'gemini-pro') specified in config."
-    )
-    parser.add_argument(
-        "-e", "--num_train_epochs",
-        type=int,
-        default=None,
-        help="Override number of training epochs specified in config."
-    )
-    parser.add_argument(
-        "--load_in_8bit",
-        action="store_true",
-        help="Override config to load the base model in 8bit (for training/generation)."
-    )
-    parser.add_argument(
-        "--data_dir_path",
-        type=str,
-        default=None, # Default is handled in config.py now
-        help="Path to the base data directory (containing raw, paas_plans, etc.). Defaults to './data/'."
-    )
-    parser.add_argument(
-        "--tasks_dataset_file_path",
-        type=str,
-        default=None,
-        help="Path to the tasks dataset file (e.g., 'data/tasks.jsonl'). Defaults to './data/tasks.jsonl'."
-    )
-    parser.add_argument(
-        "--overwrite_generated_plans",
-        action="store_true",
-        help="Overwrite the generated plans if they already exist."
-    )
-    def number_of_instances_type(value):
-        if value.isdigit():
-            return int(value)
-        elif value in ["all", "long", "basic"]:
-            return value
-        else:
-            raise argparse.ArgumentTypeError(f"Invalid value for number_of_instances: {value}. Must be 'all', 'long', 'basic', or a positive integer.")
-    parser.add_argument(
-        "-n", "--number_of_instances",
-        type=number_of_instances_type,
-        default="all",
-        help="Number of instances to generate plans for. Can be 'all', 'long', 'basic', or a positive integer."
-    )
-    def prompt_type_converter(value: Optional[str] = None) -> Optional[config.PROMPT_TYPE]:
-        if not value:
-            return None
-        try:
-            return config.PROMPT_TYPE[value.upper()]
-        except KeyError:
-            valid = ", ".join([pt.value for pt in config.PROMPT_TYPE])
-            raise argparse.ArgumentTypeError(f"Invalid prompt_type: {value}. Valid options are: {valid}.")
-    parser.add_argument(
-        "--prompt_type",
-        type=prompt_type_converter,
-        default=None,
-        help=f"Type of prompt to use for plan generation. Options: {list(config.PROMPT_TYPE)}. Default is {config.PROMPT_TYPE.IO.name}."
-    )
-    parser.add_argument(
-        "--few_shot",
-        type=int,
-        default=0,
-        help="Number of few-shot examples to use for generation. Default is 0 (no few-shot examples)."
-    )
-    parser.add_argument(
-        "--dont_use_checkpoint",
-        action="store_true",
-        help="Do not use the latest checkpoint for training."
-    )
-    # --- Credentials ---
-    parser.add_argument(
-        "--huggingface_token",
-        type=str,
-        default=None,
-        help="Hugging Face token (overrides HUGGINGFACE_TOKEN env var)."
-    )
-    parser.add_argument(
-        "--google_api_key", # Added argument for Google API Key
-        type=str,
-        default=None,
-        help="Google API Key (overrides GOOGLE_API_KEY env var)."
-    )
-    parser.add_argument(
-        "-s", "--num_samples",
-        type=int,
-        default=1,
-        help="Number of samples to generate per task. Default is 1."
-    )
-
-    return parser.parse_args()
 
 from typing import Optional
 def get_selected_domains(args, dir:Optional[str]=None, is_file:bool=False) -> set[str]:
@@ -176,7 +29,7 @@ def get_selected_domains(args, dir:Optional[str]=None, is_file:bool=False) -> se
             raise e
         assert available_domains and len(available_domains) > 0, f"No domains found in {dir}."
     elif is_file:
-        tasks = task.get_dataset()
+        tasks = database.get_dataset()
         assert tasks, f"No tasks found in {config.TASKS_DATASET_FILE_PATH}."
         available_domains = {t._domain for t in tasks}
         assert available_domains, f"No domains found in {config.TASKS_DATASET_FILE_PATH}."
@@ -197,7 +50,7 @@ def get_selected_domains(args, dir:Optional[str]=None, is_file:bool=False) -> se
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    args = parse_args()
+    args = parser.parse_args()
     config.initialize(args) # Config initialization likely sets up logging
 
     # --- Action Blocks ---
@@ -259,7 +112,7 @@ if __name__ == "__main__":
             function=processing_data.compute_metrics
         )
         logger.info("--- Finished All Metrics Computation ---")
-    elif args.clear_models_dir:
+    elif args.clear_model_dir:
         if args.model_name:
             try:
                 model = models.get_model(model_name=args.model_name)
@@ -272,6 +125,10 @@ if __name__ == "__main__":
             utils.apply_function_to_all_models(
                 function=clear_model_dir_helper
             )
+    elif args.landmarks_generation:
+        logger.info("--- Starting Landmark Graph Generation ---")
+        utils.get_landmark_graph()
+        logger.info("--- Finished All Landmark Graph Generation ---")
     else:
         logger.warning("No action requested (e.g., --train, --generate). Exiting.")
 

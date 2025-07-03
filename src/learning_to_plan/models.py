@@ -19,6 +19,7 @@ import datasets
 import json
 from enum import Enum
 logger = config.get_logger(__name__)
+from learning_to_plan import database
 
 class Model:
     class Content:
@@ -162,7 +163,7 @@ class Model:
             """
             Reads a JSON‐serializable dict (from your .jsonl) and returns a Content.
             """
-            t = task.get_task(
+            t = database.get_task(
             row['domain_file_path'],
             row['instance_file_path'],
             )
