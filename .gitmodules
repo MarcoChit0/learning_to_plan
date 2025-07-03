@@ -1,3 +1,6 @@
 [submodule "utils/VAL"]
 	path = utils/VAL
 	url = https://github.com/KCL-Planning/VAL.git
+[submodule "utils/downward"]
+	path = utils/downward
+	url = https://github.com/aibasel/downward
