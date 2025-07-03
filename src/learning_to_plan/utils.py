@@ -3,7 +3,7 @@ from typing import Callable
 from tqdm import tqdm
 from learning_to_plan import task
 from learning_to_plan import config
-from learning_to_plan import models
+from learning_to_plan.models import base
 import asyncio
 import aiohttp
 import os
@@ -110,7 +110,7 @@ async def call_paas(
     semaphore = asyncio.Semaphore(num_workers)
     await asyncio.gather(*[process_instance(t) for t in tasks_to_process])
 
-    database.save()
+    database.save_tasks()
     logger.info(f"Finished call to planning as a service at {datetime.datetime.now()}.")
 
 
@@ -119,7 +119,7 @@ def split_dataset(
     logger.info(f"Starting to build finetuning dataset at {datetime.datetime.now()}.")
 
     try:
-        tasks = database.get_dataset()
+        tasks = database.get_task_database()
         assert len(tasks) > 0, f"No tasks found in file {config.TASKS_DATASET_FILE_PATH}."
     except Exception as e:
         logger.error(f"No tasks found in file {config.TASKS_DATASET_FILE_PATH}.", exc_info=True)
@@ -157,7 +157,7 @@ def split_dataset(
             t._type = task.Task.TYPE.TEST
         
         # Save the final dataset
-        database.save()
+        database.save_tasks()
     logger.info(f"Finished building finetuning dataset at {datetime.datetime.now()}.")
 
 import subprocess
@@ -201,7 +201,7 @@ def get_landmark_graph() -> None:
         return graph
 
     try:
-        tasks = database.get_dataset()
+        tasks = database.get_task_database()
         assert len(tasks) > 0, f"No tasks found in file {config.TASKS_DATASET_FILE_PATH}."
     except Exception as e:
         logger.error(f"No tasks found in file {config.TASKS_DATASET_FILE_PATH}.", exc_info=True)
@@ -234,7 +234,7 @@ def get_landmark_graph() -> None:
                 t._landmark_graph_status = task.Task.LANDMARK_GRAPH_STATUS.ERROR
                 logger.error(f"Error generating landmark graph for task {t._id}: {e}", exc_info=True)
         
-        database.save()
+        database.save_tasks()
 
 def get_model_names_from_models_dir():
     """
@@ -270,7 +270,7 @@ def apply_function_to_all_models(
     logger.info(f"Applying function '{function.__name__}' to all models...")
     for model_name in model_names:
         try:
-            model = models.get_model(model_name=model_name)
+            model = model.get_model(model_name=model_name)
             if not model:
                 logger.warning(f"Model '{model_name}' not found or could not be loaded.")
                 continue

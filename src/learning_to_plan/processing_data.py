@@ -1,8 +1,10 @@
 import os
-from learning_to_plan import config, models
+from learning_to_plan import config
 import datetime
 import subprocess
 from tqdm import tqdm
+
+from learning_to_plan.models import base
 logger = config.get_logger(__name__)
 import numpy as np
 # # domin_path = "data/raw/blocksworld/generated_domain.pddl"
@@ -35,15 +37,15 @@ import numpy as np
 # # val_command = f"../VAL/bin/Validate -v -t 0.001 {domin_path} {problem_path} plan_blocksworld_instance-0.txt"
 # # os.system(val_command)
 
-def validate_plans(model:models.Model, **kwargs):
+def validate_plans(model:base.Model, **kwargs):
     logger.info(f"Starting plan validation at {datetime.datetime.now()}.")
     generated_plans = model.get_generated_plans()
     for content in tqdm(generated_plans, desc="Validating Plans", unit="plan"):
-        if content.was_vaidated():
+        if content.was_validated():
             continue
         
         is_plan_valid = False
-        if content._status != models.Model.Content.STATUS.ERROR:
+        if content._status != model.Model.Content.STATUS.ERROR:
             try:        
                 temp_plan_file = os.path.join(
                 model._model_dir_path,
@@ -77,13 +79,13 @@ def validate_plans(model:models.Model, **kwargs):
 import pandas as pd
 
 def compute_metrics(
-    model:models.Model,
+    model:base.Model,
     **kwargs,
 ):
     logger.info(f"Computing metrics for model {model._model_name} at {datetime.datetime.now()}.")
     data = {}
     for content in model.get_generated_plans():
-        if not content.was_vaidated():
+        if not content.was_validated():
             print(f"skip -- {content._validity}")
             continue 
 
@@ -115,7 +117,7 @@ def compute_metrics(
             }
         
         data[content._prompt_type][prompt_metadata_key][model_metadata_key][content._task._domain][plan_size][content._task._instance_file_path]['num_samples'] += 1
-        if content._validity == models.Model.Content.VALIDITY.VALID:
+        if content._validity == model.Model.Content.VALIDITY.VALID:
             data[content._prompt_type][prompt_metadata_key][model_metadata_key][content._task._domain][plan_size][content._task._instance_file_path]['num_valid_samples'] += 1
     
     processed_data = {}

@@ -3,10 +3,16 @@ from learning_to_plan.task import Task
 import json
 import os
 from typing import Optional
+from learning_to_plan import content
 logger = config.get_logger(__name__)
 
+
+# TODO: UPDATE TO USE SQL INSTEAD OF JSONL
+# TODO: CREATE A TABLE FOR CONTENT AS WELL
+# TODO: MAKE MOST OF METHODS REUSABLE FOR CONTENT AS WELL
+# TODO: WHEN CONTENT USES THE DATABASE, ITS PROBLEM WITH IDS WOULD BE SOLVED
 TASK_DATABASE: set[Task] = set()
-def get_dataset() -> set[Task]:
+def get_task_database() -> set[Task]:
     global TASK_DATABASE
     if not TASK_DATABASE:
         raise ValueError("Dataset is empty. Please load the dataset first.")
@@ -47,7 +53,7 @@ def get_task(domain_file_path: str, instance_file_path: str) -> Task:
             return task
     raise ValueError(f"Task with domain file path '{domain_file_path}' and instance file path '{instance_file_path}' not found.")
 
-def load() -> None:
+def load_tasks() -> None:
     jsonl_file_path = config.TASKS_DATASET_FILE_PATH
     global TASK_DATABASE
     if not os.path.exists(jsonl_file_path):
@@ -79,7 +85,7 @@ def load() -> None:
     TASK_DATABASE = tasks
     logger.info(f"Loaded {len(TASK_DATABASE)} tasks from {jsonl_file_path}.")
 
-def save()-> None:
+def save_tasks()-> None:
     jsonl_file_path = config.TASKS_DATASET_FILE_PATH
     global TASK_DATABASE
     if not TASK_DATABASE:
@@ -96,3 +102,5 @@ def save()-> None:
                 logger.error(m)
                 raise e
     logger.info(f"Saved {len(TASK_DATABASE)} tasks to {jsonl_file_path}.")
+
+

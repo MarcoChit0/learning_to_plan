@@ -2,7 +2,7 @@
 
 import datetime
 from tqdm import tqdm
-from learning_to_plan import models
+from learning_to_plan.models import utils as model_utils
 
 # Import project modules
 import learning_to_plan.config as config
@@ -11,7 +11,7 @@ logger = config.get_logger(__name__)
 from typing import Union
 from learning_to_plan import database
 from learning_to_plan import prompt_building
-from learning_to_plan.domain_translators import utils
+from learning_to_plan.domain_translators import utils as domain_translator_utils
 # --- Batch Generation from File (Modified) ---
 
 def generate_batch(
@@ -29,7 +29,7 @@ def generate_batch(
     prompt_type = generation_kwargs.get("prompt_type", None)
     assert prompt_type is not None, "Prompt type must be specified in generation_kwargs."
     try:
-        model = models.get_model(model_name=model_name)
+        model = model_utils.get_model(model_name=model_name)
         generation_kwargs['is_trainable'] = False
         model.setup(**generation_kwargs)
     except Exception as e:
@@ -126,7 +126,7 @@ def generate_batch(
                             pddl_plan = raw_plan
                         else:
                             try:
-                                pddl_plan = utils.translate_natural_language_plan_to_pddl(t, raw_plan)
+                                pddl_plan = domain_translator_utils.translate_natural_language_plan_to_pddl(t, raw_plan)
                             except Exception as e:
                                 error_message = "Error translating plan to PDDL: " + str(e)
                     if error_message is None:

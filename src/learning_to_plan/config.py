@@ -174,7 +174,7 @@ def initialize(
 
     if os.path.exists(TASKS_DATASET_FILE_PATH):
         try:
-            database.load()
+            database.load_tasks()
             logger.info(f"Task dataset loaded from {TASKS_DATASET_FILE_PATH}.")
         except Exception as e:
             logger.error(f"Failed to load task dataset from {TASKS_DATASET_FILE_PATH}: {e}", exc_info=True)

@@ -9,7 +9,7 @@ from learning_to_plan import database
 from learning_to_plan import config
 from learning_to_plan import generate
 from learning_to_plan import processing_data
-from learning_to_plan import models
+from learning_to_plan.models import base
 from learning_to_plan import parser
 
 logger = config.get_logger(__name__)
@@ -29,7 +29,7 @@ def get_selected_domains(args, dir:Optional[str]=None, is_file:bool=False) -> se
             raise e
         assert available_domains and len(available_domains) > 0, f"No domains found in {dir}."
     elif is_file:
-        tasks = database.get_dataset()
+        tasks = database.get_task_database()
         assert tasks, f"No tasks found in {config.TASKS_DATASET_FILE_PATH}."
         available_domains = {t._domain for t in tasks}
         assert available_domains, f"No domains found in {config.TASKS_DATASET_FILE_PATH}."
@@ -115,12 +115,12 @@ if __name__ == "__main__":
     elif args.clear_model_dir:
         if args.model_name:
             try:
-                model = models.get_model(model_name=args.model_name)
-                model.clear_model_dir()
+                base = base.get_model(model_name=args.model_name)
+                base.clear_model_dir()
             except Exception as e:
                 raise "Error clearing model directory: {e}"
         else:
-            def clear_model_dir_helper(model: models.Model, **kwargs):
+            def clear_model_dir_helper(model: base.Model, **kwargs):
                 model.clear_model_dir()
             utils.apply_function_to_all_models(
                 function=clear_model_dir_helper

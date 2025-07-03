@@ -1,14 +1,14 @@
 import os
 import datetime
 import datasets
-from learning_to_plan import models
+from learning_to_plan.models import base
 import learning_to_plan.config as config
 logger = config.get_logger(__name__)
 from learning_to_plan import task
 from learning_to_plan import prompt_building
 from learning_to_plan import database
 
-def get_tokenized_dataset(model: models.Model, tasks:set[task.Task], max_seq_length:int=1024, **kwargs):
+def get_tokenized_dataset(model: base.Model, tasks:set[task.Task], max_seq_length:int=1024, **kwargs):
     """
     Create a dataset from the tasks and model.
     """
@@ -30,7 +30,7 @@ def get_tokenized_dataset(model: models.Model, tasks:set[task.Task], max_seq_len
     dataset.set_format(type='torch', columns=['input_ids', 'labels', 'attention_mask'])
     return dataset
     
-def save_dataset_samples(dataset:datasets.Dataset, model:models.Model, checkpoint_dir:str, dataset_name:str, num_samples:int=5):
+def save_dataset_samples(dataset:datasets.Dataset, model:base.Model, checkpoint_dir:str, dataset_name:str, num_samples:int=5):
     if len(dataset) == 0:
         logger.warning(f"Cannot save samples from empty {dataset_name} dataset.")
         return
@@ -72,7 +72,7 @@ def run_training_procedure(model_name: str, domain: str, **train_kwargs):
     config.create_necessary_dirs(model_checkpoint_dir)
     logger.info(f"Checkpoints will be saved to: {model_checkpoint_dir}")
     try:
-        model = models.get_model(model_name=model_name)
+        model = model.get_model(model_name=model_name)
         train_kwargs['is_trainable'] = True
         train_kwargs['checkpoint_dir'] = model_checkpoint_dir
         model.setup(**train_kwargs)
