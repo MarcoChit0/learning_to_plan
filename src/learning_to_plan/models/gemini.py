@@ -33,7 +33,7 @@ class GeminiModel(Model):
             chat:list[dict[str, str]],
             **generation_kwargs
         ) -> str:
-        logger.debug(f"Generating with Gemini model {self._model_name}.")
+        logger.debug(f"Generating with Gemini model {self.model_name}.")
 
         prompt = ""
         for msg in chat:
@@ -66,10 +66,10 @@ class GeminiModel(Model):
             logger.debug("Calling Gemini model.generate_content...")
             # The prompt should ideally include PLAN_START_TOKEN if Gemini needs it to trigger plan generation
             # Example: prompt_text_full = prompt_text + PLAN_START_TOKEN
-            model = genai.GenerativeModel(model_name=self._model_name, generation_config=generation_config)
+            model = genai.GenerativeModel(model_name=self.model_name, generation_config=generation_config)
             token_count = model.count_tokens(prompt)
             logger.info(f"Token count for prompt: {token_count}")
-            logger.info(f"Generating content with Gemini model: {self._model_name}.")
+            logger.info(f"Generating content with Gemini model: {self.model_name}.")
             response = model.generate_content(prompt)
             logger.info("Gemini model generation completed successfully.")
             logger.info(f"gemini's metadata: {response.usage_metadata}")

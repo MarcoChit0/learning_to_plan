@@ -706,7 +706,7 @@ Here is a checklist to help you with your task:
             {"role": "user", "content": content}
         ]
         if with_plan:
-            chat.append({"role": "assistant", "content": f"{config.TOKENS.PLAN_START.value}\n{t._pddl_plan}\n{config.TOKENS.PLAN_END.value}"})
+            chat.append({"role": "assistant", "content": f"{config.TOKENS.PLAN_START.value}\n{t.pddl_plan}\n{config.TOKENS.PLAN_END.value}"})
         return chat
     else:
         raise ValueError(f"Unsupported prompt type: {prompt_type}. Supported types are: {list(config.PROMPT_TYPE)}.")

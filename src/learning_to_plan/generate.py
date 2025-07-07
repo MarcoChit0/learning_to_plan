@@ -10,6 +10,7 @@ from learning_to_plan import task
 logger = config.get_logger(__name__)
 from typing import Union
 from learning_to_plan import database
+from learning_to_plan import generated_plans
 from learning_to_plan import prompt_building
 from learning_to_plan.domain_translators import utils as domain_translator_utils
 # --- Batch Generation from File (Modified) ---
@@ -53,13 +54,16 @@ def generate_batch(
         logger.error(f"Error getting tasks for generation: {e}", exc_info=True)
         raise e
 
+    try:
+        tasks = task.TaskDatabase.get(number_of_instances=)
+
     # --- Generate Plans ---
     logger.info("Starting plan generation loop...") # Use logger
     for t in tqdm(tasks, total=len(tasks), desc="Generating plans"):
         prompt_metadata = prompt_building.get_prompt_metadata(**generation_kwargs)
         model_metadata = model.get_metadata()
         if overwrite_generated_plans:
-            logger.info(f"Overwriting existing generated plans for task {t._id} with prompt type {prompt_type}.")
+            logger.info(f"Overwriting existing generated plans for task {t.id} with prompt type {prompt_type}.")
             model.overwrite_generated_plans(
                 t=t,
                 prompt_type=prompt_type,
@@ -76,22 +80,22 @@ def generate_batch(
         existing_count = len(generated_plans_for_task_with_prompt_type)
         if num_samples <= existing_count:
             logger.info(
-                f"Skipping generation: requested {num_samples} samples but already have {existing_count} for task {t._id} with prompt {prompt_type}."
+                f"Skipping generation: requested {num_samples} samples but already have {existing_count} for task {t.id} with prompt {prompt_type}."
             )
             continue
         to_generate = num_samples - existing_count
         if existing_count > 0:
             logger.info(
-                f"Task {t._id} with prompt {prompt_type} has {existing_count}/{num_samples} plans; "
+                f"Task {t.id} with prompt {prompt_type} has {existing_count}/{num_samples} plans; "
                 f"generating {to_generate} more."
             )
         else:
             logger.info(
-                f"Task {t._id} with prompt {prompt_type} has no plans; generating {to_generate} samples."
+                f"Task {t.id} with prompt {prompt_type} has no plans; generating {to_generate} samples."
             )
         for _ in tqdm(
             range(to_generate),
-            desc=f"Generating samples for task {t._id}",
+            desc=f"Generating samples for task {t.id}",
             unit="sample",
             leave=False
         ):
@@ -139,14 +143,14 @@ def generate_batch(
             finally:
                 if status == model.Content.STATUS.ERROR:
                     logger.warning(
-                        f"Failed to generate valid plan for task {t._id} with prompt {prompt_type}: {error_message}",
+                        f"Failed to generate valid plan for task {t.id} with prompt {prompt_type}: {error_message}",
                         exc_info=True
                     )
                     pddl_plan = None
                     raw_plan = None
                     validity = model.Content.VALIDITY.INVALID
                 else:
-                    logger.info(f"Generated valid plan for task {t._id} with prompt {prompt_type}.")
+                    logger.info(f"Generated valid plan for task {t.id} with prompt {prompt_type}.")
                     error_message = None
                     validity = model.Content.VALIDITY.UNCHECKED
                 content = model.Content(
@@ -163,7 +167,7 @@ def generate_batch(
                 model.add_generated_plan(content=content)
     logger.info("Plan generation loop completed.") # Use logger
     try:
-        logger.info(f"Saving generated plans to {model._model_dir_path}")
+        logger.info(f"Saving generated plans to {model.model_dir_path}")
         model.save_generated_plans()
         logger.info(f"Generated plans saved successfully.")
     except Exception as e:

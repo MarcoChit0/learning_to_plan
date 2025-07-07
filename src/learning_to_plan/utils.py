@@ -18,8 +18,8 @@ def process_paas_response(t: task.Task, response: dict) -> None:
     if status == "ok":
         plan = response["result"]["output"]["sas_plan"]
     
-    t._paas_status = task.Task.PAAS_STATUS(status) if status in [e.value for e in task.Task.PAAS_STATUS] else None
-    t._pddl_plan = plan
+    t.paas_status = task.Task.PAAS_STATUS(status) if status in [e.value for e in task.Task.PAAS_STATUS] else None
+    t.pddl_plan = plan
 
 # Removed unused import 'Dataset'
 # from datasets import Dataset
@@ -100,7 +100,7 @@ async def call_paas(
 
     try:
         logger.info(f"Domain {domain} already exists. Loading tasks from dataset.")
-        tasks_to_process = {t for t in database.get_tasks(filter_by_domain=domain) if t._paas_status == task.Task.PAAS_STATUS.ERROR}
+        tasks_to_process = {t for t in database.get_tasks(filter_by_domain=domain) if t.paas_status == task.Task.PAAS_STATUS.ERROR}
     except Exception as e:
         logger.error(f"Error loading tasks from dataset: {e}", exc_info=True)
         logger.info(f"Creating new tasks for domain: {domain}.")
@@ -125,17 +125,17 @@ def split_dataset(
         logger.error(f"No tasks found in file {config.TASKS_DATASET_FILE_PATH}.", exc_info=True)
         raise e
 
-    valid_tasks:set[task.Task] = {t for t in tasks if t._paas_status == task.Task.PAAS_STATUS.OK}
-    domains:set[str] = {t._domain for t in valid_tasks}
-    tasks_per_domain = {d: [t for t in valid_tasks if t._domain == d] for d in domains}
+    valid_tasks:set[task.Task] = {t for t in tasks if t.paas_status == task.Task.PAAS_STATUS.OK}
+    domains:set[str] = {t.domain for t in valid_tasks}
+    tasks_per_domain = {d: [t for t in valid_tasks if t.domain == d] for d in domains}
 
     for d in domains:
         logger.info(f"Splitting tasks in domain: {d}")
         assert len(tasks_per_domain[d]) == 4400, f"Data file must contain at least 4400 valid instances, but only {len(valid_tasks)} instances were found."
         
         # Extract longer plans and basic plans
-        longer_tasks = [t for t in tasks_per_domain[d] if t._is_longer_plan]
-        basic_tasks = [t for t in tasks_per_domain[d] if not t._is_longer_plan]
+        longer_tasks = [t for t in tasks_per_domain[d] if t.is_longer_plan]
+        basic_tasks = [t for t in tasks_per_domain[d] if not t.is_longer_plan]
 
         assert len(longer_tasks) == 200, f"Expected 200 instances with 'is_longer_plan' as True, but found {len(longer_tasks)} instances."
         assert len(basic_tasks) == 4200, f"Expected 4200 instances with 'is_longer_plan' as False, but found {len(basic_tasks)} instances."
@@ -150,11 +150,11 @@ def split_dataset(
         )
         test_tasks = longer_tasks + basic_test_tasks
         for t in train_tasks:
-            t._type = task.Task.TYPE.TRAIN
+            t.type = task.Task.TYPE.TRAIN
         for t in validation_tasks:
-            t._type = task.Task.TYPE.VALIDATION
+            t.type = task.Task.TYPE.VALIDATION
         for t in test_tasks:
-            t._type = task.Task.TYPE.TEST
+            t.type = task.Task.TYPE.TEST
         
         # Save the final dataset
         database.save_tasks()
@@ -166,8 +166,8 @@ def get_landmark_graph() -> None:
         # command = ./utils/downward/fast-downward.py ./data/raw/blocksworld/generated_domain.pddl ./data/raw/blocksworld/generated_basic_longer_plan_len/instance-20.pddl --search "lazy_greedy([landmark_sum(lm_zg(verbosity=debug))])"
         cmd_list = [
             './utils/downward/fast-downward.py',
-            t._domain_file_path,
-            t._instance_file_path,
+            t.domain_file_path,
+            t.instance_file_path,
             '--search',
             'lazy_greedy([landmark_sum(lm_zg(verbosity=debug))])'
         ]
@@ -206,8 +206,8 @@ def get_landmark_graph() -> None:
     except Exception as e:
         logger.error(f"No tasks found in file {config.TASKS_DATASET_FILE_PATH}.", exc_info=True)
         raise e
-    domains:set[str] = {t._domain for t in tasks}
-    tasks_per_domain = {d: [t for t in tasks if t._domain == d] for d in domains}
+    domains:set[str] = {t.domain for t in tasks}
+    tasks_per_domain = {d: [t for t in tasks if t.domain == d] for d in domains}
 
     for d in domains:
         if not tasks_per_domain[d]:
@@ -215,7 +215,7 @@ def get_landmark_graph() -> None:
             continue
         logger.info(f"Generating landmark graphs for domain: {d}")
 
-        tasks_to_process = {t for t in tasks_per_domain[d] if t._landmark_graph_status != task.Task.LANDMARK_GRAPH_STATUS.OK}
+        tasks_to_process = {t for t in tasks_per_domain[d] if t.landmark_graph_status != task.Task.LANDMARK_GRAPH_STATUS.OK}
         if not tasks_to_process:
             logger.info("All tasks already have a landmark graph. No processing needed.")
             continue
@@ -228,56 +228,10 @@ def get_landmark_graph() -> None:
         for t in tqdm(tasks_to_process, total=len(tasks_to_process), desc="Generating landmark graphs"):
             try:
                 graph = call_downward(t)
-                t._landmark_graph = graph
-                t._landmark_graph_status = task.Task.LANDMARK_GRAPH_STATUS.OK
+                t.landmark_graph = graph
+                t.landmark_graph_status = task.Task.LANDMARK_GRAPH_STATUS.OK
             except Exception as e:
-                t._landmark_graph_status = task.Task.LANDMARK_GRAPH_STATUS.ERROR
-                logger.error(f"Error generating landmark graph for task {t._id}: {e}", exc_info=True)
+                t.landmark_graph_status = task.Task.LANDMARK_GRAPH_STATUS.ERROR
+                logger.error(f"Error generating landmark graph for task {t.id}: {e}", exc_info=True)
         
         database.save_tasks()
-
-def get_model_names_from_models_dir():
-    """
-    Go through all models names and compute the metrics for each one of them.
-    A model names is in the following format:
-        config.MODELS_DIR/model_name/config.GENERATED_PLANS_FILE_NAME,
-
-    where model_name can be separated by '/' as well.
-    """
-    if not os.path.exists(config.MODELS_DIR):
-        raise FileNotFoundError(f"Models directory '{config.MODELS_DIR}' not found.")
-    
-    model_names = []
-    for root, dirs, files in os.walk(config.MODELS_DIR):
-        for file in files:
-            if file == config.GENERATED_PLANS_FILE_NAME:
-                model_path = os.path.join(root, file)
-                model_name = os.path.relpath(model_path, config.MODELS_DIR)
-                model_name = os.path.dirname(model_name)
-                model_names.append(model_name)
-    
-    logger.info(f"Found {len(model_names)} models in '{config.MODELS_DIR}' directory.")
-    return model_names
-
-def apply_function_to_all_models(
-    function: Callable[..., None],
-    **fn_kwargs
-):
-    model_names = get_model_names_from_models_dir()
-    if not model_names:
-        logger.warning(f"No models found in the {config.MODELS_DIR} directory.")
-        return
-    logger.info(f"Applying function '{function.__name__}' to all models...")
-    for model_name in model_names:
-        try:
-            model = model.get_model(model_name=model_name)
-            if not model:
-                logger.warning(f"Model '{model_name}' not found or could not be loaded.")
-                continue
-        except Exception as e:
-            logger.error(f"Error loading model '{model_name}': {e}", exc_info=True)
-            continue
-        try:
-            function(model=model, **fn_kwargs)
-        except Exception as e:
-            raise ValueError(f"Error applying function '{function.__name__}' to model '{model_name}': {e}") from e

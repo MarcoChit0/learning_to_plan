@@ -1,5 +1,6 @@
 # config.py
 
+import abc
 import os
 import json
 import logging
@@ -39,10 +40,10 @@ DEFAULT_TRAIN_CONFIG = "train_config.json"
 DEFAULT_GENERATE_CONFIG = "generate_config.json"
 BASIC_INSTANCES = "generated_basic"
 LONG_INSTANCES = "generated_basic_longer_plan_len"
-TASKS_DATASET_FILE_NAME = "tasks.jsonl"
+TASKS_DATASET_FILE_NAME = "tasks.db"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
-GENERATED_PLANS_FILE_NAME = "generated_plans.jsonl"
+GENERATED_PLANS_FILE_NAME = "generated_plans.db"
 
 RANDOM_SEED = 42 
 
@@ -108,9 +109,6 @@ def get_special_tokens(prompt_type: PROMPT_TYPE) -> list[str]:
     else:
         raise ValueError(f"Unknown prompt type: {prompt_type}. Must be one of {list(PROMPT_TYPE)}.")
     return [token.value for token in tokens]
-    
-
-
 # --- End Constants ---
 
 
@@ -132,7 +130,7 @@ def initialize(
         config_path: Path to a specific JSON configuration file to load (optional).
     """
     global _CONFIG_STORE, HUGGINGFACE_TOKEN, GOOGLE_API_KEY
-    global DATA_DIR, RAW_DIR, CHECKPOINTS_DIR, TASKS_DATASET_FILE_PATH, TASKS_DATASET_FILE_NAME, MODELS_DIR
+    global DATA_DIR, RAW_DIR, CHECKPOINTS_DIR, TASKS_DATASET_FILE_PATH, TASKS_DATASET_FILE_NAME, MODELS_DIR, GENERATED_PLANS_FILE_NAME
     global LOGGING_INITIALIZED, logger
 
     logger.info("Initializing environment variables...")

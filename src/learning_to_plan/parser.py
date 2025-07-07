@@ -42,11 +42,6 @@ def parse_args():
         help="Compute metrics for the generated plans."
     )
     parser.add_argument(
-        "--clear_model_dir",
-        action="store_true",
-        help="Clear the models directory before training or generation."
-    )
-    parser.add_argument(
         "--landmarks_generation",
         action="store_true",
         help="Generate landmark graphs for all tasks in the dataset."
@@ -171,7 +166,7 @@ def get_selected_domains(args, dir:Optional[str]=None, is_file:bool=False) -> se
     elif is_file:
         tasks = database.get_dataset()
         assert tasks, f"No tasks found in {config.TASKS_DATASET_FILE_PATH}."
-        available_domains = {t._domain for t in tasks}
+        available_domains = {t.domain for t in tasks}
         assert available_domains, f"No domains found in {config.TASKS_DATASET_FILE_PATH}."
     else:
         logger.error("No directory or file specified for domain selection.")

@@ -31,7 +31,7 @@ def get_selected_domains(args, dir:Optional[str]=None, is_file:bool=False) -> se
     elif is_file:
         tasks = database.get_task_database()
         assert tasks, f"No tasks found in {config.TASKS_DATASET_FILE_PATH}."
-        available_domains = {t._domain for t in tasks}
+        available_domains = {t.domain for t in tasks}
         assert available_domains, f"No domains found in {config.TASKS_DATASET_FILE_PATH}."
     else:
         logger.error("No directory or file specified for domain selection.")
@@ -112,19 +112,6 @@ if __name__ == "__main__":
             function=processing_data.compute_metrics
         )
         logger.info("--- Finished All Metrics Computation ---")
-    elif args.clear_model_dir:
-        if args.model_name:
-            try:
-                base = base.get_model(model_name=args.model_name)
-                base.clear_model_dir()
-            except Exception as e:
-                raise "Error clearing model directory: {e}"
-        else:
-            def clear_model_dir_helper(model: base.Model, **kwargs):
-                model.clear_model_dir()
-            utils.apply_function_to_all_models(
-                function=clear_model_dir_helper
-            )
     elif args.landmarks_generation:
         logger.info("--- Starting Landmark Graph Generation ---")
         utils.get_landmark_graph()
