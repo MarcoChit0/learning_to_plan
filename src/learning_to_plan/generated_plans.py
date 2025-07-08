@@ -12,9 +12,6 @@ class GeneratedPlan(database.Data):
     SEEN_IDS: set[int] = set()
     AVAILABLE_ID_POOL: set[int] = set()
     NEXT_ID: int = 0
-    class STATUS(Enum):
-        OK = "ok"
-        ERROR = "error"
     
     class VALIDITY(Enum):
         VALID = "valid"
@@ -31,7 +28,7 @@ class GeneratedPlan(database.Data):
             model_metadata: Optional[Dict[str, Any] | str] = None,
             prompt_metadata: Optional[Dict[str, Any] | str] = None,
             date: Optional[datetime.datetime | str] = None,
-            status: STATUS | str = STATUS.OK,
+            status: config.STATUS | str = config.STATUS.OK,
             error_message: Optional[str] = None
         ):
         super().__init__(id, field_names=[
@@ -54,9 +51,9 @@ class GeneratedPlan(database.Data):
         self.pddl_plan = pddl_plan
 
         self.error_message = error_message
-        self.status = self._get_enum_value(status, GeneratedPlan.STATUS, "status")
+        self.status = self._get_enum_value(status, config.STATUS, "status")
         assert self.status, "Status must not be None."
-        if self.status == GeneratedPlan.STATUS.OK:
+        if self.status == config.STATUS.OK:
             assert raw_plan and pddl_plan, "Both raw_plan and pddl_plan must be provided when status is OK."
             assert self.error_message is None, "Error message must be None when status is OK."
         else:
@@ -137,14 +134,14 @@ class GeneratedPlan(database.Data):
             "FOREIGN KEY(task_id)" : "REFERENCES tasks(id)",
         }
     
-class GeneratedPlanDatabase(database.DatabaseManager):
-    def __init__(self, file_path: str = config.GENERATED_PLANS_DATASET_FILE_PATH):
-        super().__init__(, "generated_plans", GeneratedPlan)
-    
-    def filter_functions(self) -> dict[str, str]:
-        return {
-            "filter_by_task_id": " AND task_id = ?",
-            "filter_by_prompt_type": " AND prompt_type = ?",
-            "filter_by_model_metadata": " AND model_metadata = ?",
-            "filter_by_prompt_metadata": " AND prompt_metadata = ?",
-        }
+generated_plan_database = database.DatabaseManager(
+    table_name="generated_plan",
+    data_cls=GeneratedPlan,
+    file_path=config.GENERATED_PLANS_FILE_PATH,
+    filters={
+        "filter_by_task_id": " AND task_id = ?",
+        "filter_by_prompt_type": " AND prompt_type = ?",
+        "filter_by_model_metadata": " AND model_metadata = ?",
+        "filter_by_prompt_metadata": " AND prompt_metadata = ?",
+    }
+)

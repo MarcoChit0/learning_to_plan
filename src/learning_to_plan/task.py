@@ -1,10 +1,6 @@
 from __future__ import annotations
-from copy import deepcopy
 import threading
-import abc
 import re
-import json
-import os
 from learning_to_plan import config
 from typing import Optional
 from enum import Enum
@@ -24,14 +20,6 @@ class Task(database.Data):
         VALIDATION = "validation"
         TEST = "test"
 
-    class PAAS_STATUS(Enum):
-        OK = "ok"
-        ERROR = "error"
-    
-    class LANDMARK_GRAPH_STATUS(Enum):
-        OK = "ok"
-        ERROR = "error"
-
     # TODO: CHECK WHETHER THIS WHAY DOES NOT INTRODUCES ID ERRORS
     def __init__(
             self, 
@@ -40,11 +28,11 @@ class Task(database.Data):
             instance_file_path : str,
             id: Optional[int]=None, 
             is_longer_plan: bool = False,
-            paas_status: Optional[Task.PAAS_STATUS | str] = None,
+            paas_status: Optional[config.STATUS | str] = None,
             pddl_plan: Optional[str] = None,
             type: Optional[Task.TYPE | str] = None,
             landmark_graph: Optional[str] = None,
-            landmark_graph_status: Optional[Task.LANDMARK_GRAPH_STATUS | str] = None):
+            landmark_graph_status: Optional[config.STATUS | str] = None):
         super().__init__(id, field_names=[
             "id", 
             "domain", 
@@ -67,9 +55,9 @@ class Task(database.Data):
         self.pddl_plan: Optional[str] = pddl_plan
         self.landmark_graph: Optional[str] = landmark_graph
 
-        self.paas_status = self._get_enum_value(paas_status, Task.PAAS_STATUS, "paas_status")
+        self.paas_status = self._get_enum_value(paas_status, config.STATUS, "paas_status")
         self.type = self._get_enum_value(type, Task.TYPE, "type")
-        self.landmark_graph_status = self._get_enum_value(landmark_graph_status, Task.LANDMARK_GRAPH_STATUS, "landmark_graph_status")
+        self.landmark_graph_status = self._get_enum_value(landmark_graph_status, config.STATUS, "landmark_graph_status")
 
     def __str__(self):
         long_part = ", long" if self.is_longer_plan else ""
@@ -100,14 +88,15 @@ class Task(database.Data):
             "landmark_graph_status": "TEXT"
         }
 
-class TaskDatabase(database.DatabaseManager):
-    # TODO: CHANGE FILE PATH
-    def __init__(self, file_path: str = config.TASKS_DATASET_FILE_PATH):
-        super().__init__(file_path, "tasks", Task)
-
-    def filter_functions(self) -> dict[str, str]:
-        return {
-            "filter_by_domain": " AND domain = ?",
-            "filter_by_task_type": " AND type = ?",
-            "is_longer_plan": " AND is_longer_plan = ?",
-        }
+task_database = database.DatabaseManager(
+    table_name="task",
+    data_cls=Task,
+    file_path=config.TASKS_DATASET_FILE_PATH,
+    filters={
+        "filter_by_domain": "domain = ?",
+        "filter_by_task_type": "type = ?",
+        "filter_by_is_longer_plan": "is_longer_plan = ?",
+        "filter_by_paas_status": "paas_status = ?",
+        "filter_by_landmark_graph_status": "landmark_graph_status = ?",
+    }
+)

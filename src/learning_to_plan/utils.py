@@ -17,8 +17,8 @@ def process_paas_response(t: task.Task, response: dict) -> None:
     status = response.get("status", "error")
     if status == "ok":
         plan = response["result"]["output"]["sas_plan"]
-    
-    t.paas_status = task.Task.PAAS_STATUS(status) if status in [e.value for e in task.Task.PAAS_STATUS] else None
+
+    t.paas_status = config.STATUS(status) if status in [e.value for e in config.STATUS] else None
     t.pddl_plan = plan
 
 # Removed unused import 'Dataset'
@@ -100,7 +100,10 @@ async def call_paas(
 
     try:
         logger.info(f"Domain {domain} already exists. Loading tasks from dataset.")
-        tasks_to_process = {t for t in database.get_tasks(filter_by_domain=domain) if t.paas_status == task.Task.PAAS_STATUS.ERROR}
+        tasks_to_process = task.task_database.get(
+            filter_by_domain=domain,
+            filter_by_status=config.STATUS.ERROR
+        )
     except Exception as e:
         logger.error(f"Error loading tasks from dataset: {e}", exc_info=True)
         logger.info(f"Creating new tasks for domain: {domain}.")
@@ -110,7 +113,11 @@ async def call_paas(
     semaphore = asyncio.Semaphore(num_workers)
     await asyncio.gather(*[process_instance(t) for t in tasks_to_process])
 
-    database.save_tasks()
+    try:
+        task.task_database.add(tasks_to_process)
+        logger.info(f"Added/ Updated {len(tasks_to_process)} tasks.")
+    except Exception as e:
+        logger.error(f"Error adding tasks to singleton_task_database: {e}", exc_info=True)
     logger.info(f"Finished call to planning as a service at {datetime.datetime.now()}.")
 
 
@@ -125,7 +132,9 @@ def split_dataset(
         logger.error(f"No tasks found in file {config.TASKS_DATASET_FILE_PATH}.", exc_info=True)
         raise e
 
-    valid_tasks:set[task.Task] = {t for t in tasks if t.paas_status == task.Task.PAAS_STATUS.OK}
+    valid_tasks:set[task.Task] = task.task_database.get(
+        filter_by_paas_status=config.STATUS.OK,
+    )
     domains:set[str] = {t.domain for t in valid_tasks}
     tasks_per_domain = {d: [t for t in valid_tasks if t.domain == d] for d in domains}
 
@@ -156,8 +165,8 @@ def split_dataset(
         for t in test_tasks:
             t.type = task.Task.TYPE.TEST
         
-        # Save the final dataset
-        database.save_tasks()
+        task.task_database.add(tasks_per_domain[d])
+        logger.info(f"Domain {d} split into {len(train_tasks)} train, {len(validation_tasks)} validation, and {len(test_tasks)} test tasks.")
     logger.info(f"Finished building finetuning dataset at {datetime.datetime.now()}.")
 
 import subprocess
@@ -201,37 +210,19 @@ def get_landmark_graph() -> None:
         return graph
 
     try:
-        tasks = database.get_task_database()
+        tasks:set[task.Task] = task.task_database.get(filter_by_landmark_graph_status=config.STATUS.ERROR)
         assert len(tasks) > 0, f"No tasks found in file {config.TASKS_DATASET_FILE_PATH}."
     except Exception as e:
         logger.error(f"No tasks found in file {config.TASKS_DATASET_FILE_PATH}.", exc_info=True)
         raise e
-    domains:set[str] = {t.domain for t in tasks}
-    tasks_per_domain = {d: [t for t in tasks if t.domain == d] for d in domains}
-
-    for d in domains:
-        if not tasks_per_domain[d]:
-            logger.warning(f"No valid tasks found for domain {d}. Skipping landmark graph generation for this domain.")
-            continue
-        logger.info(f"Generating landmark graphs for domain: {d}")
-
-        tasks_to_process = {t for t in tasks_per_domain[d] if t.landmark_graph_status != task.Task.LANDMARK_GRAPH_STATUS.OK}
-        if not tasks_to_process:
-            logger.info("All tasks already have a landmark graph. No processing needed.")
-            continue
-
-        if len(tasks_to_process) != len(tasks_per_domain[d]):
-            logger.info(f"{len(tasks_per_domain[d]) - len(tasks_to_process)} tasks already have a landmark graph. Processing {len(tasks_to_process)} tasks.")
-        else:
-            logger.info(f"No tasks have a landmark graph. Processing all {len(tasks_per_domain[d])} tasks.")
-
-        for t in tqdm(tasks_to_process, total=len(tasks_to_process), desc="Generating landmark graphs"):
-            try:
-                graph = call_downward(t)
-                t.landmark_graph = graph
-                t.landmark_graph_status = task.Task.LANDMARK_GRAPH_STATUS.OK
-            except Exception as e:
-                t.landmark_graph_status = task.Task.LANDMARK_GRAPH_STATUS.ERROR
-                logger.error(f"Error generating landmark graph for task {t.id}: {e}", exc_info=True)
-        
-        database.save_tasks()
+    
+    for t in tqdm(tasks, total=len(tasks), desc="Generating landmark graphs"):
+        try:
+            graph = call_downward(t)
+            t.landmark_graph = graph
+            t.landmark_graph_status = config.STATUS.OK
+            task.task_database.add(t)
+            logger.info(f"Generated landmark graph for task {t.id}.")
+        except Exception as e:
+            logger.error(f"Error generating landmark graph for task {t.id}: {e}", exc_info=True)
+    

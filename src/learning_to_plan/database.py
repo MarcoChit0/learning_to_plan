@@ -154,11 +154,18 @@ class Data(abc.ABC):
         return self.id < other.id
 
 class DatabaseManager(abc.ABC):
-    def __init__(self, file_path: str, table_name: str, data_cls: type[Data]):
-        self.file_path = file_path
-        self.table_name = table_name
+    def __init__(self, table_name: str, data_cls: type[Data], file_path: str, filters: dict[str, str] = {}):
+        self.table_name: str = table_name
+        self.content_database_cls: type[Data] = data_cls
+        self.file_path: str = file_path
         self.connection = sqlite3.connect(file_path)
-        self.content_database_cls = data_cls
+        # filters are used to filter the data when retrieving it from the database
+        # they are expected to be a dictionary where keys are column names and values are the values to filter by
+        self.filters: dict[str, str] = filters
+        self.filters_ordering: list[str] = list(self.filters.keys())
+        self.filters['number_of_instances'] = 'LIMIT ?'  # Special filter for limiting the number of instances
+        self.filters_ordering.append('number_of_instances')  # Ensure this is the last filter applied
+        self.setup()
 
     def close(self):
         self.connection.close()
@@ -174,62 +181,95 @@ class DatabaseManager(abc.ABC):
         # Create table if it does not exist
         cursor.execute(f"""
             CREATE TABLE IF NOT EXISTS {self.table_name} (
-                {', '.join([f"{col} {dtype}" for col, dtype in self.content_database_cls.storage_datatype().items()])}
+                {', '.join([f"{col} {dtype}" for col, dtype in self.content_database_cls().storage_datatype().items()])}
             )
         """)
         self.commit()
     
-    @abc.abstractmethod
-    def filter_functions(self) -> dict[str, str]:
-        raise NotImplementedError("Subclasses must implement the filter_functions method.")
-    
-    def get(self, number_of_instances: Optional[int] = None, **kwargs) -> set[Data]:
+    def get(self, **filters) -> set[Data]:
         query = f"SELECT * FROM {self.table_name} WHERE 1=1"
         params = []  
-        for filter in self.filter_functions().keys():
-            if filter in kwargs:
-                query += f" AND {filter} = ?"
+        for f in self.filters_ordering:
+            if f in filters:
+                value = filters[f]
                 try:
-                    transformed_value = transform_value_to_sqlite_storage(kwargs[filter])
+                    trans_value = transform_value_to_sqlite_storage(value)
                 except TypeError as e:
-                    logger.error(f"Error transforming value for filter '{filter}': {e}")
+                    logger.error(f"Error transforming value {value} for filter '{f}': {e}")
                     raise e
-                params.append(transformed_value)
-        # Number of instances should be the last filter applied
-        if number_of_instances is not None:
-            query += " LIMIT ?"
-            try:
-                transformed_value = transform_value_to_sqlite_storage(number_of_instances)
-            except TypeError as e:
-                logger.error(f"Error transforming value for filter '{filter}': {e}")
-                raise e
-            params.append(transformed_value)
+                query += f" AND {self.filters[f]}"
+                params.append(trans_value)
 
-        objs = set[Data] = set()
-        self.cursor().execute(query, params)
-        for row in self.cursor().fetchall():
-            obj = self.content_database_cls.from_row(row)
+        objs: set[Data] = set()
+        cursor = self.cursor()
+        cursor.execute(query, params)
+        for row in cursor.fetchall():
+            obj = self.content_database_cls().from_row(row)
             objs.add(obj)
         return objs
+
+    def get_by_id(self, id: int) -> Optional[Data]:
+        query = f"SELECT * FROM {self.table_name} WHERE id = ?"
+        cursor = self.cursor()
+        cursor.execute(query, (id,))
+        row = cursor.fetchone()
+        if row:
+            return self.content_database_cls().from_row(row)
+        return None
     
-    def save(self, objs: set[Data]):
-        for obj in objs:
+    def add(self, obj: Optional[Data] = None, objs: Optional[set[Data]] = None):
+        assert obj is not None or objs is not None, "Must provide either obj or objs to add."
+        assert not (obj is not None and objs is not None), "Cannot provide both obj and objs to add."
+
+        def _add_single(obj: Data):
+            if not isinstance(obj, self.content_database_cls):
+                raise TypeError(f"Object must be an instance of {self.content_database_cls.__name__}.")
+            
+            assert hasattr(obj, 'id'), "Object must have an 'id' attribute."
+
             row = obj.to_row()
             placeholders = ', '.join(['?'] * len(row))
             query = f"INSERT OR REPLACE INTO {self.table_name} VALUES ({placeholders})"
             self.cursor().execute(query, row)
-        self.commit()
+            self.commit()
+
+        def _add_objects(objs: set[Data]):
+            if not isinstance(objs, set):
+                raise TypeError("objs must be a set of Data objects.")
+            for obj in objs:
+                try:
+                    _add_single(obj)
+                except Exception as e:
+                    logger.error(f"Error adding object {obj.id}: {e}", exc_info=True)
+
+        if obj is not None:
+            _add_single(obj)
+        elif objs is not None:
+            _add_objects(objs)
     
-    def get_by_id(self, id: int) -> Optional[Data]:
-        query = f"SELECT * FROM {self.table_name} WHERE id = ?"
-        self.cursor().execute(query, (id,))
-        row = self.cursor().fetchone()
-        if row:
-            return self.content_database_cls.from_row(row)
-        return None
-    
-    def delete(self, id: int):
-        query = f"DELETE FROM {self.table_name} WHERE id = ?"
-        self.cursor().execute(query, (id,))
-        self.commit()
-        self.content_database_cls.remove_id(id)
+    def delete(self, id: Optional[int] = None, obj: Optional[Data] = None, objs: Optional[set[Data]] = None):
+        assert id is not None or obj is not None or objs is not None, "Must provide either id, obj, or objs to delete."
+        assert not (id is not None and (obj is not None or objs is not None)), "Cannot provide both id and obj/objs to delete."
+        def _delete_single(id: int):
+            query = f"DELETE FROM {self.table_name} WHERE id = ?"
+            self.cursor().execute(query, (id,))
+            self.commit()
+            self.content_database_cls.remove_id(id)
+        
+        def _delete_object(obj: Data):
+            if not isinstance(obj, self.content_database_cls):
+                raise TypeError(f"Object must be an instance of {self.content_database_cls.__name__}.")
+            _delete_single(obj.id)
+
+        def _delete_objects(objs: set[Data]):
+            if not isinstance(objs, set):
+                raise TypeError("objs must be a set of Data objects.")
+            for obj in objs:
+                _delete_object(obj)
+        
+        if id is not None:
+            _delete_single(id)
+        elif obj is not None:
+            _delete_object(obj)
+        elif objs is not None:
+            _delete_objects(objs)

@@ -17,6 +17,7 @@ MODELS_DIR: Optional[str] = None
 HUGGINGFACE_TOKEN: Optional[str] = None
 GOOGLE_API_KEY: Optional[str] = None
 TASKS_DATASET_FILE_PATH: Optional[str] = None
+GENERATED_PLANS_FILE_PATH: Optional[str] = None
 LOGGING_INITIALIZED: bool = False
 # --- Configure root logger minimally initially ---
 
@@ -41,26 +42,33 @@ DEFAULT_GENERATE_CONFIG = "generate_config.json"
 BASIC_INSTANCES = "generated_basic"
 LONG_INSTANCES = "generated_basic_longer_plan_len"
 TASKS_DATASET_FILE_NAME = "tasks.db"
+GENERATED_PLANS_FILE_NAME = "generated_plans.db"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
-GENERATED_PLANS_FILE_NAME = "generated_plans.db"
 
 RANDOM_SEED = 42 
 
 from enum import Enum
 class TOKENS(Enum):
-    PLAN_START = "<|plan_start|>"
-    PLAN_END = "<|plan_end|>"
-    DOMAIN_START = "<|domain_start|>"
-    DOMAIN_END = "<|domain_end|>"
-    GOAL_START = "<|goal_start|>"
-    GOAL_END = "<|goal_end|>"
-    INITIAL_STATE_START = "<|initial_state_start|>"
-    INITIAL_STATE_END = "<|initial_state_end|>"
-    EXAMPLE_START = "<|example_start|>"
-    EXAMPLE_END = "<|example_end|>"
-    INSTANCE_START = "<|instance_start|>"
-    INSTANCE_END = "<|instance_end|>"
+    PLAN_START = "<plan>"
+    PLAN_END = "</plan>"
+    DOMAIN_START = "<domain>"
+    DOMAIN_END = "</domain>"
+    GOAL_START = "<goal>"
+    GOAL_END = "</goal>"
+    INITIAL_STATE_START = "<initial_state>"
+    INITIAL_STATE_END = "</initial_state>"
+    EXAMPLE_START = "<example>"
+    EXAMPLE_END = "</example>"
+    INSTANCE_START = "<instance>"
+    INSTANCE_END = "</instance>"
+    CHECKLIST_START = "<checklist>"
+    CHECKLIST_END = "</checklist>"
+
+class STATUS(Enum):
+    OK = "ok"
+    ERROR = "error"
+
 
 # TO ADD A NEW PROMPT TYPE, YOU MUST CHANGE THE FOLLOWING METHODS:
 # 1. PROMPT_TYPE Enum to include the new type.
@@ -130,7 +138,7 @@ def initialize(
         config_path: Path to a specific JSON configuration file to load (optional).
     """
     global _CONFIG_STORE, HUGGINGFACE_TOKEN, GOOGLE_API_KEY
-    global DATA_DIR, RAW_DIR, CHECKPOINTS_DIR, TASKS_DATASET_FILE_PATH, TASKS_DATASET_FILE_NAME, MODELS_DIR, GENERATED_PLANS_FILE_NAME
+    global DATA_DIR, RAW_DIR, CHECKPOINTS_DIR, TASKS_DATASET_FILE_PATH, TASKS_DATASET_FILE_NAME, MODELS_DIR, GENERATED_PLANS_FILE_NAME, GENERATED_PLANS_FILE_PATH
     global LOGGING_INITIALIZED, logger
 
     logger.info("Initializing environment variables...")
@@ -159,6 +167,11 @@ def initialize(
         TASKS_DATASET_FILE_PATH = args.tasks_dataset_file_path
     else:
         TASKS_DATASET_FILE_PATH = os.path.join(DATA_DIR, TASKS_DATASET_FILE_NAME)
+    
+    if hasattr(args, 'generated_plans_dataset_file_path') and args.generated_plans_dataset_file_path:
+        GENERATED_PLANS_FILE_PATH = args.generated_plans_dataset_file_path
+    else:
+        GENERATED_PLANS_FILE_PATH = os.path.join(DATA_DIR, GENERATED_PLANS_FILE_NAME)
 
     for dir_path in [DATA_DIR, RAW_DIR, CHECKPOINTS_DIR, MODELS_DIR]:
         try:
@@ -168,6 +181,7 @@ def initialize(
     logger.info("Data directories ensured/created.")
 
     # --- Load Task Dataset ---
+    # TODO: CHANGE THIS!!
     from learning_to_plan import database
 
     if os.path.exists(TASKS_DATASET_FILE_PATH):

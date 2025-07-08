@@ -1,5 +1,3 @@
-# main.py
-import os
 import argparse
 from learning_to_plan import config
 def parse_args():
@@ -85,6 +83,12 @@ def parse_args():
         help="Path to the tasks dataset file (e.g., 'data/tasks.jsonl'). Defaults to './data/tasks.jsonl'."
     )
     parser.add_argument(
+        "--generated_plans_dataset_file_path",
+        type=str,
+        default=None,
+        help="Path to the generated plans dataset file (e.g., 'data/generated_plans.jsonl'). Defaults to './data/generated_plans.jsonl'."
+    )
+    parser.add_argument(
         "--overwrite_generated_plans",
         action="store_true",
         help="Overwrite the generated plans if they already exist."
@@ -148,37 +152,3 @@ def parse_args():
     )
 
     return parser.parse_args()
-
-from typing import Optional
-def get_selected_domains(args, dir:Optional[str]=None, is_file:bool=False) -> set[str]:
-    if not args.domain:
-        logger.error("Please specify a domain with --domain <domain_name> or 'all'.")
-        raise ValueError("Domain not specified.")
-
-    if dir:
-        assert os.path.isdir(dir), f"Directory {dir} does not exist."
-        try:
-            available_domains = {d for d in os.listdir(dir) if os.path.isdir(os.path.join(dir, d))}
-        except OSError as e:
-            logger.error(f"Error listing domains in {dir}: {e}", exc_info=True)
-            raise e
-        assert available_domains and len(available_domains) > 0, f"No domains found in {dir}."
-    elif is_file:
-        tasks = database.get_dataset()
-        assert tasks, f"No tasks found in {config.TASKS_DATASET_FILE_PATH}."
-        available_domains = {t.domain for t in tasks}
-        assert available_domains, f"No domains found in {config.TASKS_DATASET_FILE_PATH}."
-    else:
-        logger.error("No directory or file specified for domain selection.")
-        raise ValueError("No directory or file specified for domain selection.")
-
-    if args.domain.lower() == "all":
-        logger.info(f"Processing all found domains: {', '.join(available_domains)}")
-        return available_domains
-    else:
-        selected = set(s.strip() for s in args.domain.split(","))
-        assert selected.issubset(available_domains), f"Selected domains {selected} are not in available domains {available_domains}."
-        selected = selected.intersection(available_domains)
-        assert len(selected) > 0, f"No valid domains selected from {args.domain}."
-        logger.info(f"Processing selected domains: {', '.join(selected)}")
-        return selected

@@ -20,6 +20,8 @@ class GeminiModel(Model):
         except Exception as e:
             logger.error(f"Failed to configure Gemini model: {e}", exc_info=True)
             raise RuntimeError(f"Failed to configure Gemini model: {e}")
+    
+    # TODO: ADD SETUP METHOD TO CHECK IF MODEL IS THINKING MODE OR NOT
 
     def train(self, dataset:datasets.DatasetDict, **train_kwargs) -> None: # Changed type hint
         """
