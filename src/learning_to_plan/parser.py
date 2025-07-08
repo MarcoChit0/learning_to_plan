@@ -1,5 +1,6 @@
 import argparse
 from learning_to_plan import config
+from typing import Optional
 def parse_args():
     parser = argparse.ArgumentParser(description="Learning to Plan")
     parser.add_argument(

@@ -180,17 +180,6 @@ def initialize(
             logger.error(f"Failed to create directory {dir_path}: {e}", exc_info=True)
     logger.info("Data directories ensured/created.")
 
-    # --- Load Task Dataset ---
-    # TODO: CHANGE THIS!!
-    from learning_to_plan import database
-
-    if os.path.exists(TASKS_DATASET_FILE_PATH):
-        try:
-            database.load_tasks()
-            logger.info(f"Task dataset loaded from {TASKS_DATASET_FILE_PATH}.")
-        except Exception as e:
-            logger.error(f"Failed to load task dataset from {TASKS_DATASET_FILE_PATH}: {e}", exc_info=True)
-
     # --- Initialize File Logging (Add Handler Once) ---
     root_logger = logging.getLogger()
     has_file_handler = any(isinstance(h, logging.FileHandler) for h in root_logger.handlers)
@@ -216,6 +205,11 @@ def initialize(
     elif not DATA_DIR:
         logger.warning("DATA_DIR not set. File logging skipped.")
 
+    # --- Initialize Databases ---
+    # TODO: PLACEHOLDER SOLUTION FOR DATABASE INITIALIZATION WHICH REQUIRES TO BE AT THE END OF INITIALIZE METHOD FROM CONFIG
+    from learning_to_plan import task, generated_plans
+    task.initialize_db()
+    generated_plans.initialize_db()
 
 def create_necessary_dirs(file_path: str) -> None:
     """Creates parent directories for a given file path if they don't exist."""

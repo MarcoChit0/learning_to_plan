@@ -8,11 +8,8 @@ import datetime
 from enum import Enum
 import sqlite3
 import json
-import os
 from typing import Optional
 from learning_to_plan import config
-from learning_to_plan.task import Task
-from learning_to_plan import generated_plans
 
 logger = config.get_logger(__name__)
 
@@ -70,16 +67,18 @@ class Data(abc.ABC):
                 logger.error(f"Invalid {name} value: {value}. Defaulting to None.")
         return None
 
+    @classmethod
     @abc.abstractmethod
-    def storage_datatype(self) -> dict[str, str]:
+    def storage_datatype(cls) -> dict[str, str]:
         raise NotImplementedError("Subclasses must implement the storage_datatype method.")
     
-    def from_row(self, row: tuple) -> Data:
-        if len(row) != len(self.field_names):
-            raise ValueError(f"Row length {len(row)} does not match field names length {len(self.field_names)}.")
-        data_dict = dict(zip(self.field_names, row))
-        return self.__class__(id=data_dict.get('id', None), **data_dict)
-    
+    @classmethod
+    def from_row(cls, row: tuple) -> Data:
+        if len(row) != len(cls.field_names):
+            raise ValueError(f"Row length {len(row)} does not match field names length {len(cls.field_names)}.")
+        data_dict = dict(zip(cls.field_names, row))
+        return cls(id=data_dict.get('id', None), **data_dict)
+
     def to_row(self) -> tuple:
         try:
             for field_name in self.field_names:
@@ -181,7 +180,7 @@ class DatabaseManager(abc.ABC):
         # Create table if it does not exist
         cursor.execute(f"""
             CREATE TABLE IF NOT EXISTS {self.table_name} (
-                {', '.join([f"{col} {dtype}" for col, dtype in self.content_database_cls().storage_datatype().items()])}
+                {', '.join([f"{col} {dtype}" for col, dtype in self.content_database_cls.storage_datatype().items()])}
             )
         """)
         self.commit()
@@ -204,7 +203,7 @@ class DatabaseManager(abc.ABC):
         cursor = self.cursor()
         cursor.execute(query, params)
         for row in cursor.fetchall():
-            obj = self.content_database_cls().from_row(row)
+            obj = self.content_database_cls.from_row(row)
             objs.add(obj)
         return objs
 
@@ -214,7 +213,7 @@ class DatabaseManager(abc.ABC):
         cursor.execute(query, (id,))
         row = cursor.fetchone()
         if row:
-            return self.content_database_cls().from_row(row)
+            return self.content_database_cls.from_row(row)
         return None
     
     def add(self, obj: Optional[Data] = None, objs: Optional[set[Data]] = None):

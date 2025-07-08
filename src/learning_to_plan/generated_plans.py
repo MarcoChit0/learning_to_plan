@@ -118,7 +118,8 @@ class GeneratedPlan(database.Data):
         else:
             raise ValueError(f"Validity status is {self.validity}, which is not valid for checking plan validity.")
 
-    def storage_datatype(self):
+    @classmethod
+    def storage_datatype(cls):
         return {
             "id": "INTEGER PRIMARY KEY",
             "task_id": "INTEGER",
@@ -133,15 +134,19 @@ class GeneratedPlan(database.Data):
             "error_message": "TEXT",
             "FOREIGN KEY(task_id)" : "REFERENCES tasks(id)",
         }
-    
-generated_plan_database = database.DatabaseManager(
-    table_name="generated_plan",
-    data_cls=GeneratedPlan,
-    file_path=config.GENERATED_PLANS_FILE_PATH,
-    filters={
-        "filter_by_task_id": " AND task_id = ?",
-        "filter_by_prompt_type": " AND prompt_type = ?",
-        "filter_by_model_metadata": " AND model_metadata = ?",
-        "filter_by_prompt_metadata": " AND prompt_metadata = ?",
-    }
-)
+
+
+def initialize_db():
+    global generated_plan_database
+    if generated_plan_database is None:
+        generated_plan_database = database.DatabaseManager(
+            table_name="generated_plan",
+            data_cls=GeneratedPlan,
+            file_path=config.GENERATED_PLANS_FILE_PATH,
+            filters={
+                "filter_by_task_id": " AND task_id = ?",
+                "filter_by_prompt_type": " AND prompt_type = ?",
+                "filter_by_model_metadata": " AND model_metadata = ?",
+                "filter_by_prompt_metadata": " AND prompt_metadata = ?",
+            }
+        )

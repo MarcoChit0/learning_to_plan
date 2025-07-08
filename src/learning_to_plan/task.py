@@ -74,7 +74,8 @@ class Task(database.Data):
             domain_content = f.read()
         return domain_content
 
-    def storage_datatype(self):
+    @classmethod
+    def storage_datatype(cls):
         return {
             "id": "INTEGER PRIMARY KEY",
             "domain": "TEXT NOT NULL",
@@ -88,15 +89,20 @@ class Task(database.Data):
             "landmark_graph_status": "TEXT"
         }
 
-task_database = database.DatabaseManager(
-    table_name="task",
-    data_cls=Task,
-    file_path=config.TASKS_DATASET_FILE_PATH,
-    filters={
-        "filter_by_domain": "domain = ?",
-        "filter_by_task_type": "type = ?",
-        "filter_by_is_longer_plan": "is_longer_plan = ?",
-        "filter_by_paas_status": "paas_status = ?",
-        "filter_by_landmark_graph_status": "landmark_graph_status = ?",
-    }
-)
+task_database: Optional[database.DatabaseManager] = None
+
+def initialize_db():
+    global task_database
+    if task_database is None:
+        task_database = database.DatabaseManager(
+            table_name="task",
+            data_cls=Task,
+            file_path=config.TASKS_DATASET_FILE_PATH,
+            filters={
+                "filter_by_domain": "domain = ?",
+                "filter_by_task_type": "type = ?",
+                "filter_by_is_longer_plan": "is_longer_plan = ?",
+                "filter_by_paas_status": "paas_status = ?",
+                "filter_by_landmark_graph_status": "landmark_graph_status = ?",
+            }
+        )
