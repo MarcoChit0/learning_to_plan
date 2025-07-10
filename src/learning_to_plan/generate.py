@@ -36,16 +36,12 @@ def generate_batch(
         logger.error(f"Error initializing model '{model_name}': {e}", exc_info=True)
         raise e
     try:
-        if number_of_instances == "all":
-            _type = None
-            _number_of_instances = None
-        elif isinstance(number_of_instances, int):
-            _type = None
-            _number_of_instances = number_of_instances
-            assert _number_of_instances > 0, "Number of instances must be a positive integer."
+        task_selection_kwargs = {}
+        if isinstance(number_of_instances, int):
+            assert number_of_instances > 0, "Number of instances must be a positive integer."
+            task_selection_kwargs['number_of_instances'] = number_of_instances
         elif isinstance(number_of_instances, str) and number_of_instances.upper() in task.Task.TYPE:
-            _type = task.Task.TYPE[number_of_instances.upper()]
-            _number_of_instances = None
+            task_selection_kwargs['filter_by_type'] = task.Task.TYPE[number_of_instances.upper()]
         else:
             raise ValueError(
                 f"Invalid number_of_instances value: {number_of_instances}. "
@@ -55,17 +51,16 @@ def generate_batch(
         tasks : set[task.Task] = task.task_database.get(
             filter_by_domain=domain,
             filter_by_pourpose=task.Task.POURPOSE.TEST,
-            filter_by_type=_type,
-            number_of_instances=_number_of_instances
+            **task_selection_kwargs
         )
-        assert len(tasks) > 0, f"No tasks found for domain '{domain}' with type={_type} and number_of_instances={_number_of_instances}."
+        assert len(tasks) > 0, f"No tasks found for domain '{domain}', whose selection kwargs where {task_selection_kwargs}."
         assert isinstance(tasks, set), "Tasks must be a set of Task objects."
         assert all(isinstance(t, task.Task) for t in tasks), "All items in tasks must be Task objects."
-        logger.info(f"Found {len(tasks)} tasks for domain '{domain}' with type={_type} and number_of_instances={_number_of_instances}.")
+        logger.info(f"Found {len(tasks)} tasks for domain '{domain}', whose selection kwargs where {task_selection_kwargs}.")
     
     except Exception as e:
         raise ValueError(
-            f"Error retrieving tasks for domain '{domain}' with type={_type} and number_of_instances={_number_of_instances}: {e}"
+            f"Error retrieving tasks for domain '{domain}', whose selection kwargs where {task_selection_kwargs}: {e}"
         ) from e
 
     # --- Generate Plans ---

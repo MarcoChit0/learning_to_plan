@@ -51,7 +51,11 @@ class DatabaseManager(abc.ABC):
                 except TypeError as e:
                     logger.error(f"Error transforming value {value} for filter '{f}': {e}")
                     raise e
-                query += f" AND {self.filters[f]}"
+                if f == self.filters_ordering[-1]:
+                    sep = " "
+                else:
+                    sep = " AND "
+                query += f"{sep}{self.filters[f]}"
                 params.append(trans_value)
 
         objs: set[base.Data] = set()

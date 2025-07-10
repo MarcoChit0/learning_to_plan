@@ -15,7 +15,7 @@ class GeneratedPlan(base.Data):
     NEXT_ID: int = 0
     FIELD_NAMES = [
             "id",
-            "task_id"
+            "task_id",
             "prompt_type",
             "raw_plan",
             "pddl_plan",
@@ -146,10 +146,10 @@ def initialize_db():
             data_cls=GeneratedPlan,
             file_path=config.GENERATED_PLANS_FILE_PATH,
             filters={
-                "filter_by_task_id": " AND task_id = ?",
-                "filter_by_prompt_type": " AND prompt_type = ?",
-                "filter_by_model_metadata": " AND model_metadata = ?",
-                "filter_by_prompt_metadata": " AND prompt_metadata = ?",
+                "filter_by_task_id": "task_id = ?",
+                "filter_by_prompt_type": "prompt_type = ?",
+                "filter_by_model_metadata": "model_metadata = ?",
+                "filter_by_prompt_metadata": "prompt_metadata = ?",
             }
         )
     _ = generated_plan_database.get()
