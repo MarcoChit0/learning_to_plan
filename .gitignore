@@ -1,9 +1,11 @@
 *.pddl
 **__pycache__/
 **checkpoints/
-**raw/
 .env
 .vscode/
 *.egg-info/
 data/logs.log
 data/models/*
+data/raw/*
+!data/raw/structure.json
+!data/raw/raw.zip

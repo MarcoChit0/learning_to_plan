@@ -4,9 +4,8 @@ import datasets
 from learning_to_plan.models import base
 import learning_to_plan.config as config
 logger = config.get_logger(__name__)
-from learning_to_plan import task
+from learning_to_plan.data import task
 from learning_to_plan import prompt_building
-from learning_to_plan import database
 
 def get_tokenized_dataset(model: base.Model, tasks:set[task.Task], max_seq_length:int=1024, **kwargs):
     """
@@ -83,8 +82,8 @@ def run_training_procedure(model_name: str, domain: str, **train_kwargs):
     # --- Load and Prepare Dataset ---
     try:
         logger.info(f"Loading training and validation datasets for domain: {domain}.")
-        train_tasks:set[task.Task] = database.get_tasks(filter_by_domain=domain, filter_by_task_type=task.Task.TYPE.TRAIN)
-        validation_tasks:set[task.Task] = database.get_tasks(filter_by_domain=domain, filter_by_task_type=task.Task.TYPE.VALIDATION)
+        train_tasks:set[task.Task] = task.task_database.get(filter_by_domain=domain, filter_by_pourpose=task.Task.POURPOSE.TRAIN)
+        validation_tasks:set[task.Task] = task.task_database.get(filter_by_domain=domain, filter_by_pourpose=task.Task.POURPOSE.VALIDATION)
 
         logger.info(f"Tokenizing datasets for training and validation.")
         tokenized_train_dataset = get_tokenized_dataset(model, train_tasks, **train_kwargs)

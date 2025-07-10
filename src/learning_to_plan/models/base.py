@@ -1,10 +1,11 @@
 from __future__ import annotations
 from typing import Optional, List, Dict, Any
 import os
-from learning_to_plan import config, task
+from learning_to_plan import config
 import datasets
 import json
-from learning_to_plan import generated_plans
+from learning_to_plan.data import generated_plans
+from learning_to_plan.data import task
 logger = config.get_logger(__name__)
 
 class Model:

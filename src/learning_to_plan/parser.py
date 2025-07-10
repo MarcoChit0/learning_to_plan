@@ -16,11 +16,6 @@ def parse_args():
         help="Call planning as a service to generate plans."
     )
     parser.add_argument(
-        "--split_dataset",
-        action="store_true",
-        help="Split the dataset into training, validation, and test sets."
-    )
-    parser.add_argument(
         "--train",
         action="store_true",
         help="Train a model on the finetuning dataset."

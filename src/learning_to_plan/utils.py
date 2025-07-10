@@ -1,16 +1,14 @@
-from typing import Callable
-
 from tqdm import tqdm
-from learning_to_plan import task
+from learning_to_plan.data import task
 from learning_to_plan import config
-from learning_to_plan.models import base
 import asyncio
 import aiohttp
 import os
 import datetime
 from sklearn.model_selection import train_test_split
 logger = config.get_logger(__name__)
-from learning_to_plan import database
+import re
+import json
 
 def process_paas_response(t: task.Task, response: dict) -> None:
     plan = ""
@@ -23,32 +21,110 @@ def process_paas_response(t: task.Task, response: dict) -> None:
 
 # Removed unused import 'Dataset'
 # from datasets import Dataset
-def get_tasks_from_domain_directory(domain: str) -> set[task.Task]:
-    # Assuming config.RAW_DIR, config.DOMAIN_FILE_NAME, config.BASIC_INSTANCES, config.LONG_INSTANCES are defined
-    domain_file_path = os.path.join(config.RAW_DIR, domain, config.DOMAIN_FILE_NAME)
+def get_tasks_from_domain_directory(domain: str) -> dict:
+    structure_json = json.load(open(config.RAW_DIR_STRUCTURE_FILE_PATH, 'r'))
+    if domain not in structure_json:
+        raise ValueError(f"Domain '{domain}' not found in raw directory structure file {config.RAW_DIR_STRUCTURE_FILE_PATH}.")
+    
+    domain_info = structure_json[domain]
+    if "domain" not in domain_info or "path" not in domain_info["domain"]:
+        raise ValueError(f"Domain information for '{domain}' is incomplete in raw directory structure file {config.RAW_DIR_STRUCTURE_FILE_PATH}. 'domain' or 'path' key is missing.")
+    
+    domain_file_path = os.path.join(config.RAW_DIR, domain_info["domain"]["path"])
+    if not os.path.exists(domain_file_path):
+        raise ValueError(f"Domain file not found: {domain_file_path}. Please ensure the domain file exists in the raw directory.")
+    
+    domain_tasks = set()
+    for key in domain_info:
+        if key == "domain":
+            continue
 
-    # Determine which instance directories to include
-    instance_dirs = [
-        os.path.join(config.RAW_DIR, domain, config.BASIC_INSTANCES), # training, validation, test instances
-        os.path.join(config.RAW_DIR, domain, config.LONG_INSTANCES) # out of distribution instances
-    ]
-    # Collect tasks
-    tasks:set[task.Task] = set()
-    for instance_dir in instance_dirs:
-        if not os.path.exists(instance_dir):
-            raise ValueError(f"Instance directory not found: {instance_dir}")
+        assert isinstance(key, str), f"In the structure of the raw directory each element except 'domain' is a type, whose type should be a string. Found type {type(key)} for key '{key}' in domain '{domain}'."
 
-        for file_name in os.listdir(instance_dir):
-            if task.INSTANCE_PATTERN.search(file_name):
-                tasks.add(
-                    task.Task(
-                        domain=domain,
-                        domain_file_path=domain_file_path,
-                        instance_file_path=os.path.join(instance_dir, file_name)
-                    )
-                )
+        if key.upper() not in task.Task.TYPE.__members__:
+            raise ValueError(f"Invalid task type '{key}' in domain '{domain}'. Must be one of {list(task.Task.TYPE.__members__.keys())}.")
+        
+        _type = task.Task.TYPE[key.upper()]
 
-    return tasks
+        p = os.path.join(config.RAW_DIR, domain_info[key]["path"])
+        pattern = domain_info[key].get("regex_pattern", "instance-[0-9]+\\.pddl")
+        tasks = set()
+        for file in os.listdir(p):
+            if re.match(pattern, file):
+                instance_file_path = os.path.join(p, file)
+                if not os.path.exists(instance_file_path):
+                    raise ValueError(f"Instance file not found: {instance_file_path}. Please ensure the instance file exists in the raw directory.")
+                
+                tasks.add(task.Task(
+                    domain=domain,
+                    domain_file_path=domain_file_path,
+                    instance_file_path=instance_file_path,
+                    type=_type
+                ))
+        
+        number_of_expected_instances = domain_info[key].get("number_of_instances", 0)
+        if len(tasks) == 0:
+            raise ValueError(
+                f"No instances found for type '{key}' in domain '{domain}'. "
+                f"Please check the raw directory structure and ensure instances match the regex pattern '{pattern}'."
+            )
+        if len(tasks) != number_of_expected_instances:
+            raise ValueError(
+                f"Expected {number_of_expected_instances} instances for type '{key}' in domain '{domain}', "
+                f"but found {len(tasks)} instances. Please check the raw directory structure."
+            )
+        expected_training_instances = domain_info[key].get("number_of_instances_for_training", 0)
+        expected_validation_instances = domain_info[key].get("number_of_instances_for_validation", 0)
+        expected_testing_instances = domain_info[key].get("number_of_instances_for_testing", 0)
+        if expected_training_instances + expected_validation_instances + expected_testing_instances != number_of_expected_instances:
+            raise ValueError(
+                f"Expected {expected_training_instances} training, {expected_validation_instances} validation, and {expected_testing_instances} testing instances for type '{key}' in domain '{domain}', "
+                f"but the total does not match the number of expected instances ({number_of_expected_instances})."
+            )
+        logger.info(f"Found {len(tasks)} tasks for domain '{domain}' with type '{key}'.")
+
+        tasks = sorted(tasks)
+        if expected_training_instances != 0:
+            train_tasks, remaining_tasks = train_test_split(
+                tasks,
+                train_size=expected_training_instances,
+                random_state=config.RANDOM_SEED
+            )
+        else:
+            train_tasks = set()
+            remaining_tasks = tasks
+        if expected_validation_instances != 0:
+            validation_tasks, test_tasks = train_test_split(
+                remaining_tasks,
+                test_size=expected_validation_instances,
+                random_state=config.RANDOM_SEED
+            )
+        else:
+            validation_tasks = set()
+            test_tasks = remaining_tasks
+
+        for t in train_tasks:
+            t.pourpose = task.Task.POURPOSE.TRAIN
+        for t in validation_tasks:
+            t.pourpose = task.Task.POURPOSE.VALIDATION
+        for t in test_tasks:
+            t.pourpose = task.Task.POURPOSE.TEST
+        
+        assert len(train_tasks) + len(validation_tasks) + len(test_tasks) == number_of_expected_instances, \
+            f"Expected {number_of_expected_instances} instances for type '{key}' in domain '{domain}', " \
+            f"but found {len(train_tasks) + len(validation_tasks) + len(test_tasks)} instances. " \
+            f"Please check the raw directory structure and ensure instances match the regex pattern '{pattern}'."
+        logger.info(f"Split {len(tasks)} tasks for domain '{domain}' with type '{key}' into {len(train_tasks)} training, {len(validation_tasks)} validation, and {len(test_tasks)} testing tasks.")
+
+        domain_tasks.update(train_tasks)
+        domain_tasks.update(validation_tasks)   
+        domain_tasks.update(test_tasks)
+    try:
+        task.task_database.add(obj=domain_tasks)
+    except Exception as e:
+        raise ValueError(f"Error adding tasks to the task database: {e}")
+    return domain_tasks
+
 
 async def get_plan_from_paas(t:task.Task, solver_url="http://localhost:5001/package/lama-first/solve", max_retries=2):
     domain_content = t.read_domain()
@@ -98,76 +174,35 @@ async def call_paas(
             except Exception as e:
                 raise e
 
-    try:
-        logger.info(f"Domain {domain} already exists. Loading tasks from dataset.")
+    try:    
         tasks_to_process = task.task_database.get(
             filter_by_domain=domain,
-            filter_by_status=config.STATUS.ERROR
         )
+        if not tasks_to_process:
+            logger.info(f"No tasks found for domain {domain}. Creating new tasks.")
+            tasks_to_process = get_tasks_from_domain_directory(domain=domain)
+        else:
+            logger.info(f"Domain {domain} already exists. Loading tasks from dataset.")
+            tasks_to_process = {t for t in tasks_to_process if t.paas_status == config.STATUS.ERROR}
+
     except Exception as e:
         logger.error(f"Error loading tasks from dataset: {e}", exc_info=True)
         logger.info(f"Creating new tasks for domain: {domain}.")
         tasks_to_process = get_tasks_from_domain_directory(domain=domain)
-    
+    if len(tasks_to_process) == 0:
+        logger.info(f"No tasks to process for domain {domain}. Exiting.")
+        return
+
     logger.info(f"Must process {len(tasks_to_process)} tasks.")
     semaphore = asyncio.Semaphore(num_workers)
     await asyncio.gather(*[process_instance(t) for t in tasks_to_process])
 
     try:
-        task.task_database.add(tasks_to_process)
+        task.task_database.update(tasks_to_process)
         logger.info(f"Added/ Updated {len(tasks_to_process)} tasks.")
     except Exception as e:
         logger.error(f"Error adding tasks to singleton_task_database: {e}", exc_info=True)
     logger.info(f"Finished call to planning as a service at {datetime.datetime.now()}.")
-
-
-def split_dataset(
-):
-    logger.info(f"Starting to build finetuning dataset at {datetime.datetime.now()}.")
-
-    try:
-        tasks = database.get_task_database()
-        assert len(tasks) > 0, f"No tasks found in file {config.TASKS_DATASET_FILE_PATH}."
-    except Exception as e:
-        logger.error(f"No tasks found in file {config.TASKS_DATASET_FILE_PATH}.", exc_info=True)
-        raise e
-
-    valid_tasks:set[task.Task] = task.task_database.get(
-        filter_by_paas_status=config.STATUS.OK,
-    )
-    domains:set[str] = {t.domain for t in valid_tasks}
-    tasks_per_domain = {d: [t for t in valid_tasks if t.domain == d] for d in domains}
-
-    for d in domains:
-        logger.info(f"Splitting tasks in domain: {d}")
-        assert len(tasks_per_domain[d]) == 4400, f"Data file must contain at least 4400 valid instances, but only {len(valid_tasks)} instances were found."
-        
-        # Extract longer plans and basic plans
-        longer_tasks = [t for t in tasks_per_domain[d] if t.is_longer_plan]
-        basic_tasks = [t for t in tasks_per_domain[d] if not t.is_longer_plan]
-
-        assert len(longer_tasks) == 200, f"Expected 200 instances with 'is_longer_plan' as True, but found {len(longer_tasks)} instances."
-        assert len(basic_tasks) == 4200, f"Expected 4200 instances with 'is_longer_plan' as False, but found {len(basic_tasks)} instances."
-
-        sorted_basic_tasks = sorted(basic_tasks)
-    
-        train_tasks, temp_tasks = train_test_split(
-            sorted_basic_tasks, test_size=1000, random_state=config.RANDOM_SEED
-        )
-        validation_tasks, basic_test_tasks = train_test_split(
-            temp_tasks, test_size=200, random_state=config.RANDOM_SEED
-        )
-        test_tasks = longer_tasks + basic_test_tasks
-        for t in train_tasks:
-            t.type = task.Task.TYPE.TRAIN
-        for t in validation_tasks:
-            t.type = task.Task.TYPE.VALIDATION
-        for t in test_tasks:
-            t.type = task.Task.TYPE.TEST
-        
-        task.task_database.add(tasks_per_domain[d])
-        logger.info(f"Domain {d} split into {len(train_tasks)} train, {len(validation_tasks)} validation, and {len(test_tasks)} test tasks.")
-    logger.info(f"Finished building finetuning dataset at {datetime.datetime.now()}.")
 
 import subprocess
 def get_landmark_graph() -> None:
@@ -221,7 +256,7 @@ def get_landmark_graph() -> None:
             graph = call_downward(t)
             t.landmark_graph = graph
             t.landmark_graph_status = config.STATUS.OK
-            task.task_database.add(t)
+            task.task_database.update(t)
             logger.info(f"Generated landmark graph for task {t.id}.")
         except Exception as e:
             logger.error(f"Error generating landmark graph for task {t.id}: {e}", exc_info=True)

@@ -3,15 +3,29 @@ import datetime
 from enum import Enum
 import json
 from typing import Dict, Any, Optional
-from learning_to_plan import config, task, database
+from learning_to_plan import config
+from learning_to_plan.data import database_manager, base
 # MUST BE THE SAME ID ACROSS ALL MODELS
 logger = config.get_logger(__name__)
 # TODO : ADD EXPERIMENT TAG TO CONTENT
 
-class GeneratedPlan(database.Data):
+class GeneratedPlan(base.Data):
     SEEN_IDS: set[int] = set()
     AVAILABLE_ID_POOL: set[int] = set()
     NEXT_ID: int = 0
+    FIELD_NAMES = [
+            "id",
+            "task_id"
+            "prompt_type",
+            "raw_plan",
+            "pddl_plan",
+            "validity",
+            "model_metadata",
+            "prompt_metadata",
+            "date",
+            "status",
+            "error_message"
+        ]
     
     class VALIDITY(Enum):
         VALID = "valid"
@@ -31,19 +45,7 @@ class GeneratedPlan(database.Data):
             status: config.STATUS | str = config.STATUS.OK,
             error_message: Optional[str] = None
         ):
-        super().__init__(id, field_names=[
-            "id",
-            "task_id"
-            "prompt_type",
-            "raw_plan",
-            "pddl_plan",
-            "validity",
-            "model_metadata",
-            "prompt_metadata",
-            "date",
-            "status",
-            "error_message"
-        ])
+        super().__init__(id)
         self.task_id = task_id
         self.prompt_type = self._get_enum_value(prompt_type, config.PROMPT_TYPE, "prompt_type")
         assert self.prompt_type, "Prompt type must not be None."
@@ -135,11 +137,11 @@ class GeneratedPlan(database.Data):
             "FOREIGN KEY(task_id)" : "REFERENCES tasks(id)",
         }
 
-
+generated_plan_database: Optional[database_manager.DatabaseManager] = None
 def initialize_db():
     global generated_plan_database
     if generated_plan_database is None:
-        generated_plan_database = database.DatabaseManager(
+        generated_plan_database = database_manager.DatabaseManager(
             table_name="generated_plan",
             data_cls=GeneratedPlan,
             file_path=config.GENERATED_PLANS_FILE_PATH,
@@ -150,3 +152,4 @@ def initialize_db():
                 "filter_by_prompt_metadata": " AND prompt_metadata = ?",
             }
         )
+    _ = generated_plan_database.get()

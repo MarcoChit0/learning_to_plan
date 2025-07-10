@@ -5,11 +5,10 @@ import asyncio
 # Import project modules
 from learning_to_plan import train
 from learning_to_plan import utils
-from learning_to_plan import database
 from learning_to_plan import config
 from learning_to_plan import generate
-from learning_to_plan import processing_data
 from learning_to_plan import parser
+from learning_to_plan.data import task
 
 logger = config.get_logger(__name__)
 
@@ -28,7 +27,7 @@ def get_selected_domains(args, dir:Optional[str]=None, is_file:bool=False) -> se
             raise e
         assert available_domains and len(available_domains) > 0, f"No domains found in {dir}."
     elif is_file:
-        tasks = database.get_task_database()
+        tasks = task.task_database.get()
         assert tasks, f"No tasks found in {config.TASKS_DATASET_FILE_PATH}."
         available_domains = {t.domain for t in tasks}
         assert available_domains, f"No domains found in {config.TASKS_DATASET_FILE_PATH}."
@@ -61,11 +60,6 @@ if __name__ == "__main__":
             asyncio.run(utils.call_paas(domain=domain))
             logger.info(f"Finished PaaS calls for domain: {domain}")
         logger.info("--- Finished All PaaS Calls ---")
-
-    elif args.split_dataset:
-        logger.info("--- Starting Dataset Splitting ---")
-        utils.split_dataset()
-        logger.info("--- Finished All Dataset Splitting ---")
 
     elif args.train:
         logger.info("--- Starting Model Training ---")

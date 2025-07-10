@@ -6,11 +6,10 @@ from learning_to_plan.models import utils as model_utils
 
 # Import project modules
 import learning_to_plan.config as config
-from learning_to_plan import task
+from learning_to_plan.data import task
 logger = config.get_logger(__name__)
 from typing import Union
-from learning_to_plan import database
-from learning_to_plan import generated_plans
+from learning_to_plan.data import generated_plans
 from learning_to_plan import prompt_building
 from learning_to_plan.domain_translators import utils as domain_translator_utils
 # --- Batch Generation from File (Modified) ---
@@ -37,32 +36,36 @@ def generate_batch(
         logger.error(f"Error initializing model '{model_name}': {e}", exc_info=True)
         raise e
     try:
-        if number_of_instances == "basic":
-            is_longer_plan = False; n = None
-        elif number_of_instances == "long":
-            is_longer_plan = True; n = None
-        elif number_of_instances == "all":
-            is_longer_plan = None; n = None
+        if number_of_instances == "all":
+            _type = None
+            _number_of_instances = None
         elif isinstance(number_of_instances, int):
-            is_longer_plan = None; n = number_of_instances
-            assert n > 0, "Number of instances must be a positive integer."
+            _type = None
+            _number_of_instances = number_of_instances
+            assert _number_of_instances > 0, "Number of instances must be a positive integer."
+        elif isinstance(number_of_instances, str) and number_of_instances.upper() in task.Task.TYPE:
+            _type = task.Task.TYPE[number_of_instances.upper()]
+            _number_of_instances = None
         else:
-            raise ValueError(f"Invalid value for number_of_instances: {number_of_instances}. Must be 'all', 'basic', 'long', or a positive integer.")
-        
+            raise ValueError(
+                f"Invalid number_of_instances value: {number_of_instances}. "
+                "Must be 'all', a positive integer, or a valid task type."
+            )
+
         tasks : set[task.Task] = task.task_database.get(
             filter_by_domain=domain,
-            filter_by_task_type=task.Task.TYPE.TEST,
-            filter_by_is_longer_plan=is_longer_plan,
-            number_of_instances=n
+            filter_by_pourpose=task.Task.POURPOSE.TEST,
+            filter_by_type=_type,
+            number_of_instances=_number_of_instances
         )
-        assert len(tasks) > 0, f"No tasks found for domain '{domain}' with is_longer_plan={is_longer_plan} and number_of_instances={n}."
+        assert len(tasks) > 0, f"No tasks found for domain '{domain}' with type={_type} and number_of_instances={_number_of_instances}."
         assert isinstance(tasks, set), "Tasks must be a set of Task objects."
         assert all(isinstance(t, task.Task) for t in tasks), "All items in tasks must be Task objects."
-        logger.info(f"Found {len(tasks)} tasks for domain '{domain}' with is_longer_plan={is_longer_plan} and number_of_instances={n}.")
+        logger.info(f"Found {len(tasks)} tasks for domain '{domain}' with type={_type} and number_of_instances={_number_of_instances}.")
     
     except Exception as e:
         raise ValueError(
-            f"Error retrieving tasks for domain '{domain}' with is_longer_plan={is_longer_plan} and number_of_instances={n}: {e}"
+            f"Error retrieving tasks for domain '{domain}' with type={_type} and number_of_instances={_number_of_instances}: {e}"
         ) from e
 
     # --- Generate Plans ---
@@ -81,7 +84,7 @@ def generate_batch(
                 f"Overwriting {len(_generated_plans)} existing generated plans for task {t.id} with prompt {prompt_type}."
             )
             try:
-                generated_plans.generated_plan_database.delete(objs=_generated_plans)
+                generated_plans.generated_plan_database.delete(obj=_generated_plans)
             except Exception as e:
                 logger.error(f"Error deleting existing generated plans for task {t.id}: {e}", exc_info=True)
                 raise e

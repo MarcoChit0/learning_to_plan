@@ -1,6 +1,3 @@
-# config.py
-
-import abc
 import os
 import json
 import logging
@@ -18,6 +15,7 @@ HUGGINGFACE_TOKEN: Optional[str] = None
 GOOGLE_API_KEY: Optional[str] = None
 TASKS_DATASET_FILE_PATH: Optional[str] = None
 GENERATED_PLANS_FILE_PATH: Optional[str] = None
+RAW_DIR_STRUCTURE_FILE_PATH: Optional[str] = None
 LOGGING_INITIALIZED: bool = False
 # --- Configure root logger minimally initially ---
 
@@ -41,10 +39,11 @@ DEFAULT_TRAIN_CONFIG = "train_config.json"
 DEFAULT_GENERATE_CONFIG = "generate_config.json"
 BASIC_INSTANCES = "generated_basic"
 LONG_INSTANCES = "generated_basic_longer_plan_len"
-TASKS_DATASET_FILE_NAME = "tasks.db"
-GENERATED_PLANS_FILE_NAME = "generated_plans.db"
+TASKS_DATASET_FILE_NAME = "task.db"
+GENERATED_PLANS_FILE_NAME = "generated_plan.db"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
+RAW_DIR_STRUCTURE_FILE_NAME = "structure.json"
 
 RANDOM_SEED = 42 
 
@@ -138,7 +137,7 @@ def initialize(
         config_path: Path to a specific JSON configuration file to load (optional).
     """
     global _CONFIG_STORE, HUGGINGFACE_TOKEN, GOOGLE_API_KEY
-    global DATA_DIR, RAW_DIR, CHECKPOINTS_DIR, TASKS_DATASET_FILE_PATH, TASKS_DATASET_FILE_NAME, MODELS_DIR, GENERATED_PLANS_FILE_NAME, GENERATED_PLANS_FILE_PATH
+    global DATA_DIR, RAW_DIR, CHECKPOINTS_DIR, TASKS_DATASET_FILE_PATH, TASKS_DATASET_FILE_NAME, MODELS_DIR, GENERATED_PLANS_FILE_NAME, GENERATED_PLANS_FILE_PATH, RAW_DIR_STRUCTURE_FILE_PATH, RAW_DIR_STRUCTURE_FILE_NAME
     global LOGGING_INITIALIZED, logger
 
     logger.info("Initializing environment variables...")
@@ -180,6 +179,9 @@ def initialize(
             logger.error(f"Failed to create directory {dir_path}: {e}", exc_info=True)
     logger.info("Data directories ensured/created.")
 
+    RAW_DIR_STRUCTURE_FILE_PATH = os.path.join(RAW_DIR, RAW_DIR_STRUCTURE_FILE_NAME)
+    assert os.path.exists(RAW_DIR_STRUCTURE_FILE_PATH), f"Raw directory structure file {RAW_DIR_STRUCTURE_FILE_PATH} does not exist. Please ensure it is created before running the application."
+
     # --- Initialize File Logging (Add Handler Once) ---
     root_logger = logging.getLogger()
     has_file_handler = any(isinstance(h, logging.FileHandler) for h in root_logger.handlers)
@@ -207,8 +209,9 @@ def initialize(
 
     # --- Initialize Databases ---
     # TODO: PLACEHOLDER SOLUTION FOR DATABASE INITIALIZATION WHICH REQUIRES TO BE AT THE END OF INITIALIZE METHOD FROM CONFIG
-    from learning_to_plan import task, generated_plans
+    from learning_to_plan.data import task
     task.initialize_db()
+    from learning_to_plan.data import generated_plans
     generated_plans.initialize_db()
 
 def create_necessary_dirs(file_path: str) -> None:

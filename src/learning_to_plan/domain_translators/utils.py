@@ -1,5 +1,5 @@
 from learning_to_plan.domain_translators.base import DomainTranslator
-from learning_to_plan import task
+from learning_to_plan.data import task
 
 def get_domain_traslator(domain: str) ->DomainTranslator:
     """

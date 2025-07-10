@@ -1,4 +1,4 @@
-from learning_to_plan import task
+from learning_to_plan.data import task
 from learning_to_plan import config
 import os
 from learning_to_plan.domain_translators import utils

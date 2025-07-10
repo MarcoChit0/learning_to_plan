@@ -2,7 +2,7 @@ from __future__ import annotations
 import abc
 import re
 from learning_to_plan import config
-from learning_to_plan import task
+from learning_to_plan.data import task
 logger = config.get_logger(__name__)
 
 class DomainTranslator(abc.ABC):
