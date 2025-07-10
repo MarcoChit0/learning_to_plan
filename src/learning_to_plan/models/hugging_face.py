@@ -224,7 +224,7 @@ class HuggingFaceModel(Model):
         collator = DataCollatorForLanguageModeling(tokenizer=self.tokenizer, mlm=False)
 
         # --- Print GPU Information ---
-        logger.info(f"PyTorch version: {torch._version__}")
+        logger.info(f"PyTorch version: {torch.__version__}")
         is_cuda_available = torch.cuda.is_available()
         logger.info(f"CUDA available: {is_cuda_available}")
 
@@ -246,8 +246,8 @@ class HuggingFaceModel(Model):
             num_train_epochs=train_kwargs.get("num_train_epochs", 2),
             per_device_train_batch_size=train_kwargs.get("batch_size", 1),
             gradient_accumulation_steps=train_kwargs.get("gradient_accumulation_steps", 1),
-            fp16=not self._dict__.get("bf16", False), 
-            bf16=self._dict__.get("bf16", False),     
+            fp16=not self.__dict__.get("bf16", False), 
+            bf16=self.__dict__.get("bf16", False),     
             learning_rate=train_kwargs.get("learning_rate", 1.0e-5),
             lr_scheduler_type=train_kwargs.get("lr_scheduler_type", "cosine"),
             weight_decay=train_kwargs.get("weight_decay", 0.02),

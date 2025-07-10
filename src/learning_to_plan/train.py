@@ -6,6 +6,7 @@ import learning_to_plan.config as config
 logger = config.get_logger(__name__)
 from learning_to_plan.data import task
 from learning_to_plan import prompt_building
+from learning_to_plan.models import utils
 
 def get_tokenized_dataset(model: base.Model, tasks:set[task.Task], max_seq_length:int=1024, **kwargs):
     """
@@ -71,7 +72,7 @@ def run_training_procedure(model_name: str, domain: str, **train_kwargs):
     config.create_necessary_dirs(model_checkpoint_dir)
     logger.info(f"Checkpoints will be saved to: {model_checkpoint_dir}")
     try:
-        model = model.get_model(model_name=model_name)
+        model = utils.get_model(model_name=model_name)
         train_kwargs['is_trainable'] = True
         train_kwargs['checkpoint_dir'] = model_checkpoint_dir
         model.setup(**train_kwargs)
