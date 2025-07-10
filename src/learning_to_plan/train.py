@@ -5,7 +5,7 @@ from learning_to_plan.models import base
 import learning_to_plan.config as config
 logger = config.get_logger(__name__)
 from learning_to_plan.data import task
-from learning_to_plan import prompt_building
+from learning_to_plan.prompt_building import base
 from learning_to_plan.models import utils
 
 def get_tokenized_dataset(model: base.Model, tasks:set[task.Task], max_seq_length:int=1024, **kwargs):
@@ -18,7 +18,7 @@ def get_tokenized_dataset(model: base.Model, tasks:set[task.Task], max_seq_lengt
         'attention_mask': [],
     }
     for t in tasks:
-        chat = prompt_building.get_chat(t, with_plan=True, **kwargs)
+        chat = base.get_chat(t, with_plan=True, **kwargs)
         tokenized_chat = model.tokenize_chat(chat, max_seq_length=max_seq_length)
         data['input_ids'].append(tokenized_chat['input_ids'])
         data['labels'].append(tokenized_chat['labels'])

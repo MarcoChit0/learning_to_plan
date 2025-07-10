@@ -11,7 +11,7 @@ from learning_to_plan.data import task
 logger = config.get_logger(__name__)
 from typing import Union
 from learning_to_plan.data import generated_plans
-from learning_to_plan import prompt_building
+from learning_to_plan.prompt_builder import utils as prompt_builder_utils
 from learning_to_plan.domain_translators import utils as domain_translator_utils
 # --- Batch Generation from File (Modified) ---
 
@@ -74,7 +74,7 @@ def generate_batch(
     # --- Generate Plans ---
     logger.info("Starting plan generation loop...") # Use logger
     for t in tqdm(tasks, total=len(tasks), desc="Generating plans"):
-        prompt_metadata = prompt_building.get_prompt_metadata(**generation_kwargs)
+        prompt_metadata = prompt_builder_utils.get_metadata(**generation_kwargs)
         model_metadata = model.get_metadata()
         _generated_plans = generated_plans.generated_plan_database.get(
             filter_by_task_id=t.id,
@@ -118,7 +118,7 @@ def generate_batch(
             unit="sample",
             leave=False
         ):
-            chat = prompt_building.get_chat(t=t, with_plan=False, **generation_kwargs)
+            chat = prompt_builder_utils.get_chat(t=t, with_plan=False, **generation_kwargs)
             try:
                 status = config.STATUS.ERROR
                 error_message = None
@@ -174,7 +174,6 @@ def generate_batch(
                     validity = generated_plans.GeneratedPlan.VALIDITY.UNCHECKED
                 new_generated_plan = generated_plans.GeneratedPlan(
                     task_id=t.id,
-                    prompt_type=prompt_type,
                     raw_plan=raw_plan,
                     pddl_plan=pddl_plan,
                     model_metadata=model_metadata,

@@ -10,13 +10,11 @@ logger = config.get_logger(__name__)
 # TODO : ADD EXPERIMENT TAG TO CONTENT
 
 class GeneratedPlan(base.Data):
-    SEEN_IDS: set[int] = set()
     AVAILABLE_ID_POOL: set[int] = set()
     NEXT_ID: int = 0
     FIELD_NAMES = [
             "id",
             "task_id",
-            "prompt_type",
             "raw_plan",
             "pddl_plan",
             "validity",
@@ -34,7 +32,6 @@ class GeneratedPlan(base.Data):
     def __init__(
             self,
             task_id: int,
-            prompt_type: config.PROMPT_TYPE | str,
             id: Optional[int] = None,
             raw_plan: Optional[str] = None,
             pddl_plan: Optional[str] = None,
@@ -47,8 +44,6 @@ class GeneratedPlan(base.Data):
         ):
         super().__init__(id)
         self.task_id = task_id
-        self.prompt_type = config.get_enum_value(prompt_type, config.PROMPT_TYPE, "prompt_type")
-        assert self.prompt_type, "Prompt type must not be None."
         self.raw_plan = raw_plan
         self.pddl_plan = pddl_plan
 
@@ -125,7 +120,6 @@ class GeneratedPlan(base.Data):
         return [
             "id INTEGER PRIMARY KEY",
             "task_id INTEGER",
-            "prompt_type TEXT NOT NULL",
             "raw_plan TEXT",
             "pddl_plan TEXT",
             "validity TEXT",
@@ -140,7 +134,7 @@ class GeneratedPlan(base.Data):
     def column_constraints(cls):
         return [
             "CONSTRAINT fk_task_id FOREIGN KEY(task_id) REFERENCES tasks(id)",
-            "CONSTRAINT tup_tid_pt_pm_mm UNIQUE(task_id, prompt_type, prompt_metadata, model_metadata)" 
+            "CONSTRAINT tup_tid_pt_pm_mm UNIQUE(task_id, prompt_metadata, model_metadata)" 
         ]
 
 generated_plan_database: Optional[database_manager.DatabaseManager] = None
@@ -152,7 +146,6 @@ def initialize_db():
             data_cls=GeneratedPlan,
             filters={
                 "filter_by_task_id": "task_id = ?",
-                "filter_by_prompt_type": "prompt_type = ?",
                 "filter_by_model_metadata": "model_metadata = ?",
                 "filter_by_prompt_metadata": "prompt_metadata = ?",
             }
