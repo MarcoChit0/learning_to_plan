@@ -47,13 +47,13 @@ class GeneratedPlan(base.Data):
         ):
         super().__init__(id)
         self.task_id = task_id
-        self.prompt_type = self._get_enum_value(prompt_type, config.PROMPT_TYPE, "prompt_type")
+        self.prompt_type = config.get_enum_value(prompt_type, config.PROMPT_TYPE, "prompt_type")
         assert self.prompt_type, "Prompt type must not be None."
         self.raw_plan = raw_plan
         self.pddl_plan = pddl_plan
 
         self.error_message = error_message
-        self.status = self._get_enum_value(status, config.STATUS, "status")
+        self.status = config.get_enum_value(status, config.STATUS, "status")
         assert self.status, "Status must not be None."
         if self.status == config.STATUS.OK:
             assert raw_plan and pddl_plan, "Both raw_plan and pddl_plan must be provided when status is OK."
@@ -62,7 +62,7 @@ class GeneratedPlan(base.Data):
             assert self.error_message, "Error message must be provided when status is ERROR."
             assert raw_plan is None and pddl_plan is None, "raw_plan and pddl_plan must be None when status is ERROR."
         
-        self.validity = self._get_enum_value(validity, GeneratedPlan.VALIDITY, "validity")
+        self.validity = config.get_enum_value(validity, GeneratedPlan.VALIDITY, "validity")
         assert self.validity, "Validity must not be None."
 
         for var in ["model_metadata", "prompt_metadata"]:
@@ -121,21 +121,27 @@ class GeneratedPlan(base.Data):
             raise ValueError(f"Validity status is {self.validity}, which is not valid for checking plan validity.")
 
     @classmethod
-    def storage_datatype(cls):
-        return {
-            "id": "INTEGER PRIMARY KEY",
-            "task_id": "INTEGER",
-            "prompt_type": "TEXT NOT NULL",
-            "raw_plan": "TEXT",
-            "pddl_plan": "TEXT",
-            "validity": "TEXT",
-            "model_metadata": "TEXT",
-            "prompt_metadata": "TEXT",
-            "date": "TEXT",
-            "status": "TEXT",
-            "error_message": "TEXT",
-            "FOREIGN KEY(task_id)" : "REFERENCES tasks(id)",
-        }
+    def column_def(cls):
+        return [
+            "id INTEGER PRIMARY KEY",
+            "task_id INTEGER",
+            "prompt_type TEXT NOT NULL",
+            "raw_plan TEXT",
+            "pddl_plan TEXT",
+            "validity TEXT",
+            "model_metadata TEXT",
+            "prompt_metadata TEXT",
+            "date TEXT",
+            "status TEXT",
+            "error_message TEXT",
+        ]
+
+    @classmethod
+    def column_constraints(cls):
+        return [
+            "CONSTRAINT fk_task_id FOREIGN KEY(task_id) REFERENCES tasks(id)",
+            "CONSTRAINT tup_tid_pt_pm_mm UNIQUE(task_id, prompt_type, prompt_metadata, model_metadata)" 
+        ]
 
 generated_plan_database: Optional[database_manager.DatabaseManager] = None
 def initialize_db():
@@ -144,7 +150,6 @@ def initialize_db():
         generated_plan_database = database_manager.DatabaseManager(
             table_name="generated_plan",
             data_cls=GeneratedPlan,
-            file_path=config.GENERATED_PLANS_FILE_PATH,
             filters={
                 "filter_by_task_id": "task_id = ?",
                 "filter_by_prompt_type": "prompt_type = ?",

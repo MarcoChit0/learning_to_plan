@@ -1,6 +1,8 @@
 import argparse
-from learning_to_plan import config
+
 from typing import Optional
+from learning_to_plan import config
+from learning_to_plan.data import task
 def parse_args():
     parser = argparse.ArgumentParser(description="Learning to Plan")
     parser.add_argument(
@@ -10,6 +12,11 @@ def parse_args():
         help="List of domains separated by commas (e.g., 'blocksworld,logistics') or 'all'."
     )
     # --- Action Flags ---
+    parser.add_argument(
+        "--get_tasks_from_raw_data",
+        action="store_true",
+        help="Create tasks from raw data."
+    )
     parser.add_argument(
         "--call_paas",
         action="store_true",
@@ -73,16 +80,10 @@ def parse_args():
         help="Path to the base data directory (containing raw, paas_plans, etc.). Defaults to './data/'."
     )
     parser.add_argument(
-        "--tasks_dataset_file_path",
+        "--database_file_path",
         type=str,
-        default=None,
-        help="Path to the tasks dataset file (e.g., 'data/tasks.jsonl'). Defaults to './data/tasks.jsonl'."
-    )
-    parser.add_argument(
-        "--generated_plans_dataset_file_path",
-        type=str,
-        default=None,
-        help="Path to the generated plans dataset file (e.g., 'data/generated_plans.jsonl'). Defaults to './data/generated_plans.jsonl'."
+        default=None,  # Default is handled in config.py now
+        help="Path to the SQLite database file. Defaults to './data/learning_to_plan.db'."
     )
     parser.add_argument(
         "--overwrite_generated_plans",
@@ -91,16 +92,32 @@ def parse_args():
     )
     def number_of_instances_type(value):
         if value.isdigit():
+            assert int(value) > 0, "Number of instances must be a positive integer."
             return int(value)
-        elif value in ["all", "long", "basic"]:
+        elif value == "all":
             return value
         else:
-            raise argparse.ArgumentTypeError(f"Invalid value for number_of_instances: {value}. Must be 'all', 'long', 'basic', or a positive integer.")
+            raise argparse.ArgumentTypeError(f"Invalid value for number_of_instances: {value}. Must be 'all',  or a positive integer.")
     parser.add_argument(
         "-n", "--number_of_instances",
         type=number_of_instances_type,
         default="all",
-        help="Number of instances to generate plans for. Can be 'all', 'long', 'basic', or a positive integer."
+        help="Number of instances to generate plans for. Can be 'all', or a positive integer."
+    )
+    def task_type_converter(value: Optional[str] = None) -> Optional[task.Task.TYPE]:
+        if not value:
+            return None
+        try:
+            return config.get_enum_value(value, task.Task.TYPE, "task_type")
+        except KeyError:
+            raise argparse.ArgumentTypeError(
+                f"Invalid task_type: {value}. Valid options are: {', '.join([t.value for t in task.Task.TYPE])}."
+            )
+    parser.add_argument(
+        "--task_type",
+        type=task_type_converter,
+        default=None,
+        help="Type of task to filter by. Options: 'indistribution', 'outofdistribution', 'unseen', 'obfuscated'. Default is None (no filtering)."
     )
     def prompt_type_converter(value: Optional[str] = None) -> Optional[config.PROMPT_TYPE]:
         if not value:

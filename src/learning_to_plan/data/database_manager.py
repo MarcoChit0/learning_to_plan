@@ -8,11 +8,10 @@ from learning_to_plan.data import base
 logger = config.get_logger(__name__)
 
 class DatabaseManager(abc.ABC):
-    def __init__(self, table_name: str, data_cls: type[base.Data], file_path: str, filters: dict[str, str] = {}):
+    def __init__(self, table_name: str, data_cls: type[base.Data], filters: dict[str, str] = {}):
         self.table_name: str = table_name
         self.data_cls: type[base.Data] = data_cls
-        self.file_path: str = file_path
-        self.connection = sqlite3.connect(file_path)
+        self.connection = sqlite3.connect(config.DATABASE_FILE_PATH)
         # filters are used to filter the data when retrieving it from the database
         # they are expected to be a dictionary where keys are column names and values are the values to filter by
         self.filters: dict[str, str] = filters
@@ -29,15 +28,21 @@ class DatabaseManager(abc.ABC):
 
     def cursor(self):
         return self.connection.cursor()
+
+    def __del__(self):
+        try:
+            self.close()
+        except sqlite3.Error as e:
+            logger.error(f"Error closing database connection: {e}")
     
     def setup(self):
         cursor = self.cursor()
-        # Create table if it does not exist
-        cursor.execute(f"""
-            CREATE TABLE IF NOT EXISTS {self.table_name} (
-                {', '.join([f"{col} {dtype}" for col, dtype in self.data_cls.storage_datatype().items()])}
-            )
-        """)
+        columns_def_str = ', '.join(self.data_cls.column_def())
+        constraints_str = ', '.join(self.data_cls.column_constraints())
+        table_definition = f"{columns_def_str}, {constraints_str}" if constraints_str else columns_def_str
+        print(f"CREATE TABLE IF NOT EXISTS {self.table_name} ({table_definition})")
+        cursor.execute(f"CREATE TABLE IF NOT EXISTS {self.table_name} ({table_definition})")
+        
         self.commit()
     
     def get(self, **filters) -> set[base.Data]:
@@ -87,9 +92,10 @@ class DatabaseManager(abc.ABC):
 
         def _add_single(obj: base.Data):
             assert hasattr(obj, 'id'), "Object must have an 'id' attribute."
+
             row = obj.to_row()
             placeholders = ', '.join(['?'] * len(row))
-            query = f"INSERT INTO {self.table_name} VALUES ({placeholders})"
+            query = f"INSERT OR REPLACE INTO {self.table_name} VALUES ({placeholders})"
             try:
                 self.cursor().execute(query, row)
                 self.commit()

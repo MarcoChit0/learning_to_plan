@@ -12,31 +12,17 @@ from learning_to_plan.data import task
 
 logger = config.get_logger(__name__)
 
-from typing import Optional
-def get_selected_domains(args, dir:Optional[str]=None, is_file:bool=False) -> set[str]:
+def get_selected_domains(args) -> set[str]:
     if not args.domain:
         logger.error("Please specify a domain with --domain <domain_name> or 'all'.")
         raise ValueError("Domain not specified.")
 
-    if dir:
-        assert os.path.isdir(dir), f"Directory {dir} does not exist."
-        try:
-            available_domains = {d for d in os.listdir(dir) if os.path.isdir(os.path.join(dir, d))}
-        except OSError as e:
-            logger.error(f"Error listing domains in {dir}: {e}", exc_info=True)
-            raise e
-        assert available_domains and len(available_domains) > 0, f"No domains found in {dir}."
-    elif is_file:
-        tasks = task.task_database.get()
-        assert tasks, f"No tasks found in {config.TASKS_DATASET_FILE_PATH}."
-        available_domains = {t.domain for t in tasks}
-        assert available_domains, f"No domains found in {config.TASKS_DATASET_FILE_PATH}."
-    else:
-        logger.error("No directory or file specified for domain selection.")
-        raise ValueError("No directory or file specified for domain selection.")
+    tasks = task.task_database.get()
+    available_domains = {t.domain for t in tasks}
+    logger.info(f"Available domains: {', '.join(available_domains)}")
 
     if args.domain.lower() == "all":
-        logger.info(f"Processing all found domains: {', '.join(available_domains)}")
+        logger.info("Processing all available domains.")
         return available_domains
     else:
         selected = set(s.strip() for s in args.domain.split(","))
@@ -52,9 +38,13 @@ if __name__ == "__main__":
     config.initialize(args) # Config initialization likely sets up logging
 
     # --- Action Blocks ---
-    if args.call_paas:
+    if args.get_tasks_from_raw_data:
+        logger.info("--- Starting Task Creation from Raw Data ---")
+        utils.get_tasks_from_raw_data()
+        logger.info("--- Finished Task Creation from Raw Data ---")
+    elif args.call_paas:
         logger.info("--- Starting Planning as a Service (PaaS) Calls ---")
-        domains = get_selected_domains(args, dir=config.RAW_DIR)
+        domains = get_selected_domains(args)
         for domain in domains:
             logger.info(f"Processing PaaS for domain: {domain}")
             asyncio.run(utils.call_paas(domain=domain))
@@ -66,7 +56,7 @@ if __name__ == "__main__":
         config_file_path = args.config_file_path or os.path.join(config.CONFIGS_DIR, config.DEFAULT_TRAIN_CONFIG)
         train_kwargs = config.get_config(config_file_path=config_file_path, args=args)
         assert train_kwargs["model_name"], "Model name not found in config. Please check your configuration."
-        domains = get_selected_domains(args=args, is_file=True)
+        domains = get_selected_domains(args=args)
         for domain in domains:
             logger.info(f"Starting training for domain: {domain}")
             train.run_training_procedure(domain=domain, **train_kwargs)
@@ -78,13 +68,14 @@ if __name__ == "__main__":
         config_file_path = args.config_file_path or os.path.join(config.CONFIGS_DIR, config.DEFAULT_GENERATE_CONFIG)
         generate_kwargs = config.get_config(config_file_path=config_file_path, args=args)
         assert generate_kwargs["model_name"], "Model name not found in config. Please check your configuration."
-        domains = get_selected_domains(args=args, is_file=True)
+        domains = get_selected_domains(args=args)
         for domain in domains:
             logger.info(f"Starting generation for domain: {domain}")
             checkpoint_dir = None if args.dont_use_checkpoint else config.get_checkpoint_dir(domain, generate_kwargs["model_name"])
             generate.generate_batch(
                 domain=domain, 
                 number_of_instances=args.number_of_instances, 
+                task_type=args.task_type,
                 ## --- generation kwargs ---
                 checkpoint_dir=checkpoint_dir, 
                 overwrite_generated_plans=args.overwrite_generated_plans, 

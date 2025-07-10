@@ -1,222 +1,248 @@
 {
-    "barman" : {
-        "domain" : {
-            "path" : "barman/generated_domain.pddl"
+    "domain" : {
+        "barman" : {
+            "domain" : {
+                "path" : "barman/generated_domain.pddl"
+            },
+            "indistribution" : {
+                "path" : "barman/generated_basic/",
+                "number_of_instances" : 4200,
+                "number_of_instances_for_training" : 3200,
+                "number_of_instances_for_validation" : 800,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            },
+            "outofdistribution" : {
+                "path" : "barman/generated_basic_longer_plan_len/",
+                "number_of_instances" : 200,
+                "number_of_instances_for_training" : 0,
+                "number_of_instances_for_validation" : 0,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            }
         },
-        "indistribution" : {
-            "path" : "barman/generated_basic/",
-            "number_of_instances" : 4200,
-            "number_of_instances_for_training" : 3200,
-            "number_of_instances_for_validation" : 800,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
+        "blocksworld" : {
+            "domain" : {
+                "path" : "blocksworld/generated_domain.pddl"
+            },
+            "indistribution" : {
+                "path" : "blocksworld/generated_basic/",
+                "number_of_instances" : 4200,
+                "number_of_instances_for_training" : 3200,
+                "number_of_instances_for_validation" : 800,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            },
+            "outofdistribution" : {
+                "path" : "blocksworld/generated_basic_longer_plan_len/",
+                "number_of_instances" : 200,
+                "number_of_instances_for_training" : 0,
+                "number_of_instances_for_validation" : 0,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            }
         },
-        "outofdistribution" : {
-            "path" : "barman/generated_basic_longer_plan_len/",
-            "number_of_instances" : 200,
-            "number_of_instances_for_training" : 0,
-            "number_of_instances_for_validation" : 0,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
+        "childsnack" : {
+            "domain" : {
+                "path" : "childsnack/generated_domain.pddl"
+            },
+            "indistribution" : {
+                "path" : "childsnack/generated_basic/",
+                "number_of_instances" : 4200,
+                "number_of_instances_for_training" : 3200,
+                "number_of_instances_for_validation" : 800,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            },
+            "outofdistribution" : {
+                "path" : "childsnack/generated_basic_longer_plan_len/",
+                "number_of_instances" : 200,
+                "number_of_instances_for_training" : 0,
+                "number_of_instances_for_validation" : 0,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            }
+        },
+        "depots" : {
+            "domain" : {
+                "path" : "depots/generated_domain.pddl"
+            },
+            "indistribution" : {
+                "path" : "depots/generated_basic/",
+                "number_of_instances" : 4200,
+                "number_of_instances_for_training" : 3200,
+                "number_of_instances_for_validation" : 800,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            },
+            "outofdistribution" : {
+                "path" : "depots/generated_basic_longer_plan_len/",
+                "number_of_instances" : 200,
+                "number_of_instances_for_training" : 0,
+                "number_of_instances_for_validation" : 0,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            }
+        },
+        "driverlog" : {
+            "domain" : {
+                "path" : "driverlog/generated_domain.pddl"
+            },
+            "indistribution" : {
+                "path" : "driverlog/generated_basic/",
+                "number_of_instances" : 4200,
+                "number_of_instances_for_training" : 3200,
+                "number_of_instances_for_validation" : 800,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            },
+            "outofdistribution" : {
+                "path" : "driverlog/generated_basic_longer_plan_len/",
+                "number_of_instances" : 200,
+                "number_of_instances_for_training" : 0,
+                "number_of_instances_for_validation" : 0,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            }
+        },
+        "grippers": {
+            "domain" : {
+                "path" : "grippers/generated_domain.pddl"
+            },
+            "indistribution" : {
+                "path" : "grippers/generated_basic/",
+                "number_of_instances" : 4200,
+                "number_of_instances_for_training" : 3200,
+                "number_of_instances_for_validation" : 800,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            },
+            "outofdistribution" : {
+                "path" : "grippers/generated_basic_longer_plan_len/",
+                "number_of_instances" : 200,
+                "number_of_instances_for_training" : 0,
+                "number_of_instances_for_validation" : 0,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            }
+        },
+        "logistics" : {
+            "domain" : {
+                "path" : "logistics/generated_domain.pddl"
+            },
+            "indistribution" : {
+                "path" : "logistics/generated_basic/",
+                "number_of_instances" : 4200,
+                "number_of_instances_for_training" : 3200,
+                "number_of_instances_for_validation" : 800,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            },
+            "outofdistribution" : {
+                "path" : "logistics/generated_basic_longer_plan_len/",
+                "number_of_instances" : 200,
+                "number_of_instances_for_training" : 0,
+                "number_of_instances_for_validation" : 0,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            }
+        },
+        "satellite" : {
+            "domain" : {
+                "path" : "satellite/generated_domain.pddl"
+            },
+            "indistribution" : {
+                "path" : "satellite/generated_basic/",
+                "number_of_instances" : 4200,
+                "number_of_instances_for_training" : 3200,
+                "number_of_instances_for_validation" : 800,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            },
+            "outofdistribution" : {
+                "path" : "satellite/generated_basic_longer_plan_len/",
+                "number_of_instances" : 200,
+                "number_of_instances_for_training" : 0,
+                "number_of_instances_for_validation" : 0,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            }
+        },
+        "hanoi" : {
+            "domain" : {
+                "path" : "hanoi/generated_domain.pddl"
+            },
+            "unseen" : {
+                "path" : "hanoi/generated_basic/",
+                "number_of_instances" : 200,
+                "number_of_instances_for_training" : 0,
+                "number_of_instances_for_validation" : 0,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            }
+        },
+        "storage": {
+            "domain" : {
+                "path" : "storage/generated_domain.pddl"
+            },
+            "unseen" : {
+                "path" : "storage/generated_basic/",
+                "number_of_instances" : 200,
+                "number_of_instances_for_training" : 0,
+                "number_of_instances_for_validation" : 0,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            }
+        },
+        "mystery_blocksworld": {
+            "domain" : {
+                "path" : "mystery_blocksworld/generated_domain.pddl"
+            },
+            "obfuscated" : {
+                "path" : "mystery_blocksworld/generated_basic/",
+                "number_of_instances" : 200,
+                "number_of_instances_for_training" : 0,
+                "number_of_instances_for_validation" : 0,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            }
+        },
+        "obfuscated_deceptive_logistics": {
+            "domain" : {
+                "path" : "obfuscated_deceptive_logistics/generated_domain.pddl"
+            },
+            "obfuscated" : {
+                "path" : "obfuscated_deceptive_logistics/generated_basic/",
+                "number_of_instances" : 200,
+                "number_of_instances_for_training" : 0,
+                "number_of_instances_for_validation" : 0,
+                "number_of_instances_for_testing" : 200,
+                "regex_pattern" : "instance-([0-9]+)\\.pddl"
+            }
         }
     },
-    "blocksworld" : {
-        "domain" : {
-            "path" : "blocksworld/generated_domain.pddl"
-        },
-        "indistribution" : {
-            "path" : "blocksworld/generated_basic/",
-            "number_of_instances" : 4200,
-            "number_of_instances_for_training" : 3200,
-            "number_of_instances_for_validation" : 800,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        },
-        "outofdistribution" : {
-            "path" : "blocksworld/generated_basic_longer_plan_len/",
-            "number_of_instances" : 200,
-            "number_of_instances_for_training" : 0,
-            "number_of_instances_for_validation" : 0,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        }
-    },
-    "childsnack" : {
-        "domain" : {
-            "path" : "childsnack/generated_domain.pddl"
-        },
-        "indistribution" : {
-            "path" : "childsnack/generated_basic/",
-            "number_of_instances" : 4200,
-            "number_of_instances_for_training" : 3200,
-            "number_of_instances_for_validation" : 800,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        },
-        "outofdistribution" : {
-            "path" : "childsnack/generated_basic_longer_plan_len/",
-            "number_of_instances" : 200,
-            "number_of_instances_for_training" : 0,
-            "number_of_instances_for_validation" : 0,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        }
-    },
-    "depots" : {
-        "domain" : {
-            "path" : "depots/generated_domain.pddl"
-        },
-        "indistribution" : {
-            "path" : "depots/generated_basic/",
-            "number_of_instances" : 4200,
-            "number_of_instances_for_training" : 3200,
-            "number_of_instances_for_validation" : 800,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        },
-        "outofdistribution" : {
-            "path" : "depots/generated_basic_longer_plan_len/",
-            "number_of_instances" : 200,
-            "number_of_instances_for_training" : 0,
-            "number_of_instances_for_validation" : 0,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        }
-    },
-    "driverlog" : {
-        "domain" : {
-            "path" : "driverlog/generated_domain.pddl"
-        },
-        "indistribution" : {
-            "path" : "driverlog/generated_basic/",
-            "number_of_instances" : 4200,
-            "number_of_instances_for_training" : 3200,
-            "number_of_instances_for_validation" : 800,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        },
-        "outofdistribution" : {
-            "path" : "driverlog/generated_basic_longer_plan_len/",
-            "number_of_instances" : 200,
-            "number_of_instances_for_training" : 0,
-            "number_of_instances_for_validation" : 0,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        }
-    },
-    "grippers": {
-        "domain" : {
-            "path" : "grippers/generated_domain.pddl"
-        },
-        "indistribution" : {
-            "path" : "grippers/generated_basic/",
-            "number_of_instances" : 4200,
-            "number_of_instances_for_training" : 3200,
-            "number_of_instances_for_validation" : 800,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        },
-        "outofdistribution" : {
-            "path" : "grippers/generated_basic_longer_plan_len/",
-            "number_of_instances" : 200,
-            "number_of_instances_for_training" : 0,
-            "number_of_instances_for_validation" : 0,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        }
-    },
-    "logistics" : {
-        "domain" : {
-            "path" : "logistics/generated_domain.pddl"
-        },
-        "indistribution" : {
-            "path" : "logistics/generated_basic/",
-            "number_of_instances" : 4200,
-            "number_of_instances_for_training" : 3200,
-            "number_of_instances_for_validation" : 800,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        },
-        "outofdistribution" : {
-            "path" : "logistics/generated_basic_longer_plan_len/",
-            "number_of_instances" : 200,
-            "number_of_instances_for_training" : 0,
-            "number_of_instances_for_validation" : 0,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        }
-    },
-    "satellite" : {
-        "domain" : {
-            "path" : "satellite/generated_domain.pddl"
-        },
-        "indistribution" : {
-            "path" : "satellite/generated_basic/",
-            "number_of_instances" : 4200,
-            "number_of_instances_for_training" : 3200,
-            "number_of_instances_for_validation" : 800,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        },
-        "outofdistribution" : {
-            "path" : "satellite/generated_basic_longer_plan_len/",
-            "number_of_instances" : 200,
-            "number_of_instances_for_training" : 0,
-            "number_of_instances_for_validation" : 0,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        }
-    },
-    "hanoi" : {
-        "domain" : {
-            "path" : "hanoi/generated_domain.pddl"
-        },
-        "unseen" : {
-            "path" : "hanoi/generated_basic/",
-            "number_of_instances" : 200,
-            "number_of_instances_for_training" : 0,
-            "number_of_instances_for_validation" : 0,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        }
-    },
-    "storage": {
-        "domain" : {
-            "path" : "storage/generated_domain.pddl"
-        },
-        "unseen" : {
-            "path" : "storage/generated_basic/",
-            "number_of_instances" : 200,
-            "number_of_instances_for_training" : 0,
-            "number_of_instances_for_validation" : 0,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        }
-    },
-    "mystery_blocksworld": {
-        "domain" : {
-            "path" : "mystery_blocksworld/generated_domain.pddl"
-        },
-        "obfuscated" : {
-            "path" : "mystery_blocksworld/generated_basic/",
-            "number_of_instances" : 200,
-            "number_of_instances_for_training" : 0,
-            "number_of_instances_for_validation" : 0,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
-        }
-    },
-    "obfuscated_deceptive_logistics": {
-        "domain" : {
-            "path" : "obfuscated_deceptive_logistics/generated_domain.pddl"
-        },
-        "obfuscated" : {
-            "path" : "obfuscated_deceptive_logistics/generated_basic/",
-            "number_of_instances" : 200,
-            "number_of_instances_for_training" : 0,
-            "number_of_instances_for_validation" : 0,
-            "number_of_instances_for_testing" : 200,
-            "regex_pattern" : "instance-[0-9]+\\.pddl"
+    "structure": {
+        "order" : {
+            "domain" : [
+                "barman",
+                "blocksworld",
+                "childsnack",
+                "depots",
+                "driverlog",
+                "grippers",
+                "logistics",
+                "satellite",
+                "hanoi",
+                "storage",
+                "mystery_blocksworld",
+                "obfuscated_deceptive_logistics"
+            ],
+            "instance" : [
+                "indistribution",
+                "outofdistribution",
+                "unseen",
+                "obfuscated"
+            ]
         }
     }
 }

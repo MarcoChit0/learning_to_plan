@@ -1,6 +1,7 @@
 # generate.py 
 
 import datetime
+from typing import Optional
 from tqdm import tqdm
 from learning_to_plan.models import utils as model_utils
 
@@ -17,7 +18,8 @@ from learning_to_plan.domain_translators import utils as domain_translator_utils
 def generate_batch(
         model_name: str, 
         domain:str, 
-        number_of_instances:Union[str, int] = "all", 
+        number_of_instances:Union[str, int] = "all",
+        task_type: Optional[task.Task.TYPE] = None,
         num_samples:int = 1,
         overwrite_generated_plans:bool = False,
         **generation_kwargs):
@@ -36,27 +38,33 @@ def generate_batch(
         logger.error(f"Error initializing model '{model_name}': {e}", exc_info=True)
         raise e
     try:
-        task_selection_kwargs = {}
-        if isinstance(number_of_instances, int):
-            assert number_of_instances > 0, "Number of instances must be a positive integer."
-            task_selection_kwargs['number_of_instances'] = number_of_instances
-        elif isinstance(number_of_instances, str) and number_of_instances.upper() in task.Task.TYPE:
-            task_selection_kwargs['filter_by_type'] = task.Task.TYPE[number_of_instances.upper()]
-        else:
-            raise ValueError(
-                f"Invalid number_of_instances value: {number_of_instances}. "
-                "Must be 'all', a positive integer, or a valid task type."
-            )
+        task_selection_kwargs = {
+            'filter_by_domain': domain,
+            'filter_by_pourpose': task.Task.POURPOSE.TEST
+        }
+        if task_type:
+            assert isinstance(task_type, (str, task.Task.TYPE)), "task_type must be a string or a Task.TYPE enum."
+            task_selection_kwargs['filter_by_type'] = task_type
 
         tasks : set[task.Task] = task.task_database.get(
-            filter_by_domain=domain,
-            filter_by_pourpose=task.Task.POURPOSE.TEST,
             **task_selection_kwargs
         )
         assert len(tasks) > 0, f"No tasks found for domain '{domain}', whose selection kwargs where {task_selection_kwargs}."
         assert isinstance(tasks, set), "Tasks must be a set of Task objects."
         assert all(isinstance(t, task.Task) for t in tasks), "All items in tasks must be Task objects."
         logger.info(f"Found {len(tasks)} tasks for domain '{domain}', whose selection kwargs where {task_selection_kwargs}.")
+
+        if number_of_instances != "all":
+            assert isinstance(number_of_instances, int) and number_of_instances > 0, "number_of_instances must be 'all' or a positive integer."
+            l = min(len(tasks), number_of_instances)
+
+            # select l tasks from the set evenly distributed
+            import numpy as np
+            indices = np.linspace(0, len(tasks) - 1, num=l, dtype=int)
+            tasks = set(sorted(tasks)[i] for i in indices)
+            assert len(tasks) == l, f"Expected {l} tasks, but got {len(tasks)} after selection."
+            
+        logger.info(f"Generating plans for {len(tasks)} tasks in domain '{domain}' with prompt type='{prompt_type}',num_samples={num_samples}, and type='{task_type}'.")
     
     except Exception as e:
         raise ValueError(

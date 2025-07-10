@@ -68,23 +68,23 @@ class Data(abc.ABC):
 
         assert all(isinstance(name, str) for name in self.get_field_names()), "All field names must be strings."
         assert len(self.get_field_names()) > 0, "field_names must not be an empty list."
-    
-    # helper method to convert a value to an enum if applicable
-    @staticmethod
-    def _get_enum_value(value, enum_cls, name):
-        if isinstance(value, enum_cls):
-            return value
-        if isinstance(value, str):
-            try:
-                return enum_cls(value)
-            except ValueError:
-                logger.error(f"Invalid {name} value: {value}. Defaulting to None.")
-        return None
+
+    def __del__(self):
+        self.remove_id(self.id)
 
     @classmethod
     @abc.abstractmethod
-    def storage_datatype(cls) -> dict[str, str]:
-        raise NotImplementedError("Subclasses must implement the storage_datatype method.")
+    def column_def(cls) -> list[str]:
+        raise NotImplementedError("Subclasses must implement the columns_names method.")
+
+    @classmethod
+    @abc.abstractmethod
+    def column_constraints(cls) -> list[str]:
+        """
+        Returns a list of constraints for the columns in the database.
+        This is used to ensure that the database schema is consistent with the data class.
+        """
+        raise NotImplementedError("Subclasses must implement the column_constraints method.")
     
     @classmethod
     def from_row(cls, row: tuple) -> Data:

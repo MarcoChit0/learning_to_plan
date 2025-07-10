@@ -6,6 +6,7 @@ CONDA_ENV_NAME = learning_to_plan
 DOCKER_IMAGE_NAME = learning_to_plan_app
 MAIN_SCRIPT = main.py# Path to your main script at the root
 VAL_DIR = utils/VAL# Path to VAL submodule
+DOWNWARD_DIR = utils/downward# Path to Downward submodule
 VAL_BUILD_DIR = $(VAL_DIR)/build# Should evaluate to utils/VAL/build
 ENV_FILE ?= .env # Default environment file name (can be overridden: make docker_bash ENV_FILE=my.env)
 
@@ -67,6 +68,16 @@ build_val: conda_env
 	    make -j$$(nproc); \
 	'
 	@echo ">>> VAL build complete. Executables should be in $(VAL_BUILD_DIR)"
+
+# --- Build Downward Dependencies ---
+build_downward: conda_env
+	@echo ">>> Building Downward submodule in $(DOWNWARD_DIR) using Conda env '${CONDA_ENV_NAME}'..."
+	@conda run -n ${CONDA_ENV_NAME} bash -c '\
+	    set -e; \
+	    cd "$(DOWNWARD_DIR)"; \
+	    ./build.py \
+	'
+	@echo ">>> Downward build complete. Executables should be in $(DOWNWARD_DIR)/install"
 
 
 # --- Conda Run Target (Default, No Args) ---
