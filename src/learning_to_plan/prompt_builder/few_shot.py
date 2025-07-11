@@ -1,12 +1,12 @@
 import os
-from learning_to_plan.prompt_builder import base
+from learning_to_plan.prompt_builder import natural_language
 from learning_to_plan import config
 from learning_to_plan.data import task
 from learning_to_plan.domain_translators import utils as domain_translator_utils
 
 logger = config.get_logger(__name__)
 
-class FewShotPromptBuilder(base.PromptBuilder):
+class FewShotPromptBuilder(natural_language.NaturalLanguagePromptBuilder):
     def __init__(self, few_shot : int, **kwargs):
         super().__init__(prompt_type=config.PROMPT_TYPE.FEW_SHOT, **kwargs)
         self.prompt_metadata["few_shot"] = few_shot
@@ -21,7 +21,7 @@ class FewShotPromptBuilder(base.PromptBuilder):
         initial_state = "\n".join(task_components_in_nl['initial_state_facts'])
         goal_state = "\n".join(task_components_in_nl['goal_facts'])
 
-        examples = self.get_few_shot_examples(self.few_shot)
+        examples = get_few_shot_examples(self.few_shot)
         examples_str_lst = []
         for e in examples:
             examples_str_lst.append(f"""{config.TOKENS.EXAMPLE_START.value}
@@ -65,12 +65,6 @@ Here is a checklist to help you with your task:
             {"role": "system", "content": "You are an expert in AI Planning."},
             {"role": "user", "content": content}
         ]
-        # TODO: REMOVE THIS LATER
-        filename_for_debuging_prompt = f"debugging_prompt.txt"
-        if not os.path.exists(filename_for_debuging_prompt):
-            with open(filename_for_debuging_prompt, "w", encoding='utf-8') as f:
-                f.write(content)
-        # TODO: REMOVE UNTIL HERE LATER
 
         if with_plan:
             plan = f"{config.TOKENS.PLAN_START.value}\n{task_components_in_nl['plan']}\n{config.TOKENS.PLAN_END.value}"

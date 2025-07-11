@@ -51,14 +51,6 @@ class GeminiModel(Model):
         }
         logger.debug(f"Gemini generation config: {generation_config}")
 
-
-        # TODO: REMOVE THIS AFTER DEBUGGING
-        filename = "temp__prompt__debug.txt"
-        if not os.path.exists(filename):
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(prompt)
-            logger.info(f"Prompt saved to {filename} for debugging.")
-
         try:
             wait_time = generation_kwargs.get("wait_time", 20) 
             if wait_time > 0:

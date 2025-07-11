@@ -614,7 +614,7 @@ logger = config.get_logger(__name__)
 
 class PDDLPromptBuilder(base.PromptBuilder):
     def __init__(self, **kwargs):
-        super().__init__(prompt_type=config.PROMPT_TYPE.IO, **kwargs)
+        super().__init__(prompt_type=config.PROMPT_TYPE.PDDL, **kwargs)
 
     def get_chat(self, t : task.Task, with_plan: bool = True, **kwargs) -> list[dict[str, str]]:
         instance = t.read_instance()
@@ -629,4 +629,34 @@ class PDDLPromptBuilder(base.PromptBuilder):
         ]
         if with_plan:
             chat.append({"role": "assistant", "content": f"{config.TOKENS.PLAN_START.value}\n{t.pddl_plan}\n{config.TOKENS.PLAN_END.value}"})
+        
         return chat
+    
+    def process_response(self, response: str) -> str:
+        """
+        Processes the response from the model.
+        :param response: The response from the model.
+        :return: The processed response.
+        """
+        if response == "":
+            raise ValueError("The response is empty. Please provide a valid plan.")
+        
+        if config.TOKENS.PLAN_START.value not in response:
+            raise ValueError(f"The response does not contain the plan start token '{config.TOKENS.PLAN_START.value}'. Please provide a valid plan.")
+        
+        if config.TOKENS.PLAN_END.value not in response:
+            raise ValueError(f"The response does not contain the plan end token '{config.TOKENS.PLAN_END.value}'. Please provide a valid plan.")
+        
+        plan_start_index = response.index(config.TOKENS.PLAN_START.value)
+        plan_end_index = response.index(config.TOKENS.PLAN_END.value)
+
+        if plan_start_index > plan_end_index:
+            raise ValueError("The plan start token is after the plan end token. Please provide a valid plan.")
+        
+        plan = response[plan_start_index + len(config.TOKENS.PLAN_START.value):plan_end_index].strip()
+
+        if plan == "":
+            raise ValueError("After removing the plan start and end tokens, the plan is empty. Please provide a valid plan.")
+        
+        return plan
+        

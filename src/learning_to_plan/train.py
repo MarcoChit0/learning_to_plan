@@ -5,7 +5,7 @@ from learning_to_plan.models import base
 import learning_to_plan.config as config
 logger = config.get_logger(__name__)
 from learning_to_plan.data import task
-from learning_to_plan.prompt_building import base
+from learning_to_plan.prompt_builder import utils as prompt_builder_utils
 from learning_to_plan.models import utils
 
 def get_tokenized_dataset(model: base.Model, tasks:set[task.Task], max_seq_length:int=1024, **kwargs):
@@ -17,8 +17,9 @@ def get_tokenized_dataset(model: base.Model, tasks:set[task.Task], max_seq_lengt
         'labels': [],
         'attention_mask': [],
     }
+    prompt_builder = prompt_builder_utils.get_prompt_builder(model.prompt_type, **kwargs)
     for t in tasks:
-        chat = base.get_chat(t, with_plan=True, **kwargs)
+        chat = prompt_builder.get_chat(t, with_plan=True, **kwargs)
         tokenized_chat = model.tokenize_chat(chat, max_seq_length=max_seq_length)
         data['input_ids'].append(tokenized_chat['input_ids'])
         data['labels'].append(tokenized_chat['labels'])
@@ -83,8 +84,8 @@ def run_training_procedure(model_name: str, domain: str, **train_kwargs):
     # --- Load and Prepare Dataset ---
     try:
         logger.info(f"Loading training and validation datasets for domain: {domain}.")
-        train_tasks:set[task.Task] = task.task_database.get(filter_by_domain=domain, filter_by_pourpose=task.Task.POURPOSE.TRAIN)
-        validation_tasks:set[task.Task] = task.task_database.get(filter_by_domain=domain, filter_by_pourpose=task.Task.POURPOSE.VALIDATION)
+        train_tasks:set[task.Task] = task.task_database.get(filter_by_domain=domain, filter_by_purpose=task.Task.purpose.TRAIN)
+        validation_tasks:set[task.Task] = task.task_database.get(filter_by_domain=domain, filter_by_purpose=task.Task.purpose.VALIDATION)
 
         logger.info(f"Tokenizing datasets for training and validation.")
         tokenized_train_dataset = get_tokenized_dataset(model, train_tasks, **train_kwargs)

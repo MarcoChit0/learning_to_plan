@@ -23,57 +23,71 @@ def process_paas_response(t: task.Task, response: dict) -> None:
 # from datasets import Dataset
 def get_tasks_from_raw_data() -> None:
     structure_json = json.load(open(config.RAW_DIR_STRUCTURE_FILE_PATH, 'r'))
-
     d_ord = structure_json["structure"]["order"]["domain"] 
     i_ord = structure_json["structure"]["order"]["instance"]
     domain_organization = structure_json["domain"]
-    exp_instances_on_db = 0
+    acc = 0
+    tasks_to_add_on_db = set()
+    
     for d in d_ord:
         domain_info = domain_organization[d]
         if "domain" not in domain_info or "path" not in domain_info["domain"]:
             raise ValueError(f"Domain information for '{d}' is incomplete in raw directory structure file {config.RAW_DIR_STRUCTURE_FILE_PATH}. 'domain' or 'path' key is missing.")
-        
         domain_file_path = os.path.join(config.RAW_DIR, domain_info["domain"]["path"])
         if not os.path.exists(domain_file_path):
             raise ValueError(f"Domain file not found: {domain_file_path}. Please ensure the domain file exists in the raw directory.")
         
-        for instance_type in i_ord:
-            if instance_type not in domain_info:
+        for task_type in i_ord:
+            if task_type not in domain_info:
                 continue
 
-            assert isinstance(instance_type, str), f"In the structure of the raw directory each element except 'domain' is a type, whose type should be a string. Found type {type(instance_type)} for key '{instance_type}' in domain '{d}'."
+            assert isinstance(task_type, str), f"In the structure of the raw directory each element except 'domain' is a type, whose type should be a string. Found type {type(task_type)} for key '{task_type}' in domain '{d}'."
+            if task_type.upper() not in task.Task.TYPE.__members__:
+                raise ValueError(f"Invalid task type '{task_type}' in domain '{d}'. Must be one of {list(task.Task.TYPE.__members__.keys())}.")
+            _type = task.Task.TYPE[task_type.upper()]
 
-            if instance_type.upper() not in task.Task.TYPE.__members__:
-                raise ValueError(f"Invalid task type '{instance_type}' in domain '{d}'. Must be one of {list(task.Task.TYPE.__members__.keys())}.")
-            
-            _type = task.Task.TYPE[instance_type.upper()]
+            p = os.path.join(config.RAW_DIR, domain_info[task_type]["path"])
+            pattern = domain_info[task_type].get("regex_pattern", "instance-([0-9])+\\.pddl")
 
-            p = os.path.join(config.RAW_DIR, domain_info[instance_type]["path"])
-            pattern = domain_info[instance_type].get("regex_pattern", "instance-([0-9])+\\.pddl")
-            number_of_expected_instances = domain_info[instance_type].get("number_of_instances")
-            exp_instances_on_db += number_of_expected_instances
-            if number_of_expected_instances is None:
-                raise ValueError(f"Number of expected instances for type '{instance_type}' in domain '{d}' is not defined in the raw directory structure file {config.RAW_DIR_STRUCTURE_FILE_PATH}. Please check the structure and ensure it is defined.")
-            
-            already_loaded_tasks:set[task.Task] = task.task_database.get(
+            number_of_instances = domain_info[task_type].get("number_of_instances", None)
+            if number_of_instances is None:
+                raise ValueError(f"Number of expected instances for type '{task_type}' in domain '{d}' is not defined in the raw directory structure file {config.RAW_DIR_STRUCTURE_FILE_PATH}. Please check the structure and ensure it is defined.")
+            num_tasks = number_of_instances.get("total", 0)
+            num_train_tasks = number_of_instances.get("train", 0)
+            num_validation_tasks = number_of_instances.get("validation", 0)
+            num_test_tasks = number_of_instances.get("test", 0)
+            if num_tasks == 0:
+                raise ValueError(
+                    f"Number of expected instances for type '{task_type}' in domain '{d}' is set to 0 in the raw directory structure file {config.RAW_DIR_STRUCTURE_FILE_PATH}. "
+                    f"Please check the structure and ensure it is defined correctly."
+                )
+            if num_train_tasks + num_validation_tasks + num_test_tasks != num_tasks:
+                raise ValueError(
+                    f"Expected {num_train_tasks} training, {num_validation_tasks} validation, and {num_test_tasks} testing instances for type '{task_type}' in domain '{d}', "
+                    f"but the total does not match the number of expected instances ({num_tasks}). Please check the raw directory structure."
+                )
+            acc += num_tasks
+
+            tasks_on_db:set[task.Task] = task.task_database.get(
                 filter_by_domain=d,
                 filter_by_type=_type,
             )
-            if len(already_loaded_tasks) > 0:
-                if len(already_loaded_tasks) == number_of_expected_instances:
-                    logger.info(f"Skipping domain '{d}' with type '{instance_type}' as it already has {len(already_loaded_tasks)}/{number_of_expected_instances} tasks loaded.")
+            print(f"Found {len(tasks_on_db)} tasks on db for domain '{d}' with type '{task_type}'.")
+            if len(tasks_on_db) > 0:
+                if len(tasks_on_db) == num_tasks:
+                    logger.info(f"Skipping domain '{d}' with type '{task_type}' as it already has {len(tasks_on_db)}/{num_tasks} tasks loaded.")
                     continue
-                elif len(already_loaded_tasks) > number_of_expected_instances:
+                elif len(tasks_on_db) > num_tasks:
                     raise ValueError(
-                        f"Domain '{d}' with type '{instance_type}' has {len(already_loaded_tasks)} tasks already loaded, "
-                        f"but expected {number_of_expected_instances} tasks. Please check the raw directory structure file {config.RAW_DIR_STRUCTURE_FILE_PATH}."
+                        f"Domain '{d}' with type '{task_type}' has {len(tasks_on_db)} tasks already loaded, "
+                        f"but expected {num_tasks} tasks. Please check the raw directory structure file {config.RAW_DIR_STRUCTURE_FILE_PATH}."
                     )
                 else:
                     logger.warning(
-                        f"Domain '{d}' with type '{instance_type}' has {len(already_loaded_tasks)}/{number_of_expected_instances} tasks already loaded. Processing remaining {number_of_expected_instances - len(already_loaded_tasks)} tasks."
+                        f"Domain '{d}' with type '{task_type}' has {len(tasks_on_db)}/{num_tasks} tasks already loaded. Processing remaining {num_tasks - len(tasks_on_db)} tasks."
                     )
             
-            tasks:set[task.Task] = set()
+            new_tasks:set[task.Task] = set()
             def sort_files(file: str, pattern : str) -> int:
                 match = re.search(pattern, file)
                 return int(match.group(1)) if match else float('inf')
@@ -84,87 +98,82 @@ def get_tasks_from_raw_data() -> None:
                     if not os.path.exists(instance_file_path):
                         raise ValueError(f"Instance file not found: {instance_file_path}. Please ensure the instance file exists in the raw directory.")
                     
-                    new_task:task.Task = task.Task(
-                        domain=d,
-                        domain_file_path=domain_file_path,
-                        instance_file_path=instance_file_path,
-                        type=_type
-                    )
                     found = False
-                    for t in already_loaded_tasks:
-                        if t.domain == new_task.domain and t.instance_file_path == new_task.instance_file_path:
+                    for t in tasks_on_db:
+                        if t.instance_file_path == instance_file_path:
                             found = True
                             break
+
                     if not found:
-                        tasks.add(new_task)
-                    else:
-                        del new_task
+                        new_tasks.add(task.Task(
+                            domain=d,
+                            domain_file_path=domain_file_path,
+                            instance_file_path=instance_file_path,
+                            type=_type
+                        ))
             
-            tasks = tasks.union(already_loaded_tasks)
-            
-            if len(tasks) == 0:
+            new_tasks = new_tasks.union(tasks_on_db)
+            if len(new_tasks) == 0 or len(new_tasks) != num_tasks:
                 raise ValueError(
-                    f"No instances found for type '{instance_type}' in domain '{d}'. "
-                    f"Please check the raw directory structure and ensure instances match the regex pattern '{pattern}'."
+                    f"Expected {num_tasks} instances for type '{task_type}' in domain '{d}', "
+                    f"but found {len(new_tasks)} instances. Please check the raw directory structure and ensure instances match the regex pattern '{pattern}'."
                 )
-            if len(tasks) != number_of_expected_instances:
-                raise ValueError(
-                    f"Expected {number_of_expected_instances} instances for type '{instance_type}' in domain '{d}', "
-                    f"but found {len(tasks)} instances. Please check the raw directory structure."
-                )
-            expected_training_instances = domain_info[instance_type].get("number_of_instances_for_training", 0)
-            expected_validation_instances = domain_info[instance_type].get("number_of_instances_for_validation", 0)
-            expected_testing_instances = domain_info[instance_type].get("number_of_instances_for_testing", 0)
-            if expected_training_instances + expected_validation_instances + expected_testing_instances != number_of_expected_instances:
-                raise ValueError(
-                    f"Expected {expected_training_instances} training, {expected_validation_instances} validation, and {expected_testing_instances} testing instances for type '{instance_type}' in domain '{d}', "
-                    f"but the total does not match the number of expected instances ({number_of_expected_instances})."
-                )
-            logger.info(f"Found {len(tasks)} tasks for domain '{d}' with type '{instance_type}'.")
+            logger.info(f"Found {len(new_tasks)} tasks for domain '{d}' with type '{task_type}'.")
 
-            tasks = sorted(tasks)
-            if expected_training_instances != 0:
-                train_tasks, remaining_tasks = train_test_split(
-                    tasks,
-                    train_size=expected_training_instances,
-                    random_state=config.RANDOM_SEED
-                )
-            else:
-                train_tasks = set()
-                remaining_tasks = tasks
-            if expected_validation_instances != 0:
+            new_tasks = sorted(new_tasks)
+            train_tasks, validation_tasks, test_tasks = [], [], []
+            if num_train_tasks != 0:
+                if num_validation_tasks != 0:
+                    train_tasks, temp_tasks = train_test_split(
+                        new_tasks, test_size=num_validation_tasks + num_test_tasks, random_state=config.RANDOM_SEED
+                    )
+                    validation_tasks, test_tasks = train_test_split(
+                        temp_tasks, test_size=num_test_tasks, random_state=config.RANDOM_SEED
+                    )
+                else:
+                    train_tasks, test_tasks = train_test_split(
+                        new_tasks, test_size=num_test_tasks, random_state=config.RANDOM_SEED
+                    )
+            elif num_validation_tasks != 0:
                 validation_tasks, test_tasks = train_test_split(
-                    remaining_tasks,
-                    test_size=expected_validation_instances,
-                    random_state=config.RANDOM_SEED
+                    new_tasks, test_size=num_test_tasks, random_state=config.RANDOM_SEED
                 )
-            else:
-                validation_tasks = set()
-                test_tasks = remaining_tasks
+            elif num_test_tasks != 0:
+                test_tasks = list(new_tasks)
 
-            for t in train_tasks:
-                t.pourpose = task.Task.POURPOSE.TRAIN
-            for t in validation_tasks:
-                t.pourpose = task.Task.POURPOSE.VALIDATION
-            for t in test_tasks:
-                t.pourpose = task.Task.POURPOSE.TEST
             
-            assert len(train_tasks) + len(validation_tasks) + len(test_tasks) == number_of_expected_instances, \
-                f"Expected {number_of_expected_instances} instances for type '{instance_type}' in domain '{d}', " \
+            assert len(train_tasks) + len(validation_tasks) + len(test_tasks) == num_tasks, \
+                f"Expected {num_tasks} instances for type '{task_type}' in domain '{d}', " \
                 f"but found {len(train_tasks) + len(validation_tasks) + len(test_tasks)} instances. " \
                 f"Please check the raw directory structure and ensure instances match the regex pattern '{pattern}'."
-            logger.info(f"Split {len(tasks)} tasks for domain '{d}' with type '{instance_type}' into {len(train_tasks)} training, {len(validation_tasks)} validation, and {len(test_tasks)} testing tasks.")
+            logger.info(f"Split {len(new_tasks)} tasks for domain '{d}' with type '{task_type}' into {len(train_tasks)} training, {len(validation_tasks)} validation, and {len(test_tasks)} testing tasks.")
 
-            try:
-                task.task_database.add(set(train_tasks + validation_tasks + test_tasks))
-                logger.info(f"Added {len(train_tasks)} training, {len(validation_tasks)} validation, and {len(test_tasks)} testing tasks to the task database for domain '{d}' with type '{instance_type}'.")
-            except Exception as e:
-                raise ValueError(f"Error adding tasks to the task database: {e}")
-    if exp_instances_on_db == 0:
+            for t in train_tasks:
+                t.purpose = task.Task.purpose.TRAIN
+            for t in validation_tasks:
+                t.purpose = task.Task.purpose.VALIDATION
+            for t in test_tasks:
+                t.purpose = task.Task.purpose.TEST
+
+            tasks_to_add_on_db.update(set(train_tasks + validation_tasks + test_tasks))
+            if len(tasks_to_add_on_db) != acc:
+                raise ValueError(
+                    f"Expected {acc} tasks to be added to the database for domain '{d}' with type '{task_type}', "
+                    f"but found {len(tasks_to_add_on_db)} tasks. Please check the raw directory structure and ensure all tasks are defined correctly."
+                )
+            
+            logger.info(f"Added {len(train_tasks)} training, {len(validation_tasks)} validation, and {len(test_tasks)} testing tasks to the task database for domain '{d}' with type '{task_type}'.")
+
+    if acc == 0 or len(tasks_to_add_on_db) == 0:
         raise ValueError(f"No instances found in the raw directory structure file {config.RAW_DIR_STRUCTURE_FILE_PATH}. Please check the structure and ensure instances are defined correctly.")
-    tasks_on_db = task.task_database.get()
-    if len(tasks_on_db) != exp_instances_on_db:
-        raise ValueError(f"Expected {exp_instances_on_db} instances in the task database, but found {len(tasks_on_db)}. Please check the task database and ensure all tasks are added correctly.")
+    try:
+        task.task_database.add(tasks_to_add_on_db)
+        logger.info(f"Added/ Updated {len(tasks_to_add_on_db)} tasks to the task database.")
+    except Exception as e:
+        raise ValueError(f"Error adding tasks to the task database: {e}")
+    tasks_on_db: set[task.Task] = task.task_database.get()
+    if len(tasks_on_db) != acc:
+        raise ValueError(f"Expected {acc} instances in the task database, but found {len(tasks_on_db)}. Please check the task database and ensure all tasks are added correctly.")
 
 
 async def get_plan_from_paas(t:task.Task, solver_url="http://localhost:5001/package/lama-first/solve", max_retries=2):

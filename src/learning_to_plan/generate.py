@@ -10,26 +10,25 @@ import learning_to_plan.config as config
 from learning_to_plan.data import task
 logger = config.get_logger(__name__)
 from typing import Union
-from learning_to_plan.data import generated_plans
+from learning_to_plan.data import generated_plan
 from learning_to_plan.prompt_builder import utils as prompt_builder_utils
 from learning_to_plan.domain_translators import utils as domain_translator_utils
 # --- Batch Generation from File (Modified) ---
 
 def generate_batch(
-        model_name: str, 
-        domain:str, 
-        number_of_instances:Union[str, int] = "all",
+        model_name: str,
+        domain: str,
+        prompt_type: config.PROMPT_TYPE,
+        number_of_instances: Union[str, int] = "all",
         task_type: Optional[task.Task.TYPE] = None,
-        num_samples:int = 1,
-        overwrite_generated_plans:bool = False,
+        num_samples: int = 1,
+        overwrite_generated_plans: bool = False,
         **generation_kwargs):
     start_time = datetime.datetime.now()
 
     logger.info(
         f"Starting generation batch with model '{model_name}' – time: {start_time}" # Use logger
     )
-    prompt_type = generation_kwargs.get("prompt_type", None)
-    assert prompt_type is not None, "Prompt type must be specified in generation_kwargs."
     try:
         model = model_utils.get_model(model_name=model_name)
         generation_kwargs['is_trainable'] = False
@@ -40,7 +39,7 @@ def generate_batch(
     try:
         task_selection_kwargs = {
             'filter_by_domain': domain,
-            'filter_by_pourpose': task.Task.POURPOSE.TEST
+            'filter_by_purpose': task.Task.purpose.TEST
         }
         if task_type:
             assert isinstance(task_type, (str, task.Task.TYPE)), "task_type must be a string or a Task.TYPE enum."
@@ -71,12 +70,14 @@ def generate_batch(
             f"Error retrieving tasks for domain '{domain}', whose selection kwargs where {task_selection_kwargs}: {e}"
         ) from e
 
+    prompt_builder = prompt_builder_utils.get_prompt_builder(prompt_type=prompt_type, **generation_kwargs)
+
     # --- Generate Plans ---
     logger.info("Starting plan generation loop...") # Use logger
     for t in tqdm(tasks, total=len(tasks), desc="Generating plans"):
-        prompt_metadata = prompt_builder_utils.get_metadata(**generation_kwargs)
+        prompt_metadata = prompt_builder.get_metadata()
         model_metadata = model.get_metadata()
-        _generated_plans = generated_plans.generated_plan_database.get(
+        _generated_plans = generated_plan.generated_plan_database.get(
             filter_by_task_id=t.id,
             filter_by_prompt_type=prompt_type,
             filter_by_model_metadata=model_metadata,
@@ -87,7 +88,7 @@ def generate_batch(
                 f"Overwriting {len(_generated_plans)} existing generated plans for task {t.id} with prompt {prompt_type}."
             )
             try:
-                generated_plans.generated_plan_database.delete(obj=_generated_plans)
+                generated_plan.generated_plan_database.delete(obj=_generated_plans)
             except Exception as e:
                 logger.error(f"Error deleting existing generated plans for task {t.id}: {e}", exc_info=True)
                 raise e
@@ -118,79 +119,41 @@ def generate_batch(
             unit="sample",
             leave=False
         ):
-            chat = prompt_builder_utils.get_chat(t=t, with_plan=False, **generation_kwargs)
+            chat = prompt_builder.get_chat(t=t, with_plan=False, **generation_kwargs)
             try:
-                status = config.STATUS.ERROR
-                error_message = None
-                pddl_plan = None
-                raw_plan = None
-
                 response = model.generate_single_sample(
                     chat=chat,
                     **generation_kwargs,
                 )
-                print("----.")
-                print(response)
-                print(".----")
-                if response == "":
-                    error_message = "Empty response from model."
-                elif config.TOKENS.PLAN_START.value not in response:
-                    error_message = f"Plan start token '{config.TOKENS.PLAN_START.value}' not found in response."
-                elif config.TOKENS.PLAN_END.value not in response:
-                    error_message = f"Plan end token '{config.TOKENS.PLAN_END.value}' not found in response."
-                else:
-                    plan_start_idx = response.index(config.TOKENS.PLAN_START.value)
-                    plan_end_idx = response.index(config.TOKENS.PLAN_END.value)
-                    if plan_start_idx >= plan_end_idx:
-                        error_message = "Plan start token is after the end token in the response."
-                    else:
-                        raw_plan = response[plan_start_idx + len(config.TOKENS.PLAN_START.value):plan_end_idx].strip()
-                        if prompt_type == config.PROMPT_TYPE.PDDL:
-                            pddl_plan = raw_plan
-                        else:
-                            try:
-                                pddl_plan = domain_translator_utils.translate_natural_language_plan_to_pddl(t, raw_plan)
-                            except Exception as e:
-                                error_message = "Error translating plan to PDDL: " + str(e)
-                    if error_message is None:
-                        if pddl_plan.replace(" ", "").replace("\n", "") == "":
-                            error_message = "Generated plan is empty after translation."
-                        else:
-                            status = config.STATUS.OK
-            except Exception as e:
-                error_message = "Error generating sample : " + str(object=e)
-            finally:
-                if status == config.STATUS.ERROR:
-                    logger.warning(
-                        f"Failed to generate valid plan for task {t.id} with prompt {prompt_type}: {error_message}",
-                        exc_info=True
-                    )
-                    pddl_plan = None
-                    raw_plan = None
-                    validity = generated_plans.GeneratedPlan.VALIDITY.INVALID
-                else:
-                    logger.info(f"Generated valid plan for task {t.id} with prompt {prompt_type}.")
+                try:
+                    pddl_plan = prompt_builder.process_response(response=response)
                     error_message = None
-                    validity = generated_plans.GeneratedPlan.VALIDITY.UNCHECKED
-                new_generated_plan = generated_plans.GeneratedPlan(
+                except Exception as e:
+                    pddl_plan = None
+                    error_message = f"Error processing response: {e}"
+            except Exception as e:
+                error_message = f"Could not generate plan for task {t.id} with prompt {prompt_type}: {e}"
+                pddl_plan = None
+            finally:
+                gen_plan = generated_plan.GeneratedPlan(
                     task_id=t.id,
-                    raw_plan=raw_plan,
                     pddl_plan=pddl_plan,
                     model_metadata=model_metadata,
                     prompt_metadata=prompt_metadata,
-                    status=status,
-                    validity=validity,
+                    validity=generated_plan.GeneratedPlan.VALIDITY.UNCHECKED,
                     error_message=error_message
                 )
-                try:
-                    generated_plans.generated_plan_database.add(obj=new_generated_plan)
-                    logger.info(f"Added new generated plan for task {t.id} with prompt {prompt_type} at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.")
-                except Exception as e:
-                    logger.error(
-                        f"Error adding new generated plan for task {t.id} with prompt {prompt_type}: {e}",
-                        exc_info=True
-                    )
-                    raise e
+            try:
+                generated_plan.generated_plan_database.add(obj=gen_plan)
+                logger.info(
+                    f"Generated plan for task {t.id} with prompt {prompt_type} saved successfully."
+                )
+            except Exception as e:
+                logger.error(
+                    f"Error saving generated plan for task {t.id} with prompt {prompt_type}: {e}",
+                    exc_info=True
+                )
+                raise e
 
     end_time = datetime.datetime.now()
     logger.info(f"Generation batch finished at {end_time.strftime('%Y-%m-%d %H:%M:%S')}. Total time: {end_time - start_time}") # Use logger

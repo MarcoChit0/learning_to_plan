@@ -205,8 +205,8 @@ def initialize(
     # TODO: PLACEHOLDER SOLUTION FOR DATABASE INITIALIZATION WHICH REQUIRES TO BE AT THE END OF INITIALIZE METHOD FROM CONFIG
     from learning_to_plan.data import task
     task.initialize_db()
-    from learning_to_plan.data import generated_plans
-    generated_plans.initialize_db()
+    from learning_to_plan.data import generated_plan
+    generated_plan.initialize_db()
 
 def create_necessary_dirs(file_path: str) -> None:
     """Creates parent directories for a given file path if they don't exist."""

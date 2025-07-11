@@ -90,25 +90,21 @@ class DatabaseManager(abc.ABC):
             assert isinstance(obj, self.data_cls), f"Object must be an instance of {self.data_cls.__name__}."
             _data = {obj}
 
-        def _add_single(obj: base.Data):
-            assert hasattr(obj, 'id'), "Object must have an 'id' attribute."
-
-            row = obj.to_row()
-            placeholders = ', '.join(['?'] * len(row))
-            query = f"INSERT OR REPLACE INTO {self.table_name} VALUES ({placeholders})"
-            try:
-                self.cursor().execute(query, row)
-                self.commit()
-            except sqlite3.IntegrityError as e:
-                logger.error(f"Integrity error while adding object {obj.id}: {e}")
-                raise e
-        
+        # Validate all objects have id attribute
         for d in _data:
-            try:
-                _add_single(d)
-            except ValueError as e:
-                logger.error(f"Error adding object {d.id}: {e}")
-                raise e
+            assert hasattr(d, 'id'), "Object must have an 'id' attribute."
+
+        # Batch insert using executemany
+        rows = [d.to_row() for d in _data]
+        placeholders = ', '.join(['?'] * len(rows[0]))
+        query = f"INSERT OR REPLACE INTO {self.table_name} VALUES ({placeholders})"
+        
+        try:
+            self.cursor().executemany(query, rows)
+            self.commit()
+        except sqlite3.IntegrityError as e:
+            logger.error(f"Integrity error while adding objects: {e}")
+            raise e
             
     def update(self, obj: base.Data | set[base.Data]):
         assert isinstance(obj, (base.Data, set)), "obj must be an instance of Data or a set of Data objects."

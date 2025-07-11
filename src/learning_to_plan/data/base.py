@@ -54,18 +54,16 @@ def transform_value_from_sqlite_storage(value):
 class Data(abc.ABC):
     AVAILABLE_ID_POOL: set[int] = set()
     NEXT_ID: int = 0
-
+    SETTED_ID_VARIABLES: bool = False
     FIELD_NAMES : list[str] = []
 
     def __init__(self, id: Optional[int] = None, **kwargs):
-        if id is None:
-            self.id = self.get_new_id()
-        else:
-            self.check_id(id)
-            self.id = id
+        try:
+            self.id = type(self).add_id(id)
+        except ValueError as e:
+            logger.error(f"Error adding ID: {e}")
+            raise e
         self.__dict__.update(kwargs)
-        # field names should be ordered according to the database schema
-
         assert all(isinstance(name, str) for name in self.get_field_names()), "All field names must be strings."
         assert len(self.get_field_names()) > 0, "field_names must not be an empty list."
 
@@ -123,28 +121,33 @@ class Data(abc.ABC):
         return tuple(row)
 
     @classmethod
-    def check_id(cls, id: int) -> None:
-        if id in cls.AVAILABLE_ID_POOL:
-            cls.AVAILABLE_ID_POOL.remove(id)
-        cls.SEEN_IDS.add(id)
-        if id >= cls.NEXT_ID:
-            for _id in range(cls.NEXT_ID, id):
-                if _id not in cls.SEEN_IDS:
-                    cls.AVAILABLE_ID_POOL.add(_id)
-            cls.NEXT_ID = id + 1
-    
-    @classmethod
-    def get_new_id(cls) -> int:
-        if cls.AVAILABLE_ID_POOL:
-            new_id = cls.AVAILABLE_ID_POOL.pop()
+    def add_id(cls, id: Optional[int]) -> int:
+        if id is None:
+            if not cls.SETTED_ID_VARIABLES:
+                raise ValueError("Cannot provide a new id before setting the ID variables.")
+            new_id = cls.AVAILABLE_ID_POOL.pop() if cls.AVAILABLE_ID_POOL else cls.NEXT_ID
         else:
-            new_id = cls.NEXT_ID
-            cls.NEXT_ID += 1
+            new_id = id
+
+        if new_id in cls.AVAILABLE_ID_POOL:
+            cls.AVAILABLE_ID_POOL.remove(new_id)
+        if new_id >= cls.NEXT_ID:
+            cls.NEXT_ID = new_id + 1
+
         return new_id
 
     @classmethod
     def remove_id(cls, id: int) -> None:
         cls.AVAILABLE_ID_POOL.add(id)
+
+    @classmethod
+    def set_id_variables(cls, seen_ids : set[int] = set()) -> None:
+        if cls.SETTED_ID_VARIABLES:
+            raise ValueError(f"ID variables for class {cls.__name__} are already set.")
+        max_id = max(seen_ids) if seen_ids else -1
+        cls.NEXT_ID = max_id + 1
+        cls.AVAILABLE_ID_POOL = set(range(max_id + 1)).difference(seen_ids)
+        cls.SETTED_ID_VARIABLES = True
     
     def __hash__(self):
         return hash(self.id)

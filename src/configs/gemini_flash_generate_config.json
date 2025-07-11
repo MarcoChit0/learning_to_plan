@@ -3,5 +3,5 @@
     "max_output_tokens": 16384,
     "top_p": 0.1,
     "temperature": 0.0,
-    "wait_time": 20
+    "wait_time": 1
 }

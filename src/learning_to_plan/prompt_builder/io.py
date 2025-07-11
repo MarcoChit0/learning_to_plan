@@ -1,11 +1,11 @@
-from learning_to_plan.prompt_builder import base
+from learning_to_plan.prompt_builder import natural_language
 from learning_to_plan import config
 from learning_to_plan.data import task
 from learning_to_plan.domain_translators import utils as domain_translator_utils
 
 logger = config.get_logger(__name__)
 
-class IOPromptBuilder(base.PromptBuilder):
+class IOPromptBuilder(natural_language.NaturalLanguagePromptBuilder):
     def __init__(self, **kwargs):
         super().__init__(prompt_type=config.PROMPT_TYPE.IO, **kwargs)
 
@@ -29,4 +29,3 @@ class IOPromptBuilder(base.PromptBuilder):
             chat.append({"role": "assistant", "content": plan})
         
         return chat
-        

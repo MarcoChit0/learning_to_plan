@@ -10,9 +10,9 @@ logger = config.get_logger(__name__)
 lock = threading.Lock()
 
 class Task(base.Data):
-    SEEN_IDS: set[int] = set()
     AVAILABLE_ID_POOL: set[int] = set()
     NEXT_ID: int = 0
+    SETTED_ID_VARIABLES: bool = False
     FIELD_NAMES =[
             "id", 
             "domain", 
@@ -21,10 +21,10 @@ class Task(base.Data):
             "type",
             "paas_status", 
             "pddl_plan", 
-            "pourpose", 
+            "purpose", 
         ]
     
-    class POURPOSE(Enum):
+    class purpose(Enum):
         TRAIN = "train"
         VALIDATION = "validation"
         TEST = "test"
@@ -44,7 +44,7 @@ class Task(base.Data):
             type: Task.TYPE | str,
             id: Optional[int]=None, 
             paas_status: Optional[config.STATUS | str] = config.STATUS.ERROR,
-            pourpose: Optional[Task.POURPOSE | str] = None,
+            purpose: Optional[Task.purpose | str] = None,
             pddl_plan: Optional[str] = None):
         super().__init__(id)
         self.domain :str = domain
@@ -57,10 +57,10 @@ class Task(base.Data):
 
         self.paas_status = config.get_enum_value(paas_status, config.STATUS, "paas_status")
         
-        self.pourpose = config.get_enum_value(pourpose, Task.POURPOSE, "pourpose")
+        self.purpose = config.get_enum_value(purpose, Task.purpose, "purpose")
 
     def __str__(self):
-        return f"Task(id={self.id}, domain={self.domain}, instance={self.instance_file_path}, type={self.type}, pourpose={self.pourpose}, paas_status={self.paas_status})"
+        return f"Task(id={self.id}, domain={self.domain}, instance={self.instance_file_path}, type={self.type}, purpose={self.purpose}, paas_status={self.paas_status})"
 
     def read_instance(self):
         with lock and open(self.instance_file_path, "r", encoding='utf-8') as f:
@@ -82,7 +82,7 @@ class Task(base.Data):
             "type TEXT NOT NULL",
             "paas_status TEXT",
             "pddl_plan TEXT",
-            "pourpose TEXT NOT NULL",
+            "purpose TEXT NOT NULL",
         ]
     @classmethod
     def column_constraints(cls):
@@ -100,9 +100,12 @@ def initialize_db():
             data_cls=Task,
             filters={
                 "filter_by_domain": "domain = ?",
-                "filter_by_pourpose": "pourpose = ?",
+                "filter_by_purpose": "purpose = ?",
                 "filter_by_type": "type = ?",
                 "filter_by_paas_status": "paas_status = ?",
             }
         )
-    _ = task_database.get()
+    tasks = task_database.get()
+    Task.set_id_variables(
+        seen_ids={t.id for t in tasks}
+    )
