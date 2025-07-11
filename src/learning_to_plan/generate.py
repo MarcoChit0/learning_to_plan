@@ -12,7 +12,7 @@ logger = config.get_logger(__name__)
 from typing import Union
 from learning_to_plan.data import generated_plan
 from learning_to_plan.prompt_builder import utils as prompt_builder_utils
-from learning_to_plan.domain_translators import utils as domain_translator_utils
+from learning_to_plan import database
 # --- Batch Generation from File (Modified) ---
 
 def generate_batch(
@@ -45,7 +45,7 @@ def generate_batch(
             assert isinstance(task_type, (str, task.Task.TYPE)), "task_type must be a string or a Task.TYPE enum."
             task_selection_kwargs['filter_by_type'] = task_type
 
-        tasks : set[task.Task] = task.task_database.get(
+        tasks : set[task.Task] = database.task_database.get(
             **task_selection_kwargs
         )
         assert len(tasks) > 0, f"No tasks found for domain '{domain}', whose selection kwargs where {task_selection_kwargs}."
@@ -77,7 +77,7 @@ def generate_batch(
     for t in tqdm(tasks, total=len(tasks), desc="Generating plans"):
         prompt_metadata = prompt_builder.get_metadata()
         model_metadata = model.get_metadata()
-        _generated_plans = generated_plan.generated_plan_database.get(
+        _generated_plans = database.generated_plan_database.get(
             filter_by_task_id=t.id,
             filter_by_prompt_type=prompt_type,
             filter_by_model_metadata=model_metadata,
@@ -88,7 +88,7 @@ def generate_batch(
                 f"Overwriting {len(_generated_plans)} existing generated plans for task {t.id} with prompt {prompt_type}."
             )
             try:
-                generated_plan.generated_plan_database.delete(obj=_generated_plans)
+                database.generated_plan_database.delete(obj=_generated_plans)
             except Exception as e:
                 logger.error(f"Error deleting existing generated plans for task {t.id}: {e}", exc_info=True)
                 raise e
@@ -144,7 +144,7 @@ def generate_batch(
                     error_message=error_message
                 )
             try:
-                generated_plan.generated_plan_database.add(obj=gen_plan)
+                database.generated_plan_database.add(obj=gen_plan)
                 logger.info(
                     f"Generated plan for task {t.id} with prompt {prompt_type} saved successfully."
                 )

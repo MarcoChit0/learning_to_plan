@@ -3,7 +3,6 @@ import threading
 from learning_to_plan import config
 from typing import Optional
 from enum import Enum
-from learning_to_plan.data import database_manager
 from learning_to_plan.data import base
 
 logger = config.get_logger(__name__)
@@ -88,20 +87,3 @@ class Task(base.Data):
         return [
             "CONSTRAINT tup_dm_in UNIQUE(domain, instance_file_path)",  # Ensure unique domain-instance pairs
         ]
-
-task_database: Optional[database_manager.DatabaseManager] = None
-
-def initialize_db():
-    global task_database
-    if task_database is None:
-        task_database = database_manager.DatabaseManager(
-            table_name="task",
-            data_cls=Task,
-            filters={
-                "filter_by_domain": "domain = ?",
-                "filter_by_purpose": "purpose = ?",
-                "filter_by_type": "type = ?",
-                "filter_by_paas_status": "paas_status = ?",
-            }
-        )
-    _ = task_database.get()

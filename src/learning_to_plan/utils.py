@@ -7,6 +7,7 @@ import os
 import datetime
 from sklearn.model_selection import train_test_split
 logger = config.get_logger(__name__)
+from learning_to_plan import database
 import re
 import json
 
@@ -68,7 +69,7 @@ def get_tasks_from_raw_data() -> None:
                 )
             acc += num_tasks
 
-            tasks_on_db:set[task.Task] = task.task_database.get(
+            tasks_on_db:set[task.Task] = database.task_database.get(
                 filter_by_domain=d,
                 filter_by_type=_type,
             )
@@ -167,11 +168,11 @@ def get_tasks_from_raw_data() -> None:
     if acc == 0 or len(tasks_to_add_on_db) == 0:
         raise ValueError(f"No instances found in the raw directory structure file {config.RAW_DIR_STRUCTURE_FILE_PATH}. Please check the structure and ensure instances are defined correctly.")
     try:
-        task.task_database.add(tasks_to_add_on_db)
+        database.task_database.add(tasks_to_add_on_db)
         logger.info(f"Added/ Updated {len(tasks_to_add_on_db)} tasks to the task database.")
     except Exception as e:
         raise ValueError(f"Error adding tasks to the task database: {e}")
-    tasks_on_db: set[task.Task] = task.task_database.get()
+    tasks_on_db: set[task.Task] = database.task_database.get()
     if len(tasks_on_db) != acc:
         raise ValueError(f"Expected {acc} instances in the task database, but found {len(tasks_on_db)}. Please check the task database and ensure all tasks are added correctly.")
 
@@ -225,7 +226,7 @@ async def call_paas(
                 raise e
 
     try:    
-        tasks_to_process = task.task_database.get(
+        tasks_to_process = database.task_database.get(
             filter_by_domain=domain,
             filter_by_paas_status=config.STATUS.ERROR
         )
@@ -242,7 +243,7 @@ async def call_paas(
     await asyncio.gather(*[process_instance(t) for t in tasks_to_process])
 
     try:
-        task.task_database.update(tasks_to_process)
+        database.task_database.update(tasks_to_process)
         logger.info(f"Updated {len(tasks_to_process)} tasks.")
     except Exception as e:
         logger.error(f"Error adding tasks to singleton_task_database: {e}", exc_info=True)

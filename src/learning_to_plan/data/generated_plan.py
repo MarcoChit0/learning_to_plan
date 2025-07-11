@@ -4,7 +4,7 @@ from enum import Enum
 import json
 from typing import Dict, Any, Optional
 from learning_to_plan import config
-from learning_to_plan.data import database_manager, base
+from learning_to_plan.data import base
 # MUST BE THE SAME ID ACROSS ALL MODELS
 logger = config.get_logger(__name__)
 # TODO : ADD EXPERIMENT TAG TO CONTENT
@@ -38,11 +38,7 @@ class GeneratedPlan(base.Data):
             date: Optional[datetime.datetime | str] = None,
             error_message: Optional[str] = None
         ):
-        print("--- GeneratedPlan init START ---")
-        print(f"\tNEXT ID: {self.NEXT_ID}\n\tID: {id};")
         super().__init__(id)
-        print(f"\tNEXT ID: {self.NEXT_ID}\n\tID: {self.id};")
-        print("--- GeneratedPlan init END ---")
         self.task_id = task_id
         self.pddl_plan = pddl_plan
         self.error_message = error_message
@@ -113,18 +109,3 @@ class GeneratedPlan(base.Data):
             "CONSTRAINT fk_task_id FOREIGN KEY(task_id) REFERENCES tasks(id)",
             "CONSTRAINT tup_tid_pm_mm UNIQUE(task_id, prompt_metadata, model_metadata)" 
         ]
-
-generated_plan_database: Optional[database_manager.DatabaseManager] = None
-def initialize_db():
-    global generated_plan_database
-    if generated_plan_database is None:
-        generated_plan_database = database_manager.DatabaseManager(
-            table_name="generated_plan",
-            data_cls=GeneratedPlan,
-            filters={
-                "filter_by_task_id": "task_id = ?",
-                "filter_by_model_metadata": "model_metadata = ?",
-                "filter_by_prompt_metadata": "prompt_metadata = ?",
-            }
-        )
-    _ = generated_plan_database.get()

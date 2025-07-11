@@ -8,7 +8,7 @@ from learning_to_plan import utils
 from learning_to_plan import config
 from learning_to_plan import generate
 from learning_to_plan import parser
-from learning_to_plan.data import task
+from learning_to_plan import database
 
 logger = config.get_logger(__name__)
 
@@ -17,7 +17,7 @@ def get_selected_domains(args) -> set[str]:
         logger.error("Please specify a domain with --domain <domain_name> or 'all'.")
         raise ValueError("Domain not specified.")
 
-    tasks = task.task_database.get()
+    tasks = database.task_database.get()
     available_domains = {t.domain for t in tasks}
     logger.info(f"Available domains: {', '.join(available_domains)}")
 
