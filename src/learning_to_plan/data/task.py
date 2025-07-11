@@ -10,7 +10,6 @@ logger = config.get_logger(__name__)
 lock = threading.Lock()
 
 class Task(base.Data):
-    AVAILABLE_ID_POOL: set[int] = set()
     NEXT_ID: int = 0
     SETTED_ID_VARIABLES: bool = False
     FIELD_NAMES =[
@@ -105,7 +104,4 @@ def initialize_db():
                 "filter_by_paas_status": "paas_status = ?",
             }
         )
-    tasks = task_database.get()
-    Task.set_id_variables(
-        seen_ids={t.id for t in tasks}
-    )
+    _ = task_database.get()

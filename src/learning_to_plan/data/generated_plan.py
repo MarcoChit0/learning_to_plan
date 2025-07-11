@@ -10,7 +10,6 @@ logger = config.get_logger(__name__)
 # TODO : ADD EXPERIMENT TAG TO CONTENT
 
 class GeneratedPlan(base.Data):
-    AVAILABLE_ID_POOL: set[int] = set()
     NEXT_ID: int = 0
     SETTED_ID_VARIABLES: bool = False
     FIELD_NAMES = [
@@ -39,7 +38,11 @@ class GeneratedPlan(base.Data):
             date: Optional[datetime.datetime | str] = None,
             error_message: Optional[str] = None
         ):
+        print("--- GeneratedPlan init START ---")
+        print(f"\tNEXT ID: {self.NEXT_ID}\n\tID: {id};")
         super().__init__(id)
+        print(f"\tNEXT ID: {self.NEXT_ID}\n\tID: {self.id};")
+        print("--- GeneratedPlan init END ---")
         self.task_id = task_id
         self.pddl_plan = pddl_plan
         self.error_message = error_message
@@ -124,7 +127,4 @@ def initialize_db():
                 "filter_by_prompt_metadata": "prompt_metadata = ?",
             }
         )
-    generated_plans = generated_plan_database.get()
-    GeneratedPlan.set_id_variables(
-        seen_ids={gp.id for gp in generated_plans}
-    )
+    _ = generated_plan_database.get()
