@@ -5,6 +5,7 @@ from learning_to_plan import config
 import datasets
 from learning_to_plan.models.base import Model
 logger = config.get_logger(__name__)
+from google.generativeai.types import ThinkingConfig
 
 
 # # --- Gemini Model (Remains unchanged from previous version) ---
@@ -40,6 +41,11 @@ class GeminiModel(Model):
         prompt = ""
         for msg in chat:
             prompt += f"{msg['content']}"
+
+        thinking = generation_kwargs.get("thinking", True)
+        thinking_config = {
+            "thinking_budget" : -1 if thinking else 0,  # -1 means no limit, 0 means no thinking
+        }
             
         generation_config = {
             "temperature":generation_kwargs.get("temperature", 0.7),
@@ -48,7 +54,10 @@ class GeminiModel(Model):
             "max_output_tokens":generation_kwargs.get("max_output_tokens", 2048),
             "candidate_count":1,
             "response_mime_type": "text/plain",
+            "thinking_config": thinking_config,  # Use the thinking configuration
         }
+
+        
         logger.debug(f"Gemini generation config: {generation_config}")
 
         try:

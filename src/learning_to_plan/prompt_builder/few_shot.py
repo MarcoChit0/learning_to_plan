@@ -55,11 +55,14 @@ class FewShotPromptBuilder(natural_language.NaturalLanguagePromptBuilder):
 {examples_str}
 
 Here is a checklist to help you with your task:
+
+{config.TOKENS.CHECKLIST_START.value}
 1) Do not provide any additional text or explanations outside the plan tags.
 2) The plan must be in the same format as the examples above.
 3) The plan should be preceded by the {config.TOKENS.PLAN_START.value} tag and should be followed by the {config.TOKENS.PLAN_END.value} tag.
 4) The actions in the plan must be from the set of actions in the domain described above, that is, they must use the same name and the same number of parameters as one of the action schemas.
 5) The plan must be valid, that is, each action must be applicable in the state it is applied, and the plan must end in a goal state.
+{config.TOKENS.CHECKLIST_END.value}
 """
         chat = [
             {"role": "system", "content": "You are an expert in AI Planning."},

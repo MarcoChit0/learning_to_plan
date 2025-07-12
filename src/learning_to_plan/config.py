@@ -57,8 +57,8 @@ class TOKENS(Enum):
     INITIAL_STATE_END = "</initial_state>"
     EXAMPLE_START = "<example>"
     EXAMPLE_END = "</example>"
-    INSTANCE_START = "<instance>"
-    INSTANCE_END = "</instance>"
+    PROBLEM_START = "<instance>"
+    PROBLEM_END = "</instance>"
     CHECKLIST_START = "<checklist>"
     CHECKLIST_END = "</checklist>"
 
@@ -99,6 +99,8 @@ def get_special_tokens(prompt_type: PROMPT_TYPE) -> list[str]:
             TOKENS.INITIAL_STATE_END,
             TOKENS.EXAMPLE_START,
             TOKENS.EXAMPLE_END,
+            TOKENS.CHECKLIST_START,
+            TOKENS.CHECKLIST_END,
         ]
     elif prompt_type == PROMPT_TYPE.PDDL:
         tokens = [
@@ -108,8 +110,10 @@ def get_special_tokens(prompt_type: PROMPT_TYPE) -> list[str]:
             TOKENS.DOMAIN_END,
             TOKENS.EXAMPLE_START,
             TOKENS.EXAMPLE_END,
-            TOKENS.INSTANCE_START,
-            TOKENS.INSTANCE_END,
+            TOKENS.PROBLEM_START,
+            TOKENS.PROBLEM_END,
+            TOKENS.CHECKLIST_START,
+            TOKENS.CHECKLIST_END,
         ]
     else:
         raise ValueError(f"Unknown prompt type: {prompt_type}. Must be one of {list(PROMPT_TYPE)}.")
