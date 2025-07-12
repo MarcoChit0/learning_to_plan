@@ -16,10 +16,22 @@ from learning_to_plan import config
 import torch
 import datasets
 from learning_to_plan.models.base import Model
+from typing import Dict, Any, Tuple
 
 logger = config.get_logger(__name__)
 
 class HuggingFaceModel(Model):
+    DEFAULT_GENERATION_CONFIG = {
+        "max_new_tokens": 2048,
+        "max_prompt_length": 2048,
+        "do_sample": True,
+        "temperature": 0.7,
+        "top_p": 0.93,
+        "top_k": 50,
+        "eos_token_id": None,  # Will be set to tokenizer's eos_token
+        "pad_token_id": None,  # Will be set to tokenizer's pad_token
+        "num_return_sequences": 1,
+    }
     def __init__(self, model_name):
         super().__init__(model_name)
         assert config.HUGGINGFACE_TOKEN, "Hugging Face token is required for model loading."
@@ -27,6 +39,7 @@ class HuggingFaceModel(Model):
     def setup(self, prompt_type: config.PROMPT_TYPE, checkpoint_dir: Optional[str] = None, is_trainable=False,  **kwargs) -> None:
         model_source = self.model_name
         last_checkpoint = None
+
         if checkpoint_dir:
             last_checkpoint = get_last_checkpoint(checkpoint_dir)
 
@@ -64,11 +77,12 @@ class HuggingFaceModel(Model):
                         raise ValueError(f"Special token '{token}' not found in tokenizer vocabulary. It will be added.")
                     else:
                         logger.info(f"Special token '{token}' successfully added to tokenizer vocabulary with ID {self.tokenizer.convert_tokens_to_ids(token)}.")
-            self.metadata['vocab_size'] = self.tokenizer.vocab_size
+
+            self.metadata['vocab_size'] = len(self.tokenizer)
+            self.metadata['prompt_type'] = prompt_type.value
         except Exception as e:
             logger.error(f"Error loading or setting up tokenizer from {model_source}: {e}", exc_info=True)
             raise e
-
         # --- Model Loading ---
         try:
             torch_dtype = torch.bfloat16 if kwargs.get("bf16", False) else torch.float16
@@ -78,7 +92,7 @@ class HuggingFaceModel(Model):
             if  kwargs.get("load_in_8bit", False): # Check if load_in_8bit is true from train_config.json
                 quantization_config_param = BitsAndBytesConfig(load_in_8bit=True)
                 logger.info("8-bit quantization enabled for model loading.")
-                self.metadata['quantization_config'] = quantization_config_param.to_dict()
+                self.metadata['quantization'] = "8-bit"
 
             self.model = AutoModelForCausalLM.from_pretrained(
                 pretrained_model_name_or_path=self.model_name,
@@ -332,8 +346,17 @@ class HuggingFaceModel(Model):
         except Exception as e: # Catch errors in metrics logging as well
             logger.error(f"Error during training metrics logging or final summary: {e}", exc_info=True)
             # Don't re-raise here if training itself was successful.
+    
+    def get_generation_config(self, **generation_kwargs) -> Dict[str, Any]:
+        gen_config = super().get_generation_config(**generation_kwargs)
+        # Ensure eos_token_id and pad_token_id are set from tokenizer
+        if self.tokenizer.eos_token_id is not None:
+            gen_config["eos_token_id"] = self.tokenizer.eos_token_id
+        if self.tokenizer.pad_token_id is not None:
+            gen_config["pad_token_id"] = self.tokenizer.pad_token_id
+        return {k : v for k, v in gen_config.items() if v is not None}
 
-    def generate_single_sample(self, chat:list[dict[str, str]], **generation_kwargs) -> str:
+    def generate(self, chat:list[dict[str, str]], **generation_kwargs) -> Tuple[str, dict[str, Any]]:
         """
         Generates text based on a prompt using the Hugging Face model.
 
@@ -353,17 +376,17 @@ class HuggingFaceModel(Model):
         device = next(self.model.parameters()).device
 
         # --- Generation Configuration ---
-        gen_kwargs = {
-            "max_new_tokens": generation_kwargs.get("max_new_tokens", 512),
-            "do_sample": generation_kwargs.get("do_sample", True),
-            "temperature": generation_kwargs.get("temperature", 0.7),
-            "top_p": generation_kwargs.get("top_p", 0.93),
-            "top_k": generation_kwargs.get("top_k", 50),
-            "eos_token_id": self.tokenizer.eos_token_id,
-            "pad_token_id": self.tokenizer.pad_token_id,
-            "num_return_sequences": 1,
+        gen_specs = {
+            "tokens": {
+                "input": 0,
+                "output": 0
+            }
         }
-        gen_kwargs = {k: v for k, v in gen_kwargs.items() if v is not None}
+        gen_kwargs = self.get_generation_config(**generation_kwargs)
+        max_prompt_length = gen_kwargs.pop(
+            "max_prompt_length", 
+            self.DEFAULT_GENERATION_CONFIG["max_prompt_length"]
+        )
         logger.debug(f"Generation parameters: {gen_kwargs}")
         try:
             # Set add_generation_prompt=False so the model continues from the provided assistant prompt
@@ -372,7 +395,7 @@ class HuggingFaceModel(Model):
                 add_generation_prompt=True,
                 padding=False,              
                 truncation=True,            
-                max_length=generation_kwargs.get("max_prompt_length", 2048),
+                max_length=max_prompt_length,
                 return_tensors="pt",
                 return_attention_mask=True,
                 return_dict=True,
@@ -381,7 +404,7 @@ class HuggingFaceModel(Model):
             raise ValueError(f"Error during tokenizer.apply_chat_template: {e}") from e
 
         input_length = inputs["input_ids"].shape[1]
-
+        gen_specs["tokens"]["input"] = input_length
         # --- Perform Generation ---
         with torch.no_grad():
             dtype = getattr(self.model, 'dtype', torch.float16)
@@ -401,4 +424,5 @@ class HuggingFaceModel(Model):
             raise ValueError("No output generated by the model. Check the input and generation parameters.")
         output = outputs[0]  # Get the first generated sequence
         generated_tokens = (output[input_length:] if output.shape[0] > input_length else torch.tensor([], dtype=torch.long, device=device))
-        return self.tokenizer.decode(generated_tokens, skip_special_tokens=False)
+        gen_specs["tokens"]["output"] = len(generated_tokens)
+        return self.tokenizer.decode(generated_tokens, skip_special_tokens=False), gen_specs

@@ -3,7 +3,7 @@ import abc
 import sqlite3
 from typing import Optional
 from learning_to_plan import config
-from learning_to_plan.data import base, task, generated_plan
+from learning_to_plan.data import base, task, generated_plan, metadata
 
 logger = config.get_logger(__name__)
 
@@ -42,7 +42,6 @@ class DatabaseManager(abc.ABC):
         table_definition = f"{columns_def_str}, {constraints_str}" if constraints_str else columns_def_str
         print(f"CREATE TABLE IF NOT EXISTS {self.table_name} ({table_definition})")
         cursor.execute(f"CREATE TABLE IF NOT EXISTS {self.table_name} ({table_definition})")
-        
         self.commit()
     
     def get(self, **filters) -> set[base.Data]:
@@ -200,9 +199,10 @@ class DatabaseManager(abc.ABC):
 
 task_database: Optional[DatabaseManager] = None
 generated_plan_database: Optional[DatabaseManager] = None
+metadata_database: Optional[DatabaseManager] = None
 
 def initialize():
-    global task_database, generated_plan_database
+    global task_database, generated_plan_database, metadata_database
     if task_database is None:
         task_database = DatabaseManager(
             table_name="task",
@@ -212,6 +212,15 @@ def initialize():
                 "filter_by_purpose": "purpose = ?",
                 "filter_by_type": "type = ?",
                 "filter_by_paas_status": "paas_status = ?",
+            }
+        )
+
+    if metadata_database is None:
+        metadata_database = DatabaseManager(
+            table_name="metadata",
+            data_cls=metadata.Metadata,
+            filters={
+                "filter_by_info": "info = ?",
             }
         )
 
@@ -225,7 +234,8 @@ def initialize():
                 "filter_by_prompt_metadata": "prompt_metadata = ?",
             }
         )
-    
-    for db in [task_database, generated_plan_database]:
+
+        
+    for db in [task_database, metadata_database, generated_plan_database]:
         generated_plans = db.get()
         db.data_cls.NEXT_ID = max((plan.id for plan in generated_plans), default=-1) + 1

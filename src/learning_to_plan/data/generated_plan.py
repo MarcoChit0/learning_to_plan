@@ -1,13 +1,11 @@
 from __future__ import annotations
 import datetime
 from enum import Enum
-import json
 from typing import Dict, Any, Optional
 from learning_to_plan import config
 from learning_to_plan.data import base
-# MUST BE THE SAME ID ACROSS ALL MODELS
+
 logger = config.get_logger(__name__)
-# TODO : ADD EXPERIMENT TAG TO CONTENT
 
 class GeneratedPlan(base.Data):
     NEXT_ID: int = 0
@@ -15,12 +13,13 @@ class GeneratedPlan(base.Data):
     FIELD_NAMES = [
             "id",
             "task_id",
+            "model_metadata_id",
+            "prompt_metadata_id",
             "pddl_plan",
             "validity",
-            "model_metadata",
-            "prompt_metadata",
             "date",
             "error_message"
+            "generation_metadata"
         ]
     
     class VALIDITY(Enum):
@@ -30,16 +29,19 @@ class GeneratedPlan(base.Data):
     def __init__(
             self,
             task_id: int,
+            model_metadata_id: int,
+            prompt_metadata_id: int,
             id: Optional[int] = None,
             pddl_plan: Optional[str] = None,
             validity: VALIDITY | str = VALIDITY.UNCHECKED,
-            model_metadata: Optional[Dict[str, Any] | str] = None,
-            prompt_metadata: Optional[Dict[str, Any] | str] = None,
             date: Optional[datetime.datetime | str] = None,
-            error_message: Optional[str] = None
+            error_message: Optional[str] = None,
+            specs: Optional[Dict[str, Any] | str] = None
         ):
         super().__init__(id)
         self.task_id = task_id
+        self.prompt_metadata_id = prompt_metadata_id
+        self.model_metadata_id = model_metadata_id
         self.pddl_plan = pddl_plan
         self.error_message = error_message
         assert (self.pddl_plan or self.error_message) and not (self.pddl_plan and self.error_message), \
@@ -48,13 +50,7 @@ class GeneratedPlan(base.Data):
         self.validity = config.get_enum_value(validity, GeneratedPlan.VALIDITY, "validity")
         assert self.validity, "Validity must not be None."
 
-        self.prompt_metadata = prompt_metadata if isinstance(prompt_metadata, dict) else base.transform_value_from_sqlite_storage(prompt_metadata)
-        if self.prompt_metadata is None:
-            self.prompt_metadata = {}
-        
-        self.model_metadata = model_metadata if isinstance(model_metadata, dict) else base.transform_value_from_sqlite_storage(model_metadata)
-        if self.model_metadata is None:
-            self.model_metadata = {}
+        self.generation_metadata = specs if isinstance(specs, dict) else base.transform_value_from_sqlite_storage(specs)
 
         if date is None or base.transform_value_from_sqlite_storage(date) is None:
             self.date = datetime.datetime.now()
@@ -95,17 +91,20 @@ class GeneratedPlan(base.Data):
         return [
             "id INTEGER PRIMARY KEY",
             "task_id INTEGER NOT NULL",
+            "model_metadata_id INTEGER NOT NULL",
+            "prompt_metadata_id INTEGER NOT NULL",
             "pddl_plan TEXT",
             f"validity TEXT NOT NULL CHECK(validity IN ({validity_values}))",
-            "model_metadata TEXT",
-            "prompt_metadata TEXT",
             "date TEXT",
             "error_message TEXT",
+            "generation_metadata TEXT"
         ]
 
     @classmethod
     def column_constraints(cls):
         return [
             "CONSTRAINT fk_task_id FOREIGN KEY(task_id) REFERENCES tasks(id)",
-            "CONSTRAINT tup_tid_pm_mm UNIQUE(task_id, prompt_metadata, model_metadata)" 
+            "CONSTRAINT fk_model_metadata_id FOREIGN KEY(model_metadata_id) REFERENCES metadata(id)",
+            "CONSTRAINT fk_prompt_metadata_id FOREIGN KEY(prompt_metadata_id) REFERENCES metadata(id)",
+            "CONSTRAINT tup_tid_pm_mm UNIQUE(task_id, prompt_metadata_id, model_metadata_id)",
         ]

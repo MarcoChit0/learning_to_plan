@@ -1,21 +1,21 @@
 from __future__ import annotations
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any, Tuple
 import os
 from learning_to_plan import config
+from learning_to_plan.data import metadata
 import datasets
-import json
-from learning_to_plan.data import generated_plan
-from learning_to_plan.data import task
 logger = config.get_logger(__name__)
 
 class Model:
+    DEFAULT_GENERATION_CONFIG : dict[str, any] = {}
+
     def __init__(self, model_name: str):
         self.model_name = model_name
-        self.model_dir_path = os.path.join(config.MODELS_DIR, model_name)
-        os.makedirs(self.model_dir_path, exist_ok=True)
-        self.metadata = {
+        self.metadata : dict[str, Any] = {
             "model_name": model_name,
         }
+        self.model_dir_path = os.path.join(config.MODELS_DIR, model_name)
+        os.makedirs(self.model_dir_path, exist_ok=True)
         logger.info(f"Initialized model {self.model_name} with directory {self.model_dir_path}.")
         logger.warning(f"If you want to generate content or train the model {self.model_name}, please call the setup method first.")
     
@@ -23,7 +23,7 @@ class Model:
         self.__dict__.update(kwargs)
         return
 
-    def generate_single_sample(self, chat:list[dict[str, str]], **generation_kwargs) -> str:
+    def generate(self, chat:list[dict[str, str]], **generation_kwargs) -> Tuple[str, dict[str, Any]]:
         """
         Generates a plan based on the provided prompt.
         This is a placeholder method and should be implemented in subclasses.
@@ -50,10 +50,26 @@ class Model:
         This is a placeholder method and should be implemented in subclasses.
         """
         raise NotImplementedError("Subclasses should implement this method.")
-
-    def get_metadata(self) -> Dict[str, Any]:
+    
+    @classmethod
+    def get_generation_config(cls, **gen_kwargs) -> Dict[str, Any]:
         """
-        Returns metadata about the model.
+        Returns the generation configuration for the model.
         This is a placeholder method and should be implemented in subclasses.
         """
-        return self.metadata
+        _gen_config = cls.DEFAULT_GENERATION_CONFIG.copy()
+        for key in _gen_config:
+            if key in gen_kwargs:
+                _gen_config[key] = gen_kwargs[key]
+        return _gen_config
+    
+    def get_metadata(self, **gen_kwargs) -> metadata.Metadata:
+        """
+        Returns the metadata of the model. This method should only be used when generating plans. There is no need to call this method when training the model, because it will create a lot of useless metadata entries.
+        """
+        return metadata.create_metadata(
+            **self.metadata,
+            **self.get_generation_config(**gen_kwargs)
+        )
+    
+    

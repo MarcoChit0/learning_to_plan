@@ -33,7 +33,6 @@ class Task(base.Data):
         UNSEEN = "unseen"
         OBFUSCATED = "obfuscated"
 
-    # TODO: CHECK WHETHER THIS WHAY DOES NOT INTRODUCES ID ERRORS
     def __init__(
             self, 
             domain : str, 

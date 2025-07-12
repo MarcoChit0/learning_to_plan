@@ -10,7 +10,7 @@ import learning_to_plan.config as config
 from learning_to_plan.data import task
 logger = config.get_logger(__name__)
 from typing import Union
-from learning_to_plan.data import generated_plan
+from learning_to_plan.data import generated_plan, metadata
 from learning_to_plan.prompt_builder import utils as prompt_builder_utils
 from learning_to_plan import database
 # --- Batch Generation from File (Modified) ---
@@ -70,13 +70,13 @@ def generate_batch(
             f"Error retrieving tasks for domain '{domain}', whose selection kwargs where {task_selection_kwargs}: {e}"
         ) from e
 
-    prompt_builder = prompt_builder_utils.get_prompt_builder(prompt_type=prompt_type, **generation_kwargs)
+    pb = prompt_builder_utils.get_prompt_builder(prompt_type=prompt_type, **generation_kwargs)
 
     # --- Generate Plans ---
     logger.info("Starting plan generation loop...") # Use logger
     for t in tqdm(tasks, total=len(tasks), desc="Generating plans"):
-        prompt_metadata = prompt_builder.get_metadata()
-        model_metadata = model.get_metadata()
+        prompt_metadata:metadata.Metadata = pb.get_metadata(**generation_kwargs)
+        model_metadata:metadata.Metadata = model.get_metadata(**generation_kwargs)
         _generated_plans = database.generated_plan_database.get(
             filter_by_task_id=t.id,
             filter_by_prompt_type=prompt_type,
@@ -119,14 +119,14 @@ def generate_batch(
             unit="sample",
             leave=False
         ):
-            chat = prompt_builder.get_chat(t=t, with_plan=False, **generation_kwargs)
+            chat = pb.get_chat(t=t, with_plan=False, **generation_kwargs)
             try:
-                response = model.generate_single_sample(
+                response, gen_specs = model.generate(
                     chat=chat,
                     **generation_kwargs,
                 )
                 try:
-                    pddl_plan = prompt_builder.process_response(response=response)
+                    pddl_plan = pb.process_response(response=response)
                     error_message = None
                 except Exception as e:
                     pddl_plan = None
@@ -138,10 +138,11 @@ def generate_batch(
                 gen_plan = generated_plan.GeneratedPlan(
                     task_id=t.id,
                     pddl_plan=pddl_plan,
-                    model_metadata=model_metadata,
-                    prompt_metadata=prompt_metadata,
+                    model_metadata_id=model_metadata.id,
+                    prompt_metadata_id=prompt_metadata.id,
                     validity=generated_plan.GeneratedPlan.VALIDITY.UNCHECKED,
-                    error_message=error_message
+                    error_message=error_message,
+                    specs=gen_specs,
                 )
             try:
                 database.generated_plan_database.add(obj=gen_plan)

@@ -9,7 +9,7 @@ logger = config.get_logger(__name__)
 class FewShotPromptBuilder(natural_language.NaturalLanguagePromptBuilder):
     def __init__(self, few_shot : int, **kwargs):
         super().__init__(prompt_type=config.PROMPT_TYPE.FEW_SHOT, **kwargs)
-        self.prompt_metadata["few_shot"] = few_shot
+        self.metadata["few_shot"] = few_shot
         self.few_shot = few_shot
 
     def get_chat(self, t : task.Task, with_plan: bool = True, **kwargs) -> list[dict[str, str]]:
@@ -79,6 +79,7 @@ def get_few_shot_examples(few_shot:int) -> list[dict[str, str]]:
     # TODO: LATER, CHANGE THIS FUNCTION TO USE ONLY TEST TASKS AND FROM OTHER DOMAINS
     # FOR NOW, WE HAVE A LIST OF SAMPLES THAT WE CAN USE AS FEW-SHOT EXAMPLES
     gripper_data = {
+        "domain": "gripper",
         "domain_description": """I have to plan how to move objects between rooms using a robot with grippers. The robot can move between rooms and pick up or drop objects using its grippers.
 Here are the actions that can be performed:
 Move the robot from one room to another room.
@@ -138,6 +139,7 @@ robot_1 drops ball_2 at room_2 with left_gripper_1
 robot_1 drops ball_5 at room_2 with right_gripper_1"""
     }
     childsnack_data = {
+        "domain": "childsnack",
         "domain_description": """I have to plan how to make and serve sandwiches for a group of children, taking into account that some of them are allergic to gluten.
 There are two types of sandwiches: regular and gluten-free.
 Here are the actions that can be performed:
@@ -212,6 +214,7 @@ move tray_1 from kitchen to table_2
 use tray_1 to serve regular sandwich_5 to child_3 at table_2"""
     }
     logistics_data = {
+        "domain": "logistics",
         "domain_description": """I have to plan logistics to transport packages within cities via trucks and between cities via airplanes. Locations within a city are directly connected (trucks can move between any two such locations), and so are the cities. In each city there is exactly one truck and each city has one location that serves as an airport.
 Here are the actions that can be performed:
 Load a package into a truck.
@@ -268,6 +271,7 @@ drive truck_0 from location_0-1 to location_0-0 in city_0
 unload package_1 from truck_0 at location_0-0"""
     }
     satellite_data = {
+        "domain": "satellite",
         "domain_description": """I have to plan how to operate satellites in space equipped with various instruments. The satellites can be turned to point in different directions, their instruments can be switched on or off, calibrated, and used to take images using specific modes.
 Here are the actions that can be performed:
 Turn a satellite to a direction.
@@ -345,6 +349,7 @@ take image of star_8 using instrument_9 on satellite_4 with infrared_mode_1
 turn satellite_0 from star_6 to star_0"""
     }
     barman_data = {
+        "domain": "barman",
         "domain_description": """I have to plan actions for a robotic bartender to prepare cocktails. The bartender has two hands and works with various containers and ingredients to mix and serve drinks.
 Here are the actions that can be performed:
 Grasp a container (shot or shaker) from the table.
