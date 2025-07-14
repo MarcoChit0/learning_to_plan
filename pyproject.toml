@@ -21,8 +21,7 @@ dependencies = [
 "dotenv",
 "bitsandbytes",
 "peft",
-"google-api-python-client",
-"google-generativeai"
+"google-genai"
 ]
 
 [build-system]

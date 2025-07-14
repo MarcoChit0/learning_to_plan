@@ -80,8 +80,8 @@ def generate_batch(
         _generated_plans = database.generated_plan_database.get(
             filter_by_task_id=t.id,
             filter_by_prompt_type=prompt_type,
-            filter_by_model_metadata=model_metadata,
-            filter_by_prompt_metadata=prompt_metadata
+            filter_by_model_metadata_id=model_metadata.id,
+            filter_by_prompt_metadata_id=prompt_metadata.id
         )
         if overwrite_generated_plans:
             logger.info(
@@ -121,26 +121,28 @@ def generate_batch(
         ):
             chat = pb.get_chat(t=t, with_plan=False, **generation_kwargs)
             try:
+                gen_specs = {}
+                pddl_plan = None
+                error_message = None
+                validity = generated_plan.GeneratedPlan.VALIDITY.INVALID
                 response, gen_specs = model.generate(
                     chat=chat,
                     **generation_kwargs,
                 )
                 try:
                     pddl_plan = pb.process_response(response=response)
-                    error_message = None
+                    validity = generated_plan.GeneratedPlan.VALIDITY.UNCHECKED
                 except Exception as e:
-                    pddl_plan = None
                     error_message = f"Error processing response: {e}"
             except Exception as e:
                 error_message = f"Could not generate plan for task {t.id} with prompt {prompt_type}: {e}"
-                pddl_plan = None
             finally:
                 gen_plan = generated_plan.GeneratedPlan(
                     task_id=t.id,
                     pddl_plan=pddl_plan,
                     model_metadata_id=model_metadata.id,
                     prompt_metadata_id=prompt_metadata.id,
-                    validity=generated_plan.GeneratedPlan.VALIDITY.UNCHECKED,
+                    validity=validity,
                     error_message=error_message,
                     specs=gen_specs,
                 )

@@ -32,16 +32,20 @@ logger = get_logger(__name__) # Initialize logger
 
 
 # --- Constants for directory/file names ---
-CONFIGS_DIR_NAME = "configs"
-CONFIGS_DIR = os.path.join("src", CONFIGS_DIR_NAME)
-DEFAULT_TRAIN_CONFIG = "train_config.json"
-DEFAULT_GENERATE_CONFIG = "generate_config.json"
 BASIC_INSTANCES = "generated_basic"
 LONG_INSTANCES = "generated_basic_longer_plan_len"
 DATABASE_FILE_NAME = "learning_to_plan.db"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
 RAW_DIR_STRUCTURE_FILE_NAME = "structure.json"
+
+# --- Default Config Files ---
+CONFIG_DIR_PATH : str = os.path.join("src", "configs")
+GENERATE_CONFIG_DIR_PATH : str = os.path.join(CONFIG_DIR_PATH, "generate")
+TRAIN_CONFIG_DIR_PATH : str = os.path.join(CONFIG_DIR_PATH, "train")
+DEFAULT_TRAIN_CONFIG_FILE_PATH: str = os.path.join(TRAIN_CONFIG_DIR_PATH, "qwen.json")
+DEFAULT_GENERATE_CONFIG_FILE_PATH: str = os.path.join(GENERATE_CONFIG_DIR_PATH, "qwen.json")
+
 
 RANDOM_SEED = 42 
 

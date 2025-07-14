@@ -230,8 +230,8 @@ def initialize():
             data_cls=generated_plan.GeneratedPlan,
             filters={
                 "filter_by_task_id": "task_id = ?",
-                "filter_by_model_metadata": "model_metadata = ?",
-                "filter_by_prompt_metadata": "prompt_metadata = ?",
+                "filter_by_model_metadata_id": "model_metadata_id = ?",
+                "filter_by_prompt_metadata_id": "prompt_metadata_id = ?",
             }
         )
 

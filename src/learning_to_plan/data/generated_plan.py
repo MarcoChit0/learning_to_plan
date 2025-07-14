@@ -18,8 +18,8 @@ class GeneratedPlan(base.Data):
             "pddl_plan",
             "validity",
             "date",
-            "error_message"
-            "generation_metadata"
+            "error_message",
+            "specs"
         ]
     
     class VALIDITY(Enum):
@@ -50,7 +50,7 @@ class GeneratedPlan(base.Data):
         self.validity = config.get_enum_value(validity, GeneratedPlan.VALIDITY, "validity")
         assert self.validity, "Validity must not be None."
 
-        self.generation_metadata = specs if isinstance(specs, dict) else base.transform_value_from_sqlite_storage(specs)
+        self.specs = specs if isinstance(specs, dict) else base.transform_value_from_sqlite_storage(specs)
 
         if date is None or base.transform_value_from_sqlite_storage(date) is None:
             self.date = datetime.datetime.now()
@@ -97,7 +97,7 @@ class GeneratedPlan(base.Data):
             f"validity TEXT NOT NULL CHECK(validity IN ({validity_values}))",
             "date TEXT",
             "error_message TEXT",
-            "generation_metadata TEXT"
+            "specs TEXT"
         ]
 
     @classmethod

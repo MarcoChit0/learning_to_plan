@@ -53,7 +53,8 @@ if __name__ == "__main__":
 
     elif args.train:
         logger.info("--- Starting Model Training ---")
-        config_file_path = args.config_file_path or os.path.join(config.CONFIGS_DIR, config.DEFAULT_TRAIN_CONFIG)
+        config_file_path = args.config_file_path or config.DEFAULT_TRAIN_CONFIG_FILE_PATH
+        assert os.path.exists(config_file_path), f"Config file {config_file_path} does not exist."
         train_kwargs = config.get_config(config_file_path=config_file_path, args=args)
         assert train_kwargs["model_name"], "Model name not found in config. Please check your configuration."
         domains = get_selected_domains(args=args)
@@ -65,7 +66,8 @@ if __name__ == "__main__":
 
     elif args.generate:
         logger.info("--- Starting Generation ---")
-        config_file_path = args.config_file_path or os.path.join(config.CONFIGS_DIR, config.DEFAULT_GENERATE_CONFIG)
+        config_file_path = args.config_file_path or config.DEFAULT_GENERATE_CONFIG_FILE_PATH
+        assert os.path.exists(config_file_path), f"Config file {config_file_path} does not exist."
         generate_kwargs = config.get_config(config_file_path=config_file_path, args=args)
         assert generate_kwargs["model_name"], "Model name not found in config. Please check your configuration."
         domains = get_selected_domains(args=args)
