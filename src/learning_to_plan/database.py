@@ -40,7 +40,6 @@ class DatabaseManager(abc.ABC):
         columns_def_str = ', '.join(self.data_cls.column_def())
         constraints_str = ', '.join(self.data_cls.column_constraints())
         table_definition = f"{columns_def_str}, {constraints_str}" if constraints_str else columns_def_str
-        print(f"CREATE TABLE IF NOT EXISTS {self.table_name} ({table_definition})")
         cursor.execute(f"CREATE TABLE IF NOT EXISTS {self.table_name} ({table_definition})")
         self.commit()
     
@@ -79,7 +78,7 @@ class DatabaseManager(abc.ABC):
             return self.data_cls.from_row(row)
         return None
     
-    def add(self, obj: base.Data | set[base.Data]):
+    def _execute_many(self, query: str, obj: set[base.Data] | base.Data):
         assert isinstance(obj, (base.Data, set)), "obj must be an instance of Data or a set of Data objects."
         if isinstance(obj, set):
             assert len(obj) > 0, "Set of objects must not be empty."
@@ -92,109 +91,98 @@ class DatabaseManager(abc.ABC):
         # Validate all objects have id attribute
         for d in _data:
             assert hasattr(d, 'id'), "Object must have an 'id' attribute."
+        rows = [d.to_row() for d in _data]  
 
-        # Batch insert using executemany
-        rows = [d.to_row() for d in _data]
-        placeholders = ', '.join(['?'] * len(rows[0]))
-        query = f"INSERT OR REPLACE INTO {self.table_name} VALUES ({placeholders})"
-        
         try:
             self.cursor().executemany(query, rows)
             self.commit()
         except sqlite3.IntegrityError as e:
             logger.error(f"Integrity error while adding objects: {e}")
             raise e
-            
-    def update(self, obj: base.Data | set[base.Data]):
+
+    def _verify_obj(self, obj: base.Data | set[base.Data]):
         assert isinstance(obj, (base.Data, set)), "obj must be an instance of Data or a set of Data objects."
         if isinstance(obj, set):
             assert len(obj) > 0, "Set of objects must not be empty."
             assert all(isinstance(o, self.data_cls) for o in obj), f"All objects in the set must be instances of {self.data_cls.__name__}."
-            _data = obj
         else:
             assert isinstance(obj, self.data_cls), f"Object must be an instance of {self.data_cls.__name__}."
+        
+
+    def _get_rows(self, obj: base.Data | set[base.Data]):
+        try:
+            self._verify_obj(obj)
+        except AssertionError as e:
+            raise ValueError(f"Error verifying object(s): {e}")
+        
+        if isinstance(obj, set):
+            _data = obj
+        else:
             _data = {obj}
+        
+        return [d.to_row() for d in _data]
+        
 
-        def _update_single(obj: base.Data):
-            assert hasattr(obj, 'id'), "Object must have an 'id' attribute."
-            try:
-                older_obj = self.get_by_id(obj.id)
-                if older_obj is None:
-                    self.add(obj)
-                else:
-                    row = obj.to_row()
-                    query = f"UPDATE {self.table_name} SET "
-                    params = []
-                    for field_name, value in zip(self.data_cls.get_field_names(), row):
-                        if field_name != "id" and hasattr(older_obj, field_name) and getattr(older_obj, field_name) != getattr(obj, field_name):
-                            query += f"{field_name} = ?, "
-                            params.append(value)
-                    query = query.rstrip(', ') + " WHERE id = ?"
-                    params.append(obj.id)  
-                    
-                    try:
-                        self.cursor().execute(query, params)
-                        self.commit()
-                    except sqlite3.IntegrityError as e:
-                        logger.error(f"Integrity error while updating object {obj.id}: {e}")
-                        raise e
-            except Exception as e:
-                raise e
-
-        for d in _data:
-            try:
-                _update_single(d)
-            except ValueError as e:
-                logger.error(f"Error updating object {d.id}: {e}")
-                raise e
+    def add(self, obj: base.Data | set[base.Data]):
+        try:
+            rows = self._get_rows(obj)
+        except Exception as e:
+            raise ValueError(f"Error getting rows from object(s): {e}")
+        placeholders = ', '.join(['?'] * len(rows[0]))
+        query = f"INSERT OR REPLACE INTO {self.table_name} VALUES ({placeholders})"
+        try:
+            self._execute_many(query, obj)
+        except sqlite3.IntegrityError as e:
+            logger.error(f"Integrity error while adding objects: {e}")
+            raise e
+            
+    def update(self, obj: base.Data | set[base.Data]):
+        try:
+            rows = self._get_rows(obj)
+        except Exception as e:
+            raise ValueError(f"Error getting rows from object(s): {e}")
+        placeholders = ', '.join(['?'] * len(rows[0]))
+        query = f"REPLACE INTO {self.table_name} VALUES ({placeholders})"
+        try:
+            self._execute_many(query, obj)
+        except sqlite3.IntegrityError as e:
+            logger.error(f"Integrity error while updating objects: {e}")
+            raise e
     
-    def delete(self, obj : int | base.Data | set[base.Data]):
+    def delete(self, obj: int | base.Data | set[base.Data]):
         assert isinstance(obj, (int, base.Data, set)), "obj must be an int, an instance of Data, or a set of Data objects."
 
-        def _delete_single(id: int):
+        ids_to_delete: list[int] = []
+        if isinstance(obj, int):
+            ids_to_delete.append(obj)
+        else:    
             try:
-                _obj = self.get_by_id(id)
-                if _obj is None:
-                    raise ValueError(f"Object with id {id} does not exist in the database.")
+                self._verify_obj(obj)
+                if isinstance(obj, base.Data):
+                    ids_to_delete.append(obj.id)
+                elif isinstance(obj, set):
+                    ids_to_delete.extend(o.id for o in obj)
+                else:
+                    raise TypeError(f"Unsupported type for deletion: {type(obj)}. Must be int, Data, or set of Data objects.")
             except ValueError as e:
-                logger.error(f"Error retrieving object with id {id}: {e}")
-                raise e
-            try:
-                query = f"DELETE FROM {self.table_name} WHERE id = ?"
-                self.cursor().execute(query, (id,))
-                self.commit()
-                self.data_cls.remove_id(id)
-            except sqlite3.IntegrityError as e:
-                logger.error(f"Integrity error while deleting object with id {id}: {e}")
-                raise e
-        
-        def _delete_object(obj: base.Data):
-            assert isinstance(obj, self.data_cls), f"Object must be an instance of {self.data_cls.__name__}."
-            try:
-                _delete_single(obj.id)
-            except ValueError as e:
-                raise ValueError(f"Could not delete object with id {obj.id}: {e}")
+                raise ValueError(f"Error verifying object(s) for deletion: {e}")
 
-        def _delete_objects(objs: set[base.Data]):
-            assert len(obj) > 0, "Set of objects must not be empty."
-            assert all(isinstance(o, self.data_cls) for o in obj), f"All objects in the set must be instances of {self.data_cls.__name__}."
-            for obj in objs:
-                try:
-                    _delete_object(obj)
-                except Exception as e:
-                    objects_ids = ', '.join(str(o.id) for o in objs)
-                    raise ValueError(f"Could not delete objects with ids {objects_ids}: {e}")
+        if not ids_to_delete:
+            return
+
         try:
-            if isinstance(obj, set):
-                _delete_objects(obj)
-            elif isinstance(obj, base.Data):
-                _delete_object(obj)
-            elif isinstance(obj, int):
-                _delete_single(obj)
-            else:
-                raise TypeError(f"Unsupported type for deletion: {type(obj)}. Must be int, Data, or set of Data objects.")
-        except Exception as e:
-            logger.error(f"Error deleting object(s): {e}")
+            placeholders = ', '.join(['?'] * len(ids_to_delete))
+            query = f"DELETE FROM {self.table_name} WHERE id IN ({placeholders})"
+            cursor = self.cursor()
+            cursor.execute(query, ids_to_delete)
+            
+            if cursor.rowcount != len(ids_to_delete):
+                logger.warning(f"Attempted to delete {len(ids_to_delete)} object(s), but {cursor.rowcount} were deleted. Some IDs might not exist.")
+
+            self.commit()
+            
+        except sqlite3.Error as e:
+            logger.error(f"Error deleting object(s) with ids {ids_to_delete}: {e}")
             raise e
 
 task_database: Optional[DatabaseManager] = None
@@ -232,6 +220,7 @@ def initialize():
                 "filter_by_task_id": "task_id = ?",
                 "filter_by_model_metadata_id": "model_metadata_id = ?",
                 "filter_by_prompt_metadata_id": "prompt_metadata_id = ?",
+                "filter_by_validity": "validity = ?",
             }
         )
 

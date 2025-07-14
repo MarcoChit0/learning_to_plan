@@ -9,6 +9,7 @@ from learning_to_plan import config
 from learning_to_plan import generate
 from learning_to_plan import parser
 from learning_to_plan import database
+from learning_to_plan.data import process
 
 logger = config.get_logger(__name__)
 
@@ -85,19 +86,16 @@ if __name__ == "__main__":
             logger.info(f"Finished generation for domain: {domain}")
         logger.info("--- Finished All Generation ---")
     
-    # elif args.validate:
-    #     logger.info("--- Starting Plan Validation ---")
-    #     utils.apply_function_to_all_models(
-    #         function=processing_data.validate_plans
-    #     )
-    #     logger.info("--- Finished All Validation ---")
+    elif args.validate:
+        logger.info("--- Starting Plan Validation ---")
+        process.validate_plans()
+        logger.info("--- Finished All Validation ---")
     
-    # elif args.compute_metrics:
-    #     logger.info("--- Starting Metrics Computation ---")
-    #     utils.apply_function_to_all_models(
-    #         function=processing_data.compute_metrics
-    #     )
-    #     logger.info("--- Finished All Metrics Computation ---")
+    elif args.compute_metrics:
+        logger.info("--- Starting Metrics Computation ---")
+        process.compute_metrics()
+        logger.info("--- Finished All Metrics Computation ---")
+
     elif args.landmarks_generation:
         logger.info("--- Starting Landmark Graph Generation ---")
         utils.get_landmark_graph()

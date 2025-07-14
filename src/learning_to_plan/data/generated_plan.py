@@ -2,6 +2,7 @@ from __future__ import annotations
 import datetime
 from enum import Enum
 from typing import Dict, Any, Optional
+
 from learning_to_plan import config
 from learning_to_plan.data import base
 
@@ -9,7 +10,6 @@ logger = config.get_logger(__name__)
 
 class GeneratedPlan(base.Data):
     NEXT_ID: int = 0
-    SETTED_ID_VARIABLES: bool = False
     FIELD_NAMES = [
             "id",
             "task_id",
@@ -56,22 +56,14 @@ class GeneratedPlan(base.Data):
             self.date = datetime.datetime.now()
         else:
             self.date = base.transform_value_from_sqlite_storage(date)
-        
-    def was_validated(self) -> bool:
-        """
-        Returns True if the plan has been validated, False otherwise.
-        """
-        return self.validity != GeneratedPlan.VALIDITY.UNCHECKED
 
     def validate(self, is_valid: bool) -> None:
         """
         Validates the plan.
         """
         if is_valid:
-            logger.debug(f"Plan '{self.raw_plan}' validated as valid.")
             self.validity = GeneratedPlan.VALIDITY.VALID
         else:
-            logger.debug(f"Plan '{self.raw_plan}' validated as invalid.")
             self.validity = GeneratedPlan.VALIDITY.INVALID
     
     def is_valid(self) -> bool:

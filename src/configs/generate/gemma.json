@@ -4,5 +4,5 @@
     "top_p": 0.95,
     "temperature": 1.0,
     "top_k": 64,
-    "wait_time": 20
+    "wait_time": 3
 }

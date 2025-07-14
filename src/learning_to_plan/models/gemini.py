@@ -21,6 +21,7 @@ class GeminiModel(Model):
         "max_output_tokens": 16384,  # 16k tokens
         "candidate_count": 1,
         "response_mime_type": "text/plain",
+        "thinking" : None,
     }
     def __init__(self, model_name):
         super().__init__(model_name)

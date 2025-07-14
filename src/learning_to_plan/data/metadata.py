@@ -37,6 +37,9 @@ class Metadata(base.Data):
     
     def update(self, **kwargs: Any) -> None:
         self.info.update(kwargs)
+    
+    def __str__(self):
+        return f"Metadata(id={self.id}, info={self.info})"
         
 
 def create_metadata(**info) -> Metadata:

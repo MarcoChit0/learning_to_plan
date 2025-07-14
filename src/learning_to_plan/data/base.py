@@ -57,13 +57,13 @@ class Data(abc.ABC):
 
     def __init__(self, id: Optional[int] = None, **kwargs):
         if id is None:
-            id = self.NEXT_ID
+            id = self.__class__.NEXT_ID
         elif not isinstance(id, int):
             raise TypeError(f"ID must be an integer, got {type(id)} instead.")
         
         self.id = id
-        if id >= self.NEXT_ID:
-            self.NEXT_ID = id + 1
+        if id >= self.__class__.NEXT_ID:
+            self.__class__.NEXT_ID = id + 1
 
         self.__dict__.update(kwargs)
         assert all(isinstance(name, str) for name in self.get_field_names()), "All field names must be strings."

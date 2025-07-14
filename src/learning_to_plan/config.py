@@ -16,6 +16,7 @@ GOOGLE_API_KEY: Optional[str] = None
 DATABASE_FILE_PATH: Optional[str] = None
 RAW_DIR_STRUCTURE_FILE_PATH: Optional[str] = None
 LOGGING_INITIALIZED: bool = False
+METRICS_FILE_PATH: Optional[str] = None
 # --- Configure root logger minimally initially ---
 
 def get_logger(name: str = __name__) -> logging.Logger:
@@ -38,6 +39,7 @@ DATABASE_FILE_NAME = "learning_to_plan.db"
 DOMAIN_FILE_NAME = "generated_domain.pddl"
 LOGGING_FILE_NAME = "logs.log"
 RAW_DIR_STRUCTURE_FILE_NAME = "structure.json"
+METRICS_FILE_NAME = "metrics.csv"
 
 # --- Default Config Files ---
 CONFIG_DIR_PATH : str = os.path.join("src", "configs")
@@ -183,6 +185,9 @@ def initialize(
 
     RAW_DIR_STRUCTURE_FILE_PATH = os.path.join(RAW_DIR, RAW_DIR_STRUCTURE_FILE_NAME)
     assert os.path.exists(RAW_DIR_STRUCTURE_FILE_PATH), f"Raw directory structure file {RAW_DIR_STRUCTURE_FILE_PATH} does not exist. Please ensure it is created before running the application."
+
+    global METRICS_FILE_PATH, METRICS_FILE_NAME
+    METRICS_FILE_PATH = os.path.join(DATA_DIR, METRICS_FILE_NAME)
 
     # --- Initialize File Logging (Add Handler Once) ---
     root_logger = logging.getLogger()
