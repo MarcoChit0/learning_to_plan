@@ -1,8 +1,8 @@
 {
     "model_name": "gemma-3-27b-it",
-    "max_output_tokens": 16384,
+    "max_output_tokens": 8192,
     "top_p": 0.95,
     "temperature": 1.0,
     "top_k": 64,
-    "wait_time": 1
+    "wait_time": 20
 }
