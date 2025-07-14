@@ -278,7 +278,6 @@ Here is a checklist to help you with your task:
 from learning_to_plan.prompt_builder import base
 from learning_to_plan import config
 from learning_to_plan.data import task
-from learning_to_plan.domain_translators import utils as domain_translator_utils
 
 logger = config.get_logger(__name__)
 

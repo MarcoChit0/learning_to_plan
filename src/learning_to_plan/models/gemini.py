@@ -21,7 +21,6 @@ class GeminiModel(Model):
         "max_output_tokens": 16384,  # 16k tokens
         "candidate_count": 1,
         "response_mime_type": "text/plain",
-        "thinking": True,  # Enable thinking by default
     }
     def __init__(self, model_name):
         super().__init__(model_name)
@@ -73,15 +72,18 @@ class GeminiModel(Model):
                 )
             )
         gen_config = self.get_generation_config(**generation_kwargs)
-        thinking = gen_config.pop("thinking", True)
-        thinking_config = types.ThinkingConfig(
-            thinking_budget=-1 if thinking else 0,  # -1 means no limit, 0 means no thinking
-        )
-        # -1 means no limit, 0 means no thinking
+        thinking = gen_config.pop("thinking", None)
+        if thinking is not None:
+            # -1 means no limit, 0 means no thinking
+            thinking_budget = -1 if thinking else 0  
+            thinking_config = types.ThinkingConfig(
+                thinking_budget=thinking_budget
+            )
+            gen_config["thinking_config"] = thinking_config
         config = types.GenerateContentConfig(
             **gen_config,
-            thinking_config=thinking_config,   
         )
+            
         logger.debug(f"Gemini generation config: {config}")
 
         try:
@@ -108,9 +110,10 @@ class GeminiModel(Model):
             response_text = "".join(part.text for part in candidate.content.parts)
 
             if response.usage_metadata:
+                print(response.usage_metadata)
                 gen_specs["tokens"] = {
                     "input" : response.usage_metadata.prompt_token_count,
-                    "output": response.usage_metadata.candidates_token_count,
+                    "output": response.usage_metadata.candidates_token_count
                 }
             gen_specs["finish_reason"] = candidate.finish_reason.name
 
@@ -118,3 +121,5 @@ class GeminiModel(Model):
         except Exception as e:
             logger.error(f"Error generating content with Gemini model {self.model_name}: {e}", exc_info=True)
             raise RuntimeError(f"Error generating content with Gemini model {self.model_name}: {e}") from e
+        
+        

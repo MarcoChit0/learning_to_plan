@@ -11,7 +11,7 @@ def get_model(model_name: str) -> Model:
     Factory function to get the appropriate model based on the model name.
     """
     logger.info(f"Creating model instance for: {model_name}")
-    if model_name.lower().startswith("gemini"):
+    if model_name.lower().startswith("gemini") or model_name.lower().startswith("gemma"):
         logger.info("Identified as Gemini model.")
         model_cls = GeminiModel
     else:
