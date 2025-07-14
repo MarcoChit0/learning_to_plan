@@ -4,6 +4,6 @@
     "top_p": 0.95,
     "temperature": 1.0,
     "top_k": 64,
-    "thinking" : false,
-    "wait_time": 2
+    "thinking" : true,
+    "wait_time": 20
 }
