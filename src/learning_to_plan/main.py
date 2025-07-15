@@ -75,14 +75,17 @@ if __name__ == "__main__":
         for domain in domains:
             logger.info(f"Starting generation for domain: {domain}")
             checkpoint_dir = None if args.dont_use_checkpoint else config.get_checkpoint_dir(domain, generate_kwargs["model_name"])
-            generate.generate_batch(
-                domain=domain, 
-                number_of_instances=args.number_of_instances, 
-                task_type=args.task_type,
-                ## --- generation kwargs ---
-                checkpoint_dir=checkpoint_dir, 
-                overwrite_generated_plans=args.overwrite_generated_plans, 
-                **generate_kwargs)
+            try:
+                generate.generate_batch(
+                    domain=domain, 
+                    number_of_instances=args.number_of_instances, 
+                    task_type=args.task_type,
+                    ## --- generation kwargs ---
+                    checkpoint_dir=checkpoint_dir, 
+                    overwrite_generated_plans=args.overwrite_generated_plans, 
+                    **generate_kwargs)
+            except Exception as e:
+                logger.error(f"Error during generation for domain {domain}: {e}", exc_info=True)
             logger.info(f"Finished generation for domain: {domain}")
         logger.info("--- Finished All Generation ---")
     

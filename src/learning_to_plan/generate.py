@@ -113,7 +113,7 @@ def generate_batch(
             logger.info(
                 f"Task {t.id} with prompt {prompt_type} has no plans; generating {to_generate} samples."
             )
-        for _ in tqdm(
+        for sample in tqdm(
             range(to_generate),
             desc=f"Generating samples for task {t.id}",
             unit="sample",
@@ -137,6 +137,7 @@ def generate_batch(
             except Exception as e:
                 error_message = f"Could not generate plan for task {t.id} with prompt {prompt_type}: {e}"
             finally:
+                gen_specs["sample"] = sample + 1
                 gen_plan = generated_plan.GeneratedPlan(
                     task_id=t.id,
                     pddl_plan=pddl_plan,
