@@ -26,8 +26,8 @@ def get_task_components_in_natural_language(t : task.Task, with_plan:bool = True
     pddl_instance = t.read_instance()
     initial_state_facts_nl = domain_translator.get_initial_state_facts_from_pddl_instance(pddl_instance=pddl_instance)
     goal_facts_nl = domain_translator.get_goal_facts_from_pddl_instance(pddl_instance=pddl_instance)
-    if t.pddl_plan:
-        plan_nl = domain_translator.translate_pddl_plan_to_natural_language(pddl_plan=t.pddl_plan)
+    if t.get_plan():
+        plan_nl = domain_translator.translate_pddl_plan_to_natural_language(pddl_plan=t.get_plan())
     else:
         if with_plan:
             raise ValueError("PDDL plan is not available, but 'with_plan' is set to True. Please ensure the task has a PDDL plan before requesting it.")

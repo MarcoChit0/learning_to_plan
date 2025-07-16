@@ -1,0 +1,87 @@
+Model gemma-3-27b-it initialized successfully with kwargs: {'get_tasks_from_raw_data': False, 'call_paas': False, 'train': False, 'generate': True, 'validate': False, 'compute_metrics': False, 'landmark_factory': 'lm_zg', 'num_train_epochs': None, 'load_in_8bit': False, 'data_dir_path': None, 'database_file_path': None, 'few_shot': 0, 'huggingface_token': None, 'google_api_key': None, 'max_output_tokens': 8192, 'top_p': 0.95, 'temperature': 1.0, 'top_k': 64, 'wait_time': 20, 'is_trainable': False, 'checkpoint_dir': 'data/checkpoints/blocksworld/gemma-3-27b-it'}
+Model class is GeminiModel
+	0
+	1
+	2
+	3
+	4
+	inside
+	A
+	B
+	C
+	D
+	E
+	config: http_options=None system_instruction=None temperature=1.0 top_p=0.95 top_k=64.0 candidate_count=1 max_output_tokens=8192 stop_sequences=None response_logprobs=None logprobs=None presence_penalty=None frequency_penalty=None seed=None response_mime_type='text/plain' response_schema=None response_json_schema=None routing_config=None model_selection_config=None safety_settings=None tools=None tool_config=None labels=None cached_content=None response_modalities=None media_resolution=None speech_config=None audio_timestamp=None automatic_function_calling=None thinking_config=None
+cache_tokens_details=None cached_content_token_count=None candidates_token_count=None candidates_tokens_details=None prompt_token_count=3424 prompt_tokens_details=[ModalityTokenCount(
+  modality=<MediaModality.TEXT: 'TEXT'>,
+  token_count=3424
+)] thoughts_token_count=None tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=3424 traffic_type=None
+	5
+	0
+	1
+	2
+	3
+	4
+	inside
+	A
+	B
+	C
+	D
+	E
+	config: http_options=None system_instruction=None temperature=1.0 top_p=0.95 top_k=64.0 candidate_count=1 max_output_tokens=8192 stop_sequences=None response_logprobs=None logprobs=None presence_penalty=None frequency_penalty=None seed=None response_mime_type='text/plain' response_schema=None response_json_schema=None routing_config=None model_selection_config=None safety_settings=None tools=None tool_config=None labels=None cached_content=None response_modalities=None media_resolution=None speech_config=None audio_timestamp=None automatic_function_calling=None thinking_config=None
+cache_tokens_details=None cached_content_token_count=None candidates_token_count=None candidates_tokens_details=None prompt_token_count=3424 prompt_tokens_details=[ModalityTokenCount(
+  modality=<MediaModality.TEXT: 'TEXT'>,
+  token_count=3424
+)] thoughts_token_count=None tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=3424 traffic_type=None
+	5
+	0
+	1
+	2
+	3
+	4
+	inside
+	A
+	B
+	C
+	D
+	E
+	config: http_options=None system_instruction=None temperature=1.0 top_p=0.95 top_k=64.0 candidate_count=1 max_output_tokens=8192 stop_sequences=None response_logprobs=None logprobs=None presence_penalty=None frequency_penalty=None seed=None response_mime_type='text/plain' response_schema=None response_json_schema=None routing_config=None model_selection_config=None safety_settings=None tools=None tool_config=None labels=None cached_content=None response_modalities=None media_resolution=None speech_config=None audio_timestamp=None automatic_function_calling=None thinking_config=None
+cache_tokens_details=None cached_content_token_count=None candidates_token_count=None candidates_tokens_details=None prompt_token_count=3424 prompt_tokens_details=[ModalityTokenCount(
+  modality=<MediaModality.TEXT: 'TEXT'>,
+  token_count=3424
+)] thoughts_token_count=None tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=3424 traffic_type=None
+	5
+	0
+	1
+	2
+	3
+	4
+	inside
+	A
+	B
+	C
+	D
+	E
+	config: http_options=None system_instruction=None temperature=1.0 top_p=0.95 top_k=64.0 candidate_count=1 max_output_tokens=8192 stop_sequences=None response_logprobs=None logprobs=None presence_penalty=None frequency_penalty=None seed=None response_mime_type='text/plain' response_schema=None response_json_schema=None routing_config=None model_selection_config=None safety_settings=None tools=None tool_config=None labels=None cached_content=None response_modalities=None media_resolution=None speech_config=None audio_timestamp=None automatic_function_calling=None thinking_config=None
+cache_tokens_details=None cached_content_token_count=None candidates_token_count=None candidates_tokens_details=None prompt_token_count=3424 prompt_tokens_details=[ModalityTokenCount(
+  modality=<MediaModality.TEXT: 'TEXT'>,
+  token_count=3424
+)] thoughts_token_count=None tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=3424 traffic_type=None
+	5
+	0
+	1
+	2
+	3
+	4
+	inside
+	A
+	B
+	C
+	D
+	E
+	config: http_options=None system_instruction=None temperature=1.0 top_p=0.95 top_k=64.0 candidate_count=1 max_output_tokens=8192 stop_sequences=None response_logprobs=None logprobs=None presence_penalty=None frequency_penalty=None seed=None response_mime_type='text/plain' response_schema=None response_json_schema=None routing_config=None model_selection_config=None safety_settings=None tools=None tool_config=None labels=None cached_content=None response_modalities=None media_resolution=None speech_config=None audio_timestamp=None automatic_function_calling=None thinking_config=None
+cache_tokens_details=None cached_content_token_count=None candidates_token_count=None candidates_tokens_details=None prompt_token_count=3424 prompt_tokens_details=[ModalityTokenCount(
+  modality=<MediaModality.TEXT: 'TEXT'>,
+  token_count=3424
+)] thoughts_token_count=None tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=3424 traffic_type=None
+	5

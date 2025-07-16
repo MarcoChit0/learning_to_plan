@@ -213,7 +213,7 @@ class HuggingFaceModel(Model):
             "attention_mask": attention_mask,
         }
 
-    def train(self, checkpoint_dir: str, tokenized_train_dataset: datasets.DatasetDict, tokenized_eval_dataset: datasets.DatasetDict, **train_kwargs: Dict[str, Any]) -> None:
+    def _train(self, checkpoint_dir: str, tokenized_train_dataset: datasets.DatasetDict, tokenized_eval_dataset: datasets.DatasetDict, **train_kwargs: Dict[str, Any]) -> None:
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
         start_timer = datetime.datetime.now()
         logger.info(f"Training started at {start_timer}.")
@@ -356,7 +356,7 @@ class HuggingFaceModel(Model):
             gen_config["pad_token_id"] = self.tokenizer.pad_token_id
         return {k : v for k, v in gen_config.items() if v is not None}
 
-    def generate(self, chat:list[dict[str, str]], **generation_kwargs) -> Tuple[str, dict[str, Any]]:
+    def _generate(self, chat:list[dict[str, str]], **generation_kwargs) -> Tuple[str, dict[str, Any]]:
         """
         Generates text based on a prompt using the Hugging Face model.
 

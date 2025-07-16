@@ -23,14 +23,14 @@ class Model:
         self.__dict__.update(kwargs)
         return
 
-    def generate(self, chat:list[dict[str, str]], **generation_kwargs) -> Tuple[str, dict[str, Any]]:
+    def _generate(self, chat:list[dict[str, str]], **generation_kwargs) -> Tuple[str, dict[str, Any]]:
         """
         Generates a plan based on the provided prompt.
         This is a placeholder method and should be implemented in subclasses.
         """
         raise NotImplementedError("Subclasses should implement this method.")
 
-    def train(self, train_dataset: datasets.DatasetDict, eval_dataset: datasets.DatasetDict,  **train_kwargs) -> None: # Changed type hint
+    def _train(self, train_dataset: datasets.DatasetDict, eval_dataset: datasets.DatasetDict,  **train_kwargs) -> None: # Changed type hint
         """
         Trains the model on the provided data.
         This is a placeholder method and should be implemented in subclasses.

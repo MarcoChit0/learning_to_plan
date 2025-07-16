@@ -6,7 +6,6 @@ from learning_to_plan.data import metadata
 class PromptBuilder(abc.ABC):
     def __init__(self, prompt_type: config.PROMPT_TYPE, **kwargs):
         self.prompt_type : config.PROMPT_TYPE = prompt_type
-        self.__dict__.update(kwargs)
         self.metadata = {
             "prompt_type": self.prompt_type.value,
         }

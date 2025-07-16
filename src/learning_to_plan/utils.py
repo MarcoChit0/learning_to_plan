@@ -249,53 +249,34 @@ async def call_paas(
         logger.error(f"Error adding tasks to singleton_task_database: {e}", exc_info=True)
     logger.info(f"Finished call to planning as a service at {datetime.datetime.now()}.")
 
-import subprocess
-import resource
+def get_selected_domains(domains : str) -> set[str]:
+    tasks = database.task_database.get()
+    available_domains = {t.domain for t in tasks}
+    logger.info(f"Available domains: {', '.join(available_domains)}")
 
-def get_landmark_graph(t : task.Task, memory_limit: int = 24, landmark_factory:str = "lm_zg") -> None:
-    # command = ./utils/downward/fast-downward.py ./data/raw/blocksworld/generated_domain.pddl ./data/raw/blocksworld/generated_basic_longer_plan_len/instance-20.pddl --search "lazy_greedy([landmark_sum(lm_zg(verbosity=debug))])"
-    cmd_list = [
-        './utils/downward/fast-downward.py',
-        t.domain_file_path,
-        t.instance_file_path,
-        '--search',
-        f"lazy_greedy([landmark_sum({landmark_factory}(verbosity=debug))])"
-    ]
-    
-    def set_memory_limit(memory_limit : int):
-        # Set memory limit to 2GB (adjust as needed)
-        mem_in_gbyte = memory_limit * 1024 * 1024 * 1024  # 24GB in bytes
-        resource.setrlimit(resource.RLIMIT_AS, (mem_in_gbyte, mem_in_gbyte))
-    
-    try:
-        result = subprocess.run(
-            cmd_list, 
-            capture_output=True, 
-            text=True, 
-            check=True,
-            preexec_fn=set_memory_limit
-        )
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Error calling Downward: {e.stderr.strip()}")
-    reading_graph = False
-    graph_lines = []
-    for line in result.stdout.splitlines():
-        if reading_graph:
-            if line.startswith("[t="):
-                reading_graph = False
-                continue
-            graph_lines.append(line)
-        if "Dumping landmark graph:" in line:
-            reading_graph = True
-            continue
-    
-    if not graph_lines:
-        raise ValueError("No landmark graph found in the output of Downward.")
-    graph = "\n".join(graph_lines)
-    # check on the start of the graph "digraph G {"
-    if not graph.startswith("digraph G {"):
-        raise ValueError("The landmark graph does not start with 'digraph G {'.")
-    # check on the end of the graph "}"
-    if not graph.endswith("}"):
-        raise ValueError("The landmark graph does not end with '}'.")
-    return graph
+    if domains.lower() == "all":
+        logger.info("Processing all available domains.")
+        return available_domains
+    else:
+        selected = set(s.strip() for s in domains.split(","))
+        assert selected.issubset(available_domains), f"Selected domains {selected} are not in available domains {available_domains}."
+        selected = selected.intersection(available_domains)
+        assert len(selected) > 0, f"No valid domains selected from {domains}."
+        logger.info(f"Processing selected domains: {', '.join(selected)}")
+        return selected
+
+def run_on_domains(
+    domains : set[str],
+    fn: callable,
+    raise_on_error: bool = True,
+    **kwargs
+):
+    for domain in domains:
+        logger.info(f"Applying function to domain: {domain} at {datetime.datetime.now()}.")
+        try:
+            fn(domain=domain, **kwargs)
+        except Exception as e:
+            logger.error(f"Error occurred while processing domain {domain}: {e}", exc_info=True)
+            if raise_on_error:
+                raise ValueError(f"Error occurred while processing domain {domain}: {e}") from e
+        logger.info(f"Finished processing domain: {domain} at {datetime.datetime.now()}.")

@@ -3,13 +3,14 @@ import argparse
 from typing import Optional
 from learning_to_plan import config
 from learning_to_plan.data import task
+from learning_to_plan import database
 def parse_args():
     parser = argparse.ArgumentParser(description="Learning to Plan")
     parser.add_argument(
-        "-d", "--domain",
-        type=str,
+        "-d", "--domains",
+        type = str,
         default="all",
-        help="List of domains separated by commas (e.g., 'blocksworld,logistics') or 'all'."
+        help="Comma-separated list of domains to process. Use 'all' to process all available domains. Defaults to 'all'."
     )
     # --- Action Flags ---
     parser.add_argument(
@@ -42,14 +43,13 @@ def parse_args():
         action="store_true",
         help="Compute metrics for the generated plans."
     )
-    parser.add_argument(
-        "--landmarks_generation",
-        action="store_true",
-        help="Generate landmark graphs for all tasks in the dataset."
-    )
-    # TODO: CREATE A FUNCTION TO SAVE THE MOST RECENT CHECKPOINT FOR ALL MODELS (OR A SINGLE MODEL).
-    # IT SHOULD SAVE THE FILE NAME, THE DATE, THE CHECKPOINT AND SOME OTHER METADATA.
     # --- Configuration & Overrides ---
+    parser.add_argument(
+        "--landmark_factory",
+        type=str,
+        default="lm_zg",
+        help="Landmark factory to use for generating landmarks. Default is 'lm_zg'."
+    )
     parser.add_argument(
         "-c", "--config_file_path",
         type=str,

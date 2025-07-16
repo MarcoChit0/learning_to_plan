@@ -35,24 +35,24 @@ class GeminiModel(Model):
             logger.error(f"Failed to configure Gemini model: {e}", exc_info=True)
             raise RuntimeError(f"Failed to configure Gemini model: {e}")
 
-    def train(self, dataset:datasets.DatasetDict, **train_kwargs) -> None: # Changed type hint
+    def _train(self, dataset:datasets.DatasetDict, **train_kwargs) -> None: # Changed type hint
         """
         Training is not applicable for Gemini model as it is a hosted service.
         """
         logger.warning("Training is not applicable for Gemini models.")
         raise NotImplementedError("Training is not applicable for Gemini model.")
 
-    def generate(
+    def _generate(
             self,
             chat:list[dict[str, str]],
             **generation_kwargs
         ) -> Tuple[str, dict[str, Any]]:
         logger.debug(f"Generating with Gemini model {self.model_name}.")
-
+        print("\tinside")
         gen_specs = {
             "tokens" : {}
         }
-
+        print("\tA")
         def _map_role(role : str):
             if role == "user":
                 return "user"
@@ -62,6 +62,7 @@ class GeminiModel(Model):
                 return "model"
             else:
                 raise ValueError(f"Unknown role: {role}. Expected 'user', 'assistant', or 'system'.")
+        print("\tB")
         contents = []
         for msg in chat:
             contents.append(
@@ -72,7 +73,8 @@ class GeminiModel(Model):
                     ]
                 )
             )
-        gen_config = self.get_generation_config(**generation_kwargs)
+        print("\tC")
+        gen_config = self.get_generation_config(**generation_kwargs); print("\tD")
         thinking = gen_config.pop("thinking", None)
         if thinking is not None:
             # -1 means no limit, 0 means no thinking
@@ -84,7 +86,8 @@ class GeminiModel(Model):
         config = types.GenerateContentConfig(
             **gen_config,
         )
-            
+        print("\tE")
+        print("\tconfig:", config)
         logger.debug(f"Gemini generation config: {config}")
 
         try:

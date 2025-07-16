@@ -1,109 +1,62 @@
-# main.py
-import os
-import asyncio
-
-# Import project modules
+# src/learning_to_plan/main.py
 from learning_to_plan import train
 from learning_to_plan import utils
 from learning_to_plan import config
 from learning_to_plan import generate
 from learning_to_plan import parser
-from learning_to_plan import database
 from learning_to_plan.data import process
 
 logger = config.get_logger(__name__)
 
-def get_selected_domains(args) -> set[str]:
-    if not args.domain:
-        logger.error("Please specify a domain with --domain <domain_name> or 'all'.")
-        raise ValueError("Domain not specified.")
-
-    tasks = database.task_database.get()
-    available_domains = {t.domain for t in tasks}
-    logger.info(f"Available domains: {', '.join(available_domains)}")
-
-    if args.domain.lower() == "all":
-        logger.info("Processing all available domains.")
-        return available_domains
-    else:
-        selected = set(s.strip() for s in args.domain.split(","))
-        assert selected.issubset(available_domains), f"Selected domains {selected} are not in available domains {available_domains}."
-        selected = selected.intersection(available_domains)
-        assert len(selected) > 0, f"No valid domains selected from {args.domain}."
-        logger.info(f"Processing selected domains: {', '.join(selected)}")
-        return selected
-
 # --- Main Execution ---
 if __name__ == "__main__":
     args = parser.parse_args()
-    config.initialize(args) # Config initialization likely sets up logging
+    config.initialize(args)
+    args.config_file_path = args.config_file_path \
+        or (config.DEFAULT_TRAIN_CONFIG_FILE_PATH if args.train else None) \
+        or (config.DEFAULT_GENERATE_CONFIG_FILE_PATH if args.generate else None)
+    try:
+        cfg = config.get_config(**vars(args))
+    except FileNotFoundError as e:
+        raise ValueError(f"Could not set up configuration: {e}")
 
-    # --- Action Blocks ---
-    if args.get_tasks_from_raw_data:
-        logger.info("--- Starting Task Creation from Raw Data ---")
-        utils.get_tasks_from_raw_data()
-        logger.info("--- Finished Task Creation from Raw Data ---")
-    elif args.call_paas:
-        logger.info("--- Starting Planning as a Service (PaaS) Calls ---")
-        domains = get_selected_domains(args)
-        for domain in domains:
-            logger.info(f"Processing PaaS for domain: {domain}")
-            asyncio.run(utils.call_paas(domain=domain))
-            logger.info(f"Finished PaaS calls for domain: {domain}")
-        logger.info("--- Finished All PaaS Calls ---")
+    mapping = {
+        "get_tasks_from_raw_data": {
+            "fn": utils.get_tasks_from_raw_data,
+        },
+        "call_paas": {
+            "fn": utils.call_paas,
+            "args": cfg,
+            "run_on_domains": True,
+        },
+        "train": {
+            "fn" : train.run,
+            "args" : cfg,
+            "run_on_domains": True,
+        },
+        "generate": {
+            "fn": generate.run,
+            "args": {
+                **cfg,
+                "raise_on_error": False
+            },
+            "run_on_domains": True,
+        },
+        "validate": {
+            "fn": process.validate_plans,
+        },
+        "compute_metrics": {
+            "fn": process.compute_metrics,
+        },
+    }
 
-    elif args.train:
-        logger.info("--- Starting Model Training ---")
-        config_file_path = args.config_file_path or config.DEFAULT_TRAIN_CONFIG_FILE_PATH
-        assert os.path.exists(config_file_path), f"Config file {config_file_path} does not exist."
-        train_kwargs = config.get_config(config_file_path=config_file_path, args=args)
-        assert train_kwargs["model_name"], "Model name not found in config. Please check your configuration."
-        domains = get_selected_domains(args=args)
-        for domain in domains:
-            logger.info(f"Starting training for domain: {domain}")
-            train.run_training_procedure(domain=domain, **train_kwargs)
-            logger.info(f"Finished training for domain: {domain}")
-        logger.info("--- Finished All Training ---")
-
-    elif args.generate:
-        logger.info("--- Starting Generation ---")
-        config_file_path = args.config_file_path or config.DEFAULT_GENERATE_CONFIG_FILE_PATH
-        assert os.path.exists(config_file_path), f"Config file {config_file_path} does not exist."
-        generate_kwargs = config.get_config(config_file_path=config_file_path, args=args)
-        assert generate_kwargs["model_name"], "Model name not found in config. Please check your configuration."
-        domains = get_selected_domains(args=args)
-        for domain in domains:
-            logger.info(f"Starting generation for domain: {domain}")
-            checkpoint_dir = None if args.dont_use_checkpoint else config.get_checkpoint_dir(domain, generate_kwargs["model_name"])
-            try:
-                generate.generate_batch(
-                    domain=domain, 
-                    number_of_instances=args.number_of_instances, 
-                    task_type=args.task_type,
-                    ## --- generation kwargs ---
-                    checkpoint_dir=checkpoint_dir, 
-                    overwrite_generated_plans=args.overwrite_generated_plans, 
-                    **generate_kwargs)
-            except Exception as e:
-                logger.error(f"Error during generation for domain {domain}: {e}", exc_info=True)
-            logger.info(f"Finished generation for domain: {domain}")
-        logger.info("--- Finished All Generation ---")
-    
-    elif args.validate:
-        logger.info("--- Starting Plan Validation ---")
-        process.validate_plans()
-        logger.info("--- Finished All Validation ---")
-    
-    elif args.compute_metrics:
-        logger.info("--- Starting Metrics Computation ---")
-        process.compute_metrics()
-        logger.info("--- Finished All Metrics Computation ---")
-
-    elif args.landmarks_generation:
-        logger.info("--- Starting Landmark Graph Generation ---")
-        utils.get_landmark_graph()
-        logger.info("--- Finished All Landmark Graph Generation ---")
-    else:
-        logger.warning("No action requested (e.g., --train, --generate). Exiting.")
+    for action, details in mapping.items():
+        if getattr(args, action):
+            logger.info(f"--- Starting {action.replace('_', ' ').title()} ---")
+            if details.get("run_on_domains", False):
+                utils.run_on_domains(fn=details["fn"], **details.get("args", {}))
+            else:
+                details["fn"](**details.get("args", {}))
+            logger.info(f"--- Finished {action.replace('_', ' ').title()} ---")
 
     logger.info("--- Main script execution finished ---")

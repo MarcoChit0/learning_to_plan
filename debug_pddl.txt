@@ -1,0 +1,352 @@
+Your task is to generate a plan for the following planning problem. The domain section describes the available actions and objects, and the problem section defines the initial and goal states. The plan must be a sequence of actions that starts from the initial state and reaches the goal state. The entire plan must be enclosed between <plan> and </plan> tags, and each action must be on a new line. Your response should only contain the plan.
+                                
+<domain>
+(define (domain blocksworld-4ops)
+  (:requirements :strips)
+(:predicates (clear ?x)
+             (ontable ?x)
+             (handempty)
+             (holding ?x)
+             (on ?x ?y))
+
+(:action pick-up
+  :parameters (?ob)
+  :precondition (and (clear ?ob) (ontable ?ob) (handempty))
+  :effect (and (holding ?ob) (not (clear ?ob)) (not (ontable ?ob))
+               (not (handempty))))
+
+(:action put-down
+  :parameters  (?ob)
+  :precondition (holding ?ob)
+  :effect (and (clear ?ob) (handempty) (ontable ?ob)
+               (not (holding ?ob))))
+
+(:action stack
+  :parameters  (?ob ?underob)
+  :precondition (and (clear ?underob) (holding ?ob))
+  :effect (and (handempty) (clear ?ob) (on ?ob ?underob)
+               (not (clear ?underob)) (not (holding ?ob))))
+
+(:action unstack
+  :parameters  (?ob ?underob)
+  :precondition (and (on ?ob ?underob) (clear ?ob) (handempty))
+  :effect (and (holding ?ob) (clear ?underob)
+               (not (on ?ob ?underob)) (not (clear ?ob)) (not (handempty)))))
+</domain>
+<instance>
+(define (problem BW-rand-3)
+(:domain blocksworld-4ops)
+(:objects a b c )
+(:init
+(handempty)
+(ontable a)
+(on b a)
+(ontable c)
+(clear b)
+(clear c)
+)
+(:goal
+(and
+(on b c)
+(on c a))
+)
+)
+</instance>
+
+For any planning problem, landmarks are the facts that must be true in all valid plans.
+
+The landmarks for this problem are as follows:
+
+<landmarks>
+on(b, c)
+clear(c)
+holding(b)
+clear(b)
+handempty()
+on(b, a)
+on(c, a)
+clear(a)
+holding(c)
+ontable(c)
+</landmarks>
+
+Here are some examples of plans in the same format as the one you should provide:
+
+<example>
+<domain>
+(define (domain hanoi)
+    (:requirements :strips)
+    (:predicates
+        (clear ?x)
+        (on ?x ?y)
+        (smaller ?x ?y)
+    )
+
+    (:action move
+        :parameters (?disc ?from ?to)
+        :precondition (and (smaller ?to ?disc)
+            (on ?disc ?from)
+            (clear ?disc)
+            (clear ?to))
+        :effect (and (clear ?from)
+            (on ?disc ?to)
+            (not (on ?disc ?from))
+            (not (clear ?to)))
+    )
+)
+</domain>
+<instance>
+(define (problem hanoi-4)
+(:domain hanoi)
+(:objects peg1 peg2 peg3 d262 d478 d176 d103 )
+(:init
+(smaller peg1 d262)
+(smaller peg1 d478)
+(smaller peg1 d176)
+(smaller peg1 d103)
+(smaller peg2 d262)
+(smaller peg2 d478)
+(smaller peg2 d176)
+(smaller peg2 d103)
+(smaller peg3 d262)
+(smaller peg3 d478)
+(smaller peg3 d176)
+(smaller peg3 d103)
+(smaller d478 d262)
+(smaller d176 d262)
+(smaller d103 d262)
+(smaller d176 d478)
+(smaller d103 d478)
+(smaller d103 d176)
+(clear peg2)
+(clear peg3)
+(clear d262)
+(on d103 peg1)
+(on d176 d103)
+(on d478 d176)
+(on d262 d478)
+)
+(:goal
+(and 
+(on d103 peg3)
+(on d176 d103)
+(on d478 d176)
+(on d262 d478)
+)
+)
+)
+</instance>
+<landmarks>
+on(d103, peg3)
+clear(peg3)
+on(d103, peg1)
+clear(d176)
+on(d478, d176)
+on(d262, d478)
+clear(d478)
+on(d176, d103)
+clear(d103)
+</landmarks>
+<plan>
+(move d262 d478 peg2)
+(move d478 d176 peg3)
+(move d262 peg2 d478)
+(move d176 d103 peg2)
+(move d262 d478 d103)
+(move d478 peg3 d176)
+(move d262 d103 d478)
+(move d103 peg1 peg3)
+(move d262 d478 d103)
+(move d478 d176 peg1)
+(move d262 d103 d478)
+(move d176 peg2 d103)
+(move d262 d478 peg2)
+(move d478 peg1 d176)
+(move d262 peg2 d478)
+</plan>
+</example>
+
+
+<example>
+<domain>
+(define (domain Storage-Propositional)
+    (:requirements :typing)
+    (:types
+        hoist crate place area - object
+        container depot - place
+        storearea transitarea - area
+    )
+
+    (:predicates
+        (clear ?s - storearea)
+        (in ?x -
+            (either storearea crate) ?p - place)
+        (available ?h - hoist)
+        (lifting ?h - hoist ?c - crate)
+        (at ?h - hoist ?a - area)
+        (on ?c - crate ?s - storearea)
+        (connected ?a1 ?a2 - area)
+        (compatible ?c1 ?c2 - crate)
+    )
+
+    (:action lift
+        :parameters (?h - hoist ?c - crate ?a1 - storearea ?a2 - area ?p - place)
+        :precondition (and
+            (connected ?a1 ?a2)
+            (at ?h ?a2)
+            (available ?h)
+            (on ?c ?a1)
+            (in ?a1 ?p))
+        :effect (and
+            (not (on ?c ?a1))
+            (clear ?a1)
+            (not (available ?h))
+            (lifting ?h ?c)
+            (not (in ?c ?p)))
+    )
+
+    (:action drop
+        :parameters (?h - hoist ?c - crate ?a1 - storearea ?a2 - area ?p - place)
+        :precondition (and
+            (connected ?a1 ?a2)
+            (at ?h ?a2)
+            ( lifting ?h ?c)
+            (clear ?a1)
+            (in ?a1 ?p))
+        :effect (and
+            (not (lifting ?h ?c))
+            (available ?h)
+            (not (clear ?a1))
+            (on ?c ?a1)
+            (in ?c ?p))
+    )
+
+    (:action move
+        :parameters (?h - hoist ?from ?to - storearea)
+        :precondition (and
+            (at ?h ?from)
+            (clear ?to)
+            (connected ?from ?to))
+        :effect (and
+            (not (at ?h ?from))
+            (at ?h ?to)
+            (not (clear ?to))
+            (clear ?from))
+    )
+
+    (:action go-out
+        :parameters (?h - hoist ?from - storearea ?to - transitarea)
+        :precondition (and
+            (at ?h ?from)
+            (connected ?from ?to))
+        :effect (and
+            (not (at ?h ?from))
+            (at ?h ?to)
+            (clear ?from))
+    )
+
+    (:action go-in
+        :parameters (?h - hoist ?from - transitarea ?to - storearea)
+        :precondition (and
+            (at ?h ?from)
+            (connected ?from ?to)
+            (clear ?to))
+        :effect (and
+            (not (at ?h ?from))
+            (at ?h ?to)
+            (not (clear ?to)))
+    )
+)
+</domain>
+<instance>
+(define (problem storage-199)
+(:domain Storage-Propositional)
+(:objects
+	depot48-1-1 depot48-1-2 depot49-1-1 depot49-1-2 depot50-1-1 container-0-0 container-1-0 container-2-0 - storearea
+	hoist0 hoist1 - hoist
+	crate0 crate1 crate2 - crate
+	container0 container1 container2 - container
+	depot48 depot49 depot50 - depot
+	loadarea - transitarea)
+
+(:init
+	(connected depot48-1-1 depot48-1-2)
+	(connected depot48-1-2 depot48-1-1)
+	(connected depot49-1-1 depot49-1-2)
+	(connected depot49-1-2 depot49-1-1)
+	(in depot48-1-1 depot48)
+	(in depot48-1-2 depot48)
+	(in depot49-1-1 depot49)
+	(in depot49-1-2 depot49)
+	(in depot50-1-1 depot50)
+	(on crate0 container-0-0)
+	(on crate1 container-1-0)
+	(on crate2 container-2-0)
+	(in crate0 container0)
+	(in crate1 container1)
+	(in crate2 container2)
+	(in container-0-0 container0)
+	(in container-1-0 container1)
+	(in container-2-0 container2)
+	(connected loadarea container-0-0) 
+	(connected container-0-0 loadarea)
+	(connected loadarea container-1-0) 
+	(connected container-1-0 loadarea)
+	(connected loadarea container-2-0) 
+	(connected container-2-0 loadarea)  
+	(connected depot48-1-1 loadarea)
+	(connected loadarea depot48-1-1)
+	(connected depot49-1-1 loadarea)
+	(connected loadarea depot49-1-1)
+	(connected depot50-1-1 loadarea)
+	(connected loadarea depot50-1-1)  
+	(clear depot48-1-1)
+	(clear depot49-1-1)
+	(clear depot50-1-1)  
+	(at hoist0 depot48-1-2)
+	(available hoist0)
+	(at hoist1 depot49-1-2)
+	(available hoist1))
+
+(:goal (and
+	(in crate0 depot48)
+	(in crate1 depot48)
+	(in crate2 depot49)))
+)
+</instance>
+<landmarks>
+in(crate2, depot49)
+on(crate2, container-2-0)
+clear(depot49-1-1)
+in(crate1, depot48)
+on(crate1, container-1-0)
+clear(depot48-1-1)
+in(crate0, depot48)
+on(crate0, container-0-0)
+</landmarks>
+<plan>
+(move hoist1 depot49-1-2 depot49-1-1)
+(go-out hoist1 depot49-1-1 loadarea)
+(lift hoist1 crate0 container-0-0 loadarea container0)
+(drop hoist1 crate0 depot48-1-1 loadarea depot48)
+(lift hoist1 crate2 container-2-0 loadarea container2)
+(drop hoist1 crate2 depot49-1-1 loadarea depot49)
+(lift hoist1 crate1 container-1-0 loadarea container1)
+(lift hoist0 crate0 depot48-1-1 depot48-1-2 depot48)
+(move hoist0 depot48-1-2 depot48-1-1)
+(drop hoist0 crate0 depot48-1-2 depot48-1-1 depot48)
+(go-out hoist0 depot48-1-1 loadarea)
+(drop hoist1 crate1 depot48-1-1 loadarea depot48)
+</plan>
+</example>
+
+          
+Here is a checklist to help you with your task:
+
+<checklist>
+1) Do not provide any additional text or explanations outside the plan tags.
+2) The plan must be in the same format as the examples above.
+3) The plan should be preceded by the <plan> tag and should be followed by the </plan> tag.
+4) The actions in the plan must be from the set of actions in the domain described above, that is, they must use the same name and the same number of parameters as one of the action schemas.
+5) The plan must be valid, that is, each action must be applicable in the state it is applied, and the plan must end in a goal state.
+</checklist>

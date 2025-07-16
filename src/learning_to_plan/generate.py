@@ -4,6 +4,7 @@ import datetime
 from typing import Optional
 from tqdm import tqdm
 from learning_to_plan.models import utils as model_utils
+from learning_to_plan.models.base import Model
 
 # Import project modules
 import learning_to_plan.config as config
@@ -11,28 +12,31 @@ from learning_to_plan.data import task
 logger = config.get_logger(__name__)
 from typing import Union
 from learning_to_plan.data import generated_plan, metadata
-from learning_to_plan.prompt_builder import utils as prompt_builder_utils
+from learning_to_plan.prompt_builder.base import PromptBuilder
 from learning_to_plan import database
 # --- Batch Generation from File (Modified) ---
 
-def generate_batch(
+def run(
         model_name: str,
         domain: str,
         prompt_type: config.PROMPT_TYPE,
+        prompt_builder: PromptBuilder,
         number_of_instances: Union[str, int] = "all",
         task_type: Optional[task.Task.TYPE] = None,
         num_samples: int = 1,
         overwrite_generated_plans: bool = False,
-        **generation_kwargs):
+        dont_use_checkpoint: bool = False,
+        **kwargs):
     start_time = datetime.datetime.now()
 
     logger.info(
         f"Starting generation batch with model '{model_name}' – time: {start_time}" # Use logger
     )
     try:
-        model = model_utils.get_model(model_name=model_name)
-        generation_kwargs['is_trainable'] = False
-        model.setup(**generation_kwargs)
+        model : Model = model_utils.get_model(model_name=model_name)
+        kwargs['is_trainable'] = False
+        kwargs['checkpoint_dir'] = None if dont_use_checkpoint else config.get_checkpoint_dir(domain, model_name)
+        model.setup(**kwargs)
     except Exception as e:
         logger.error(f"Error initializing model '{model_name}': {e}", exc_info=True)
         raise e
@@ -70,13 +74,11 @@ def generate_batch(
             f"Error retrieving tasks for domain '{domain}', whose selection kwargs where {task_selection_kwargs}: {e}"
         ) from e
 
-    pb = prompt_builder_utils.get_prompt_builder(prompt_type=prompt_type, **generation_kwargs)
-
     # --- Generate Plans ---
     logger.info("Starting plan generation loop...") # Use logger
     for t in tqdm(tasks, total=len(tasks), desc="Generating plans"):
-        prompt_metadata:metadata.Metadata = pb.get_metadata(**generation_kwargs)
-        model_metadata:metadata.Metadata = model.get_metadata(**generation_kwargs)
+        prompt_metadata:metadata.Metadata = prompt_builder.get_metadata(**kwargs)
+        model_metadata:metadata.Metadata = model.get_metadata(**kwargs)
         _generated_plans = database.generated_plan_database.get(
             filter_by_task_id=t.id,
             filter_by_prompt_type=prompt_type,
@@ -119,18 +121,18 @@ def generate_batch(
             unit="sample",
             leave=False
         ):
-            chat = pb.get_chat(t=t, with_plan=False, **generation_kwargs)
+            chat = prompt_builder.get_chat(t=t, with_plan=False, **kwargs)
             try:
                 gen_specs = {}
                 pddl_plan = None
                 error_message = None
                 validity = generated_plan.GeneratedPlan.VALIDITY.INVALID
-                response, gen_specs = model.generate(
+                response, gen_specs = model._generate(
                     chat=chat,
-                    **generation_kwargs,
+                    **kwargs,
                 )
                 try:
-                    pddl_plan = pb.process_response(response=response)
+                    pddl_plan = prompt_builder.process_response(response=response)
                     validity = generated_plan.GeneratedPlan.VALIDITY.UNCHECKED
                 except Exception as e:
                     error_message = f"Error processing response: {e}"

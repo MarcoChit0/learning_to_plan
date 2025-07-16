@@ -1,13 +1,16 @@
-from learning_to_plan.prompt_builder import base, few_shot, io, pddl
+from learning_to_plan.prompt_builder import base
+from learning_to_plan.prompt_builder.natural_language import io, few_shot
 from learning_to_plan import config
-from learning_to_plan.data import task
+from learning_to_plan.prompt_builder.pddl import pddl, landmarks
 
 def get_prompt_builder(prompt_type: config.PROMPT_TYPE, **kwargs) -> base.PromptBuilder:
-    if prompt_type == config.PROMPT_TYPE.IO:
-        return io.IOPromptBuilder(**kwargs)
-    elif prompt_type == config.PROMPT_TYPE.FEW_SHOT:
-        return few_shot.FewShotPromptBuilder(**kwargs)
-    elif prompt_type == config.PROMPT_TYPE.PDDL:
-        return pddl.PDDLPromptBuilder(**kwargs)
+    mapping = {
+        config.PROMPT_TYPE.IO: io.IOPromptBuilder,
+        config.PROMPT_TYPE.FEW_SHOT: few_shot.FewShotPromptBuilder,
+        config.PROMPT_TYPE.PDDL: pddl.PDDLPromptBuilder,
+        config.PROMPT_TYPE.LANDMARKS: landmarks.LandmarksPromptBuilder
+    }
+    if prompt_type in mapping:
+        return mapping[prompt_type](**kwargs)
     else:
-        raise ValueError(f"Unsupported prompt type: {prompt_type}. Supported types are: {list(config.PROMPT_TYPE)}.")
+        raise ValueError(f"Unsupported prompt type: {prompt_type}. Supported types are: {list(mapping.keys())}.")

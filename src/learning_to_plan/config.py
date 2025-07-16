@@ -4,7 +4,6 @@ import logging
 import argparse
 from typing import Optional, Dict, Any
 import dotenv
-import json
 
 # --- Global Variables for Paths and Token (Set during initialization) ---
 DATA_DIR = "data/"
@@ -67,6 +66,8 @@ class TOKENS(Enum):
     PROBLEM_END = "</instance>"
     CHECKLIST_START = "<checklist>"
     CHECKLIST_END = "</checklist>"
+    LANDMARKS_START = "<landmarks>"
+    LANDMARKS_END = "</landmarks>"
 
 class STATUS(Enum):
     OK = "ok"
@@ -81,6 +82,7 @@ class PROMPT_TYPE(Enum):
     IO = "io"
     FEW_SHOT = "few_shot"
     PDDL = "pddl"
+    LANDMARKS = "landmarks"
 
     def __lt__(self, other):
         if isinstance(other, PROMPT_TYPE):
@@ -108,7 +110,7 @@ def get_special_tokens(prompt_type: PROMPT_TYPE) -> list[str]:
             TOKENS.CHECKLIST_START,
             TOKENS.CHECKLIST_END,
         ]
-    elif prompt_type == PROMPT_TYPE.PDDL:
+    elif prompt_type == PROMPT_TYPE.PDDL or prompt_type == PROMPT_TYPE.LANDMARKS:
         tokens = [
             TOKENS.PLAN_START,
             TOKENS.PLAN_END,
@@ -121,6 +123,10 @@ def get_special_tokens(prompt_type: PROMPT_TYPE) -> list[str]:
             TOKENS.CHECKLIST_START,
             TOKENS.CHECKLIST_END,
         ]
+        if prompt_type == PROMPT_TYPE.LANDMARKS:
+            tokens.append(TOKENS.LANDMARKS_START)
+            tokens.append(TOKENS.LANDMARKS_END)
+
     else:
         raise ValueError(f"Unknown prompt type: {prompt_type}. Must be one of {list(PROMPT_TYPE)}.")
     return [token.value for token in tokens]
@@ -244,54 +250,50 @@ def get_checkpoint_dir(domain: str, model_name: str) -> str:
         os.makedirs(checkpoint_dir, exist_ok=True)
     return checkpoint_dir
 
-def get_config(config_file_path, args: Optional[argparse.Namespace] = None) -> Dict[str, Any]:
-    """
-    Loads a configuration file from the specified path.
+def get_selected_domains(domains : str) -> set[str]:
+    from learning_to_plan import database
+    tasks = database.task_database.get()
+    available_domains = {t.domain for t in tasks}
+    if domains.lower() == "all":
+        return available_domains
+    else:
+        selected = set(s.strip() for s in domains.split(","))
+        assert selected.issubset(available_domains), f"Selected domains {selected} are not in available domains {available_domains}."
+        selected = selected.intersection(available_domains)
+        assert len(selected) > 0, f"No valid domains selected from {domains}."
+        return selected
 
-    Args:
-        config_file_path: Path to the configuration file.
+def get_config(config_file_path = None, **kwargs) -> Dict[str, Any]:
+    if not config_file_path:
+        return kwargs
 
-    Returns:
-        A dictionary containing the loaded configuration.
-    """
     if not os.path.exists(config_file_path):
-        logger.error(f"Config file '{config_file_path}' does not exist.")
         raise FileNotFoundError(f"Config file '{config_file_path}' not found.")
     try:
         with open(config_file_path, 'r', encoding='utf-8') as f:
-            config = json.load(f)
-        logger.info(msg=f"Successfully loaded configuration from {config_file_path}.")
-        logger.debug(f"Config content: {config}")
+            file_config = json.load(f)
 
-        if config.get('prompt_type', None) is None:
-            config['prompt_type'] = PROMPT_TYPE.IO
-        if config.get('few_shot', None) is None:
-            config['few_shot'] = 0
-        if config.get('num_samples', None) is None:
-            config['num_samples'] = 1
+        config = kwargs.copy()
+        config.update(file_config)
 
-        if args:
-            logger.info("Applying command-line argument overrides to configuration...")
-            for key, value in config.items():
-                if hasattr(args, key) and getattr(args, key) is not None:
-                    value = getattr(args, key)
-                    config[key] = value
-                    logger.debug(f"Overriding config key '{key}' with value '{value}' from command line.")    
+        domains = config.pop("domains", None)
+        assert domains is not None, "No domains specified in config. Please check your configuration."
+        config["domains"] = get_selected_domains(domains)
 
-        # -- Check for consistency in config values --
-        few_shot = config.get('few_shot', None)
-        prompt_type = config.get('prompt_type', None)
-        
-        if prompt_type == PROMPT_TYPE.FEW_SHOT:
-            assert few_shot is not None, "If prompt_type is 'few_shot', few_shot must be set."
-            assert isinstance(few_shot, int) and few_shot >= 0, "If prompt_type is 'few_shot', few_shot must be a non-negative integer."
+        if not config.get("num_samples") or config.get("num_samples") <= 0:
+            logger.warning("num_samples not set or invalid in config. Defaulting to 1.")
+            config["num_samples"] = 1
 
-        else:
-            assert few_shot is None or (isinstance(few_shot, int) and few_shot == 0), "If prompt_type is not 'few_shot', few_shot must be None or 0."
+        if not config.get("model_name"):
+            raise ValueError("Model name not found in config. Please check your configuration.")
 
-        assert isinstance(config['num_samples'], int) and config['num_samples'] > 0, "num_samples must be a positive integer."
-        logger.info("Configs: %s", config)
-        
+        try:
+            from learning_to_plan.prompt_builder.utils import get_prompt_builder
+            prompt_builder = get_prompt_builder(**config)
+            config['prompt_builder'] = prompt_builder
+        except ValueError as e:
+            raise ValueError(f"Error initializing prompt builder: {e}") from e
+
         logger.info(f"Final configuration: {config}")
         return config
     except Exception as e:

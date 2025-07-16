@@ -8,6 +8,22 @@ from learning_to_plan.data import base
 logger = config.get_logger(__name__)
 lock = threading.Lock()
 
+def _read_pddl_file(pddl_file : str, ignore_comments: bool = True) -> str:
+    """
+    Reads the PDDL file and returns its content.
+    :param ignore_comments: If True, ignores lines that start with ";".
+    :return: The content of the PDDL file.
+    """
+    with lock and open(pddl_file, "r", encoding='utf-8') as f:
+        content = f.read()
+    
+    if ignore_comments:
+        # Filter out lines that start with ";"
+        filtered_lines = [line for line in content.splitlines() if not line.strip().startswith(";")]
+        return "\n".join(filtered_lines)
+    
+    return content
+
 class Task(base.Data):
     NEXT_ID: int = 0
     SETTED_ID_VARIABLES: bool = False
@@ -60,14 +76,18 @@ class Task(base.Data):
         return f"Task(id={self.id}, domain={self.domain}, instance={self.instance_file_path}, type={self.type}, purpose={self.purpose}, paas_status={self.paas_status})"
 
     def read_instance(self):
-        with lock and open(self.instance_file_path, "r", encoding='utf-8') as f:
-            instance_content = f.read()
-        return instance_content
+        return _read_pddl_file(self.instance_file_path)
 
     def read_domain(self):
-        with lock and open(self.domain_file_path, "r", encoding='utf-8') as f:
-            domain_content = f.read()
-        return domain_content
+        return _read_pddl_file(self.domain_file_path)
+
+    def get_plan(self) -> str:
+        if self.pddl_plan is None:
+            raise ValueError(f"The task {self.id} does not have a PDDL plan.")
+        p = "\n".join(line for line in self.pddl_plan.splitlines() if line.startswith("(") and line.endswith(")"))
+        if not p:
+            raise ValueError(f"The PDDL plan for task {self.id} is empty or does not contain valid actions.")
+        return p
 
     @classmethod
     def column_def(cls):

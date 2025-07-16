@@ -5,11 +5,11 @@ from learning_to_plan.models import base
 import learning_to_plan.config as config
 logger = config.get_logger(__name__)
 from learning_to_plan.data import task
-from learning_to_plan.prompt_builder import utils as prompt_builder_utils
 from learning_to_plan.models import utils
 from learning_to_plan import database
+from learning_to_plan.prompt_builder.base import PromptBuilder
 
-def get_tokenized_dataset(model: base.Model, tasks:set[task.Task], max_seq_length:int=1024, **kwargs):
+def get_tokenized_dataset(model: base.Model, tasks:set[task.Task], prompt_builder: PromptBuilder, max_seq_length:int=1024, **kwargs):
     """
     Create a dataset from the tasks and model.
     """
@@ -18,7 +18,6 @@ def get_tokenized_dataset(model: base.Model, tasks:set[task.Task], max_seq_lengt
         'labels': [],
         'attention_mask': [],
     }
-    prompt_builder = prompt_builder_utils.get_prompt_builder(model.prompt_type, **kwargs)
     for t in tasks:
         chat = prompt_builder.get_chat(t, with_plan=True, **kwargs)
         tokenized_chat = model.tokenize_chat(chat, max_seq_length=max_seq_length)
@@ -65,7 +64,11 @@ def save_dataset_samples(dataset:datasets.Dataset, model:base.Model, checkpoint_
         logger.error(f"Error saving sample {dataset_name} data to {sample_file_path}: {e}", exc_info=True)
 
 
-def run_training_procedure(model_name: str, domain: str, **train_kwargs):
+def run(
+        model_name: str, 
+        domain: str, 
+        prompt_builder: PromptBuilder,
+        **kwargs):
     start_time = datetime.datetime.now()
     start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
     logger.info(f"Starting training at {start_time_str}")
@@ -75,9 +78,9 @@ def run_training_procedure(model_name: str, domain: str, **train_kwargs):
     logger.info(f"Checkpoints will be saved to: {model_checkpoint_dir}")
     try:
         model = utils.get_model(model_name=model_name)
-        train_kwargs['is_trainable'] = True
-        train_kwargs['checkpoint_dir'] = model_checkpoint_dir
-        model.setup(**train_kwargs)
+        kwargs['is_trainable'] = True
+        kwargs['checkpoint_dir'] = model_checkpoint_dir
+        model.setup(**kwargs)
     except Exception as e:
         logger.error(f"Error loading model {model_name}: {e}", exc_info=True)
         raise e
@@ -89,8 +92,8 @@ def run_training_procedure(model_name: str, domain: str, **train_kwargs):
         validation_tasks:set[task.Task] = database.task_database.get(filter_by_domain=domain, filter_by_purpose=task.Task.purpose.VALIDATION)
 
         logger.info(f"Tokenizing datasets for training and validation.")
-        tokenized_train_dataset = get_tokenized_dataset(model, train_tasks, **train_kwargs)
-        tokenized_eval_dataset = get_tokenized_dataset(model, validation_tasks, **train_kwargs)
+        tokenized_train_dataset = get_tokenized_dataset(model, train_tasks, prompt_builder, **kwargs)
+        tokenized_eval_dataset = get_tokenized_dataset(model, validation_tasks, prompt_builder, **kwargs)
 
         logger.info("Dataset tokenization and processing complete.")
         logger.info(f"Processed Training Dataset Features: {tokenized_train_dataset.features}")
@@ -122,7 +125,7 @@ def run_training_procedure(model_name: str, domain: str, **train_kwargs):
     # --- Train ---
     try:
         logger.info("Calling model.train() at %s", datetime.datetime.now())
-        model.train(tokenized_train_dataset=tokenized_train_dataset, tokenized_eval_dataset=tokenized_eval_dataset, **train_kwargs)
+        model._train(tokenized_train_dataset=tokenized_train_dataset, tokenized_eval_dataset=tokenized_eval_dataset, **kwargs)
         end_time = datetime.datetime.now()
         logger.info(f"Training completed at {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
     except Exception as e:
