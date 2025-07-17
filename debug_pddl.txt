@@ -1,55 +1,153 @@
 Your task is to generate a plan for the following planning problem. The domain section describes the available actions and objects, and the problem section defines the initial and goal states. The plan must be a sequence of actions that starts from the initial state and reaches the goal state. The entire plan must be enclosed between <plan> and </plan> tags, and each action must be on a new line. Your response should only contain the plan.
                                 
 <domain>
-(define (domain blocksworld-4ops)
-  (:requirements :strips)
-(:predicates (clear ?x)
-             (ontable ?x)
-             (handempty)
-             (holding ?x)
-             (on ?x ?y))
+(define (domain satellite)
+  (:requirements :strips :typing)
+  (:types
+    satellite direction instrument mode
+  )
+  (:predicates
+    (on_board ?i - instrument ?s - satellite)
+    (supports ?i - instrument ?m - mode)
+    (pointing ?s - satellite ?d - direction)
+    (power_avail ?s - satellite)
+    (power_on ?i - instrument)
+    (calibrated ?i - instrument)
+    (have_image ?d - direction ?m - mode)
+    (calibration_target ?i - instrument ?d - direction)
+  )
 
-(:action pick-up
-  :parameters (?ob)
-  :precondition (and (clear ?ob) (ontable ?ob) (handempty))
-  :effect (and (holding ?ob) (not (clear ?ob)) (not (ontable ?ob))
-               (not (handempty))))
+  (:action turn_to
+    :parameters (?s - satellite ?d_new - direction ?d_prev - direction)
+    :precondition (and
+      (pointing ?s ?d_prev))
+    :effect (and
+      (pointing ?s ?d_new)
+      (not (pointing ?s ?d_prev)))
+  )
 
-(:action put-down
-  :parameters  (?ob)
-  :precondition (holding ?ob)
-  :effect (and (clear ?ob) (handempty) (ontable ?ob)
-               (not (holding ?ob))))
+  (:action switch_on
+    :parameters (?i - instrument ?s - satellite)
+    :precondition (and
+      (on_board ?i ?s)
+      (power_avail ?s))
+    :effect (and
+      (power_on ?i)
+      (not (calibrated ?i))
+      (not (power_avail ?s)))
+  )
 
-(:action stack
-  :parameters  (?ob ?underob)
-  :precondition (and (clear ?underob) (holding ?ob))
-  :effect (and (handempty) (clear ?ob) (on ?ob ?underob)
-               (not (clear ?underob)) (not (holding ?ob))))
+  (:action switch_off
+    :parameters (?i - instrument ?s - satellite)
+    :precondition (and
+      (on_board ?i ?s)
+      (power_on ?i))
+    :effect (and
+      (not (power_on ?i))
+      (power_avail ?s))
+  )
 
-(:action unstack
-  :parameters  (?ob ?underob)
-  :precondition (and (on ?ob ?underob) (clear ?ob) (handempty))
-  :effect (and (holding ?ob) (clear ?underob)
-               (not (on ?ob ?underob)) (not (clear ?ob)) (not (handempty)))))
+  (:action calibrate
+    :parameters (?s - satellite ?i - instrument ?d - direction)
+    :precondition (and
+      (on_board ?i ?s)
+      (calibration_target ?i ?d)
+      (pointing ?s ?d)
+      (power_on ?i))
+    :effect (calibrated ?i)
+  )
+
+  (:action take_image
+    :parameters (?s - satellite ?d - direction ?i - instrument ?m - mode)
+    :precondition (and
+      (calibrated ?i)
+      (on_board ?i ?s)
+      (supports ?i ?m)
+      (power_on ?i)
+      (pointing ?s ?d))
+    :effect (have_image ?d ?m)
+  )
+)
 </domain>
 <instance>
-(define (problem BW-rand-3)
-(:domain blocksworld-4ops)
-(:objects a b c )
+(define (problem strips-sat-x-1)
+(:domain satellite)
+(:objects
+	satellite0 - satellite
+	instrument0 - instrument
+	instrument1 - instrument
+	instrument2 - instrument
+	instrument3 - instrument
+	satellite1 - satellite
+	instrument4 - instrument
+	instrument5 - instrument
+	instrument6 - instrument
+	instrument7 - instrument
+	satellite2 - satellite
+	instrument8 - instrument
+	instrument9 - instrument
+	spectrograph0 - mode
+	groundstation0 - direction
+	phenomenon1 - direction
+	phenomenon2 - direction
+	phenomenon3 - direction
+	star4 - direction
+	phenomenon5 - direction
+	star6 - direction
+	phenomenon7 - direction
+	star8 - direction
+)
 (:init
-(handempty)
-(ontable a)
-(on b a)
-(ontable c)
-(clear b)
-(clear c)
+	(supports instrument0 spectrograph0)
+	(calibration_target instrument0 groundstation0)
+	(supports instrument1 spectrograph0)
+	(calibration_target instrument1 groundstation0)
+	(supports instrument2 spectrograph0)
+	(calibration_target instrument2 groundstation0)
+	(supports instrument3 spectrograph0)
+	(calibration_target instrument3 groundstation0)
+	(on_board instrument0 satellite0)
+	(on_board instrument1 satellite0)
+	(on_board instrument2 satellite0)
+	(on_board instrument3 satellite0)
+	(power_avail satellite0)
+	(pointing satellite0 phenomenon5)
+	(supports instrument4 spectrograph0)
+	(calibration_target instrument4 groundstation0)
+	(supports instrument5 spectrograph0)
+	(calibration_target instrument5 groundstation0)
+	(supports instrument6 spectrograph0)
+	(calibration_target instrument6 groundstation0)
+	(supports instrument7 spectrograph0)
+	(calibration_target instrument7 groundstation0)
+	(on_board instrument4 satellite1)
+	(on_board instrument5 satellite1)
+	(on_board instrument6 satellite1)
+	(on_board instrument7 satellite1)
+	(power_avail satellite1)
+	(pointing satellite1 star8)
+	(supports instrument8 spectrograph0)
+	(calibration_target instrument8 groundstation0)
+	(supports instrument9 spectrograph0)
+	(calibration_target instrument9 groundstation0)
+	(on_board instrument8 satellite2)
+	(on_board instrument9 satellite2)
+	(power_avail satellite2)
+	(pointing satellite2 phenomenon5)
 )
-(:goal
-(and
-(on b c)
-(on c a))
-)
+(:goal (and
+	(pointing satellite0 star4)
+	(pointing satellite2 phenomenon1)
+	(have_image phenomenon1 spectrograph0)
+	(have_image phenomenon2 spectrograph0)
+	(have_image phenomenon3 spectrograph0)
+	(have_image star4 spectrograph0)
+	(have_image phenomenon5 spectrograph0)
+	(have_image star6 spectrograph0)
+	(have_image phenomenon7 spectrograph0)
+	(have_image star8 spectrograph0)
+))
+
 )
 </instance>
 
@@ -58,16 +156,18 @@ For any planning problem, landmarks are the facts that must be true in all valid
 The landmarks for this problem are as follows:
 
 <landmarks>
-on(b, c)
-clear(c)
-holding(b)
-clear(b)
-handempty()
-on(b, a)
-on(c, a)
-clear(a)
-holding(c)
-ontable(c)
+pointing(satellite2, phenomenon1)
+pointing(satellite2, phenomenon5)
+pointing(satellite0, star4)
+pointing(satellite0, phenomenon5)
+have_image(star8, spectrograph0)
+have_image(star6, spectrograph0)
+have_image(star4, spectrograph0)
+have_image(phenomenon7, spectrograph0)
+have_image(phenomenon5, spectrograph0)
+have_image(phenomenon3, spectrograph0)
+have_image(phenomenon2, spectrograph0)
+have_image(phenomenon1, spectrograph0)
 </landmarks>
 
 Here are some examples of plans in the same format as the one you should provide:
