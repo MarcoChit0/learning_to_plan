@@ -1,9 +1,49 @@
-prompt_metadata,model_metadata,domain,task_type,num_samples,accuracy_all_valid,all_valid,accuracy_any_valid,any_valid,avg_validity_ratio,std_validity_ratio,number_of_instances,pass_at_k_1,pass_at_k_2,pass_at_k_3,pass_at_k_4,pass_at_k_5,pass_at_k_6,pass_at_k_7,pass_at_k_8,pass_at_k_9,pass_at_k_10
-"Metadata(id=0, info={'class_name': 'PDDLPromptBuilder', 'prompt_type': 'pddl'})","Metadata(id=1, info={'model_name': 'gemma-3-27b-it', 'temperature': 1.0, 'top_p': 0.95, 'top_k': 64, 'max_output_tokens': 8192, 'candidate_count': 1, 'response_mime_type': 'text/plain', 'thinking': None})",barman,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0,,,,,,,,,
-"Metadata(id=0, info={'class_name': 'PDDLPromptBuilder', 'prompt_type': 'pddl'})","Metadata(id=1, info={'model_name': 'gemma-3-27b-it', 'temperature': 1.0, 'top_p': 0.95, 'top_k': 64, 'max_output_tokens': 8192, 'candidate_count': 1, 'response_mime_type': 'text/plain', 'thinking': None})",blocksworld,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0,,,,,,,,,
-"Metadata(id=0, info={'class_name': 'PDDLPromptBuilder', 'prompt_type': 'pddl'})","Metadata(id=1, info={'model_name': 'gemma-3-27b-it', 'temperature': 1.0, 'top_p': 0.95, 'top_k': 64, 'max_output_tokens': 8192, 'candidate_count': 1, 'response_mime_type': 'text/plain', 'thinking': None})",childsnack,TYPE.OUTOFDISTRIBUTION,1,0.05,1,0.05,1,0.05,0.21794494717703367,20,0.05,,,,,,,,,
-"Metadata(id=0, info={'class_name': 'PDDLPromptBuilder', 'prompt_type': 'pddl'})","Metadata(id=1, info={'model_name': 'gemma-3-27b-it', 'temperature': 1.0, 'top_p': 0.95, 'top_k': 64, 'max_output_tokens': 8192, 'candidate_count': 1, 'response_mime_type': 'text/plain', 'thinking': None})",depots,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0,,,,,,,,,
-"Metadata(id=0, info={'class_name': 'PDDLPromptBuilder', 'prompt_type': 'pddl'})","Metadata(id=1, info={'model_name': 'gemma-3-27b-it', 'temperature': 1.0, 'top_p': 0.95, 'top_k': 64, 'max_output_tokens': 8192, 'candidate_count': 1, 'response_mime_type': 'text/plain', 'thinking': None})",driverlog,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0,,,,,,,,,
-"Metadata(id=0, info={'class_name': 'PDDLPromptBuilder', 'prompt_type': 'pddl'})","Metadata(id=1, info={'model_name': 'gemma-3-27b-it', 'temperature': 1.0, 'top_p': 0.95, 'top_k': 64, 'max_output_tokens': 8192, 'candidate_count': 1, 'response_mime_type': 'text/plain', 'thinking': None})",grippers,TYPE.OUTOFDISTRIBUTION,1,0.1,2,0.1,2,0.1,0.30000000000000004,20,0.1,,,,,,,,,
-"Metadata(id=0, info={'class_name': 'PDDLPromptBuilder', 'prompt_type': 'pddl'})","Metadata(id=1, info={'model_name': 'gemma-3-27b-it', 'temperature': 1.0, 'top_p': 0.95, 'top_k': 64, 'max_output_tokens': 8192, 'candidate_count': 1, 'response_mime_type': 'text/plain', 'thinking': None})",logistics,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0,,,,,,,,,
-"Metadata(id=0, info={'class_name': 'PDDLPromptBuilder', 'prompt_type': 'pddl'})","Metadata(id=1, info={'model_name': 'gemma-3-27b-it', 'temperature': 1.0, 'top_p': 0.95, 'top_k': 64, 'max_output_tokens': 8192, 'candidate_count': 1, 'response_mime_type': 'text/plain', 'thinking': None})",satellite,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0,,,,,,,,,
+prompt_metadata,model_metadata,domain,task_type,num_samples,accuracy_all_valid,all_valid,accuracy_any_valid,any_valid,avg_validity_ratio,std_validity_ratio,number_of_instances,pass_at_k_1
+pddl,gemma-3-27b-it,barman,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+pddl,gemma-3-27b-it,blocksworld,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+pddl,gemma-3-27b-it,childsnack,TYPE.OUTOFDISTRIBUTION,1,0.05,1,0.05,1,0.05,0.21794494717703367,20,0.05
+pddl,gemma-3-27b-it,depots,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+pddl,gemma-3-27b-it,driverlog,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+pddl,gemma-3-27b-it,grippers,TYPE.OUTOFDISTRIBUTION,1,0.1,2,0.1,2,0.1,0.30000000000000004,20,0.1
+pddl,gemma-3-27b-it,logistics,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+pddl,gemma-3-27b-it,satellite,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+pddl,gemini-2.5-flash,barman,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+pddl,gemini-2.5-flash,blocksworld,TYPE.OUTOFDISTRIBUTION,1,0.1,2,0.1,2,0.1,0.30000000000000004,20,0.1
+pddl,gemini-2.5-flash,childsnack,TYPE.OUTOFDISTRIBUTION,1,0.1,2,0.1,2,0.1,0.30000000000000004,20,0.1
+pddl,gemini-2.5-flash,depots,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+pddl,gemini-2.5-flash,driverlog,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+pddl,gemini-2.5-flash,grippers,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+pddl,gemini-2.5-flash,logistics,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+pddl,gemini-2.5-flash,satellite,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+pddl,gemini-2.5-flash-thinking,barman,TYPE.OUTOFDISTRIBUTION,1,0.25,5,0.25,5,0.25,0.4330127018922193,20,0.25
+pddl,gemini-2.5-flash-thinking,blocksworld,TYPE.OUTOFDISTRIBUTION,1,0.95,19,0.95,19,0.95,0.21794494717703372,20,0.95
+pddl,gemini-2.5-flash-thinking,childsnack,TYPE.OUTOFDISTRIBUTION,1,0.9,18,0.9,18,0.9,0.30000000000000004,20,0.9
+pddl,gemini-2.5-flash-thinking,depots,TYPE.OUTOFDISTRIBUTION,1,0.7,14,0.7,14,0.7,0.4582575694955839,20,0.7
+pddl,gemini-2.5-flash-thinking,driverlog,TYPE.OUTOFDISTRIBUTION,1,0.8,16,0.8,16,0.8,0.4000000000000001,20,0.8
+pddl,gemini-2.5-flash-thinking,grippers,TYPE.OUTOFDISTRIBUTION,1,0.9,18,0.9,18,0.9,0.30000000000000004,20,0.9
+pddl,gemini-2.5-flash-thinking,logistics,TYPE.OUTOFDISTRIBUTION,1,0.9,18,0.9,18,0.9,0.30000000000000004,20,0.9
+pddl,gemini-2.5-flash-thinking,satellite,TYPE.OUTOFDISTRIBUTION,1,0.9,18,0.9,18,0.9,0.30000000000000004,20,0.9
+landmarks,gemma-3-27b-it,barman,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+landmarks,gemma-3-27b-it,blocksworld,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+landmarks,gemma-3-27b-it,childsnack,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,5,0.0
+landmarks,gemma-3-27b-it,depots,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+landmarks,gemma-3-27b-it,driverlog,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+landmarks,gemma-3-27b-it,grippers,TYPE.OUTOFDISTRIBUTION,1,0.1,2,0.1,2,0.1,0.30000000000000004,20,0.1
+landmarks,gemma-3-27b-it,logistics,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+landmarks,gemma-3-27b-it,satellite,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,18,0.0
+landmarks,gemini-2.5-flash,barman,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+landmarks,gemini-2.5-flash,blocksworld,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+landmarks,gemini-2.5-flash,childsnack,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,5,0.0
+landmarks,gemini-2.5-flash,depots,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+landmarks,gemini-2.5-flash,driverlog,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+landmarks,gemini-2.5-flash,grippers,TYPE.OUTOFDISTRIBUTION,1,0.1,2,0.1,2,0.1,0.30000000000000004,20,0.1
+landmarks,gemini-2.5-flash,logistics,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,20,0.0
+landmarks,gemini-2.5-flash,satellite,TYPE.OUTOFDISTRIBUTION,1,0.0,0,0.0,0,0.0,0.0,18,0.0
+landmarks,gemini-2.5-flash-thinking,barman,TYPE.OUTOFDISTRIBUTION,1,0.15,3,0.15,3,0.15,0.35707142142714243,20,0.15
+landmarks,gemini-2.5-flash-thinking,blocksworld,TYPE.OUTOFDISTRIBUTION,1,0.75,15,0.75,15,0.75,0.4330127018922193,20,0.75
+landmarks,gemini-2.5-flash-thinking,childsnack,TYPE.OUTOFDISTRIBUTION,1,0.6,3,0.6,3,0.6,0.48989794855663565,5,0.6
+landmarks,gemini-2.5-flash-thinking,depots,TYPE.OUTOFDISTRIBUTION,1,0.65,13,0.65,13,0.65,0.4769696007084727,20,0.65
+landmarks,gemini-2.5-flash-thinking,driverlog,TYPE.OUTOFDISTRIBUTION,1,0.55,11,0.55,11,0.55,0.49749371855331,20,0.55
+landmarks,gemini-2.5-flash-thinking,grippers,TYPE.OUTOFDISTRIBUTION,1,0.75,15,0.75,15,0.75,0.4330127018922193,20,0.75
+landmarks,gemini-2.5-flash-thinking,logistics,TYPE.OUTOFDISTRIBUTION,1,0.85,17,0.85,17,0.85,0.35707142142714243,20,0.85
+landmarks,gemini-2.5-flash-thinking,satellite,TYPE.OUTOFDISTRIBUTION,1,0.8333333333333334,15,0.8333333333333334,15,0.8333333333333334,0.3726779962499649,18,0.8333333333333334

@@ -73,7 +73,6 @@ def get_tasks_from_raw_data() -> None:
                 filter_by_domain=d,
                 filter_by_type=_type,
             )
-            print(f"Found {len(tasks_on_db)} tasks on db for domain '{d}' with type '{task_type}'.")
             if len(tasks_on_db) > 0:
                 if len(tasks_on_db) == num_tasks:
                     logger.info(f"Skipping domain '{d}' with type '{task_type}' as it already has {len(tasks_on_db)}/{num_tasks} tasks loaded.")

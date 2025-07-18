@@ -90,7 +90,7 @@ class LandmarksPromptBuilder(pddl.PDDLPromptBuilder):
 
         for ex in self.examples:
             try:
-                landmark_graph_str = get_landmark_graph(ex, memory_limit=4, landmark_factory=self.landmark_factory)
+                landmark_graph_str = get_landmark_graph(ex, memory_limit=24, landmark_factory=self.landmark_factory)
             except Exception as e:
                 raise ValueError(f"Error getting landmark graph for task {ex.id}: {e}")
             try:

@@ -48,11 +48,9 @@ class GeminiModel(Model):
             **generation_kwargs
         ) -> Tuple[str, dict[str, Any]]:
         logger.debug(f"Generating with Gemini model {self.model_name}.")
-        print("\tinside")
         gen_specs = {
             "tokens" : {}
         }
-        print("\tA")
         def _map_role(role : str):
             if role == "user":
                 return "user"
@@ -62,7 +60,6 @@ class GeminiModel(Model):
                 return "model"
             else:
                 raise ValueError(f"Unknown role: {role}. Expected 'user', 'assistant', or 'system'.")
-        print("\tB")
         contents = []
         for msg in chat:
             contents.append(
@@ -73,8 +70,7 @@ class GeminiModel(Model):
                     ]
                 )
             )
-        print("\tC")
-        gen_config = self.get_generation_config(**generation_kwargs); print("\tD")
+        gen_config = self.get_generation_config(**generation_kwargs)
         thinking = gen_config.pop("thinking", None)
         if thinking is not None:
             # -1 means no limit, 0 means no thinking
@@ -86,8 +82,6 @@ class GeminiModel(Model):
         config = types.GenerateContentConfig(
             **gen_config,
         )
-        print("\tE")
-        print("\tconfig:", config)
         logger.debug(f"Gemini generation config: {config}")
 
         try:
@@ -114,7 +108,6 @@ class GeminiModel(Model):
             response_text = "".join(part.text for part in candidate.content.parts)
 
             if response.usage_metadata:
-                print(response.usage_metadata)
                 gen_specs["tokens"] = {
                     "input" : response.usage_metadata.prompt_token_count,
                     "output": response.usage_metadata.candidates_token_count

@@ -46,7 +46,6 @@ class BlocksworldTranslator(DomainTranslator):
                     ValueError: If the fact format is unknown or if a block identifier
                                 cannot be mapped to a color using self._color_map.
             """
-            # print(f"fact: @{fact}@")
             if not pddl_fact:
                 return ""
 

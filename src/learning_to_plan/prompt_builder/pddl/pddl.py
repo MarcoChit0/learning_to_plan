@@ -55,7 +55,7 @@ class PDDLPromptBuilder(base.PromptBuilder):
 
     def get_additional_info(self, t: task.Task) -> str:
         s = "Here are some examples of plans in the same format as the one you should provide:"
-        s += "\n\n".join([PDDL_TEMPLATE_PROMPT.substitute(
+        s += "\n\n".join([BASIC_EXAMPLE_TEMPLATE.substitute(
             domain=ex.read_domain().strip(),
             instance=ex.read_instance().strip(),
             plan=ex.get_plan()
