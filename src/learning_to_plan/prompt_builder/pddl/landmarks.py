@@ -64,7 +64,6 @@ digraph G {
 """
 
 class LandmarksPromptBuilder(pddl.PDDLPromptBuilder):
-    # TODO: ADD LANDMARK FACTORY TO PARSER
     def __init__(self, landmark_factory = "lm_zg", **kwargs):
         super().__init__(prompt_type=config.PROMPT_TYPE.LANDMARKS, **kwargs)
         self.landmark_factory = landmark_factory

@@ -279,3 +279,33 @@ def run_on_domains(
             if raise_on_error:
                 raise ValueError(f"Error occurred while processing domain {domain}: {e}") from e
         logger.info(f"Finished processing domain: {domain} at {datetime.datetime.now()}.")
+
+import subprocess
+def call_val(t : task.Task, plan: str, fn : str = "Validate") -> str:
+    """
+    Calls the VAL tool to validate a plan against a task.
+    :param t: The task to validate against.
+    :param plan: The plan to validate.
+    :param fn: The name of the VAL executable.
+    :return: The output of the VAL tool.
+    """
+    temp_plan_file = f".temp_plan_{t.id}.txt"
+    with open(temp_plan_file, "w") as f:
+        f.write(plan)
+
+    cmd_list = [
+        f"utils/VAL/build/bin/{fn}",
+        "-v",
+        "-t", "0.001",
+        t.domain_file_path,
+        t.instance_file_path,
+        temp_plan_file
+    ]
+
+    try:
+        result = subprocess.run(cmd_list, capture_output=True, text=True, check=False)
+        if os.path.exists(temp_plan_file):
+            os.remove(temp_plan_file)
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Error calling VAL: {e.stderr.strip()}")

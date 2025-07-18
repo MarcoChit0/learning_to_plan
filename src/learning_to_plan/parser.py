@@ -119,7 +119,7 @@ def parse_args():
         default=None,
         help="Type of task to filter by. Options: 'indistribution', 'outofdistribution', 'unseen', 'obfuscated'. Default is None (no filtering)."
     )
-    def prompt_type_converter(value: Optional[str] = None) -> Optional[config.PROMPT_TYPE]:
+    def prompt_type_converter(value: str) -> config.PROMPT_TYPE:
         if not value:
             return None
         try:
@@ -130,7 +130,7 @@ def parse_args():
     parser.add_argument(
         "--prompt_type",
         type=prompt_type_converter,
-        default=None,
+        default="io",
         help=f"Type of prompt to use for plan generation. Options: {list(config.PROMPT_TYPE)}. Default is {config.PROMPT_TYPE.IO.name}."
     )
     parser.add_argument(
@@ -162,6 +162,18 @@ def parse_args():
         type=int,
         default=1,
         help="Number of samples to generate per task. Default is 1."
+    )
+    def thinking_style_converter(value: str) -> config.THINKING_STYLE:
+        try:
+            return config.THINKING_STYLE[value.upper()]
+        except KeyError:
+            valid = ", ".join([ts.value for ts in config.THINKING_STYLE])
+            raise argparse.ArgumentTypeError(f"Invalid thinking_style: {value}. Valid options are: {valid}.")
+    parser.add_argument(
+        "--thinking_style",
+        type=thinking_style_converter,
+        default="none",
+        help=f"Thinking style to use for the prompt. Options: {list(config.THINKING_STYLE)}. Default is {config.THINKING_STYLE.NONE.name}."
     )
 
     return parser.parse_args()

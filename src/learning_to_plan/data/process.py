@@ -1,42 +1,12 @@
 import os
 from learning_to_plan import config
 import datetime
-import subprocess
 from tqdm import tqdm
 
-from learning_to_plan.data import generated_plan, task, base
-from learning_to_plan import database
+from learning_to_plan.data import generated_plan, task
+from learning_to_plan import database, utils
 logger = config.get_logger(__name__)
 import numpy as np
-# # domin_path = "data/raw/blocksworld/generated_domain.pddl"
-# # problem_path = "data/raw/blocksworld/generated_basic/instance-0.pddl"
-# # plan ="""(unstack a c)
-# # (put-down a)
-# # (pick-up b)
-# # (stack b c)
-# # (pick-up a)
-# # (stack a b)"""
-
-# # mapping = {
-# #     "a": "red",
-# #     "b": "blue",
-# #     "c": "yellow"
-# # }
-
-# # nl_plan = """unstack the red block from the yellow block
-# # put down the red block
-# # pick up the blue block
-# # stack the blue block on top of the yellow block
-# # pick up the red block
-# # stack the red block on top of the blue block"""
-
-
-# # with open("plan_blocksworld_instance-0.txt", "w") as f:
-# #     f.write(plan)
-
-
-# # val_command = f"../VAL/bin/Validate -v -t 0.001 {domin_path} {problem_path} plan_blocksworld_instance-0.txt"
-# # os.system(val_command)
 
 def validate_plans(**kwargs):
     logger.info(f"Starting plan validation at {datetime.datetime.now()}.")
@@ -44,29 +14,19 @@ def validate_plans(**kwargs):
     for gen_plan in tqdm(generated_plans, desc="Validating Plans", unit="plan"):
         is_plan_valid = False
         try:        
-            temp_plan_file = os.path.join(
-            f".temp_plan_{gen_plan.id}.txt"
-            )
-            with open(temp_plan_file, "w") as f:
-                f.write(gen_plan.pddl_plan)
-
             t : task.Task = database.task_database.get_by_id(gen_plan.task_id)
+            if t is None:
+                raise ValueError(f"Task with ID {gen_plan.task_id} not found in the task database.")
+            try:
+                result = utils.call_val(t, gen_plan.pddl_plan)
+            except Exception as e:
+                logger.error(f"Error calling validation for task {t.id} with plan {gen_plan.pddl_plan}: {e}")
+                raise e
 
-            logger.debug(f"Created temporary plan file: {temp_plan_file}")
-            cmd_list = [
-                "utils/VAL/build/bin/Validate",
-                "-v",
-                "-t", "0.001",
-                t.domain_file_path,
-                t.instance_file_path,
-                temp_plan_file
-            ]
-            result = subprocess.run(cmd_list, capture_output=True, text=True, check=False)
-            for line in result.stdout.splitlines():
+            for line in result.splitlines():
                 if "Plan valid" in line:
                     is_plan_valid = True
                     break
-            os.remove(temp_plan_file)
         except Exception as e:
             logger.error(f"Error validating generated plan {gen_plan.id} : {e}")
             raise e

@@ -17,7 +17,7 @@ class DomainTranslator(abc.ABC):
         #    |                 : OR
         #    \s*\)\s*$         : Ensure the match is followed by the final closing parenthesis of the define block
         #                       (allowing for potential whitespace)
-        pattern = r"\({}\s+(.*?)(?=\s+\(:|\s*\)\s*$)".format(re.escape(section_name))
+        pattern = r"\({}\s+(.*?)(?=\s+\(:|\s*\)\s*$)".format(re.escape(pattern=section_name))
         match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
         if match:
             return match.group(1).strip() # Return the stripped content

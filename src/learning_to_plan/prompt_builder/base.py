@@ -4,10 +4,13 @@ from learning_to_plan import config
 from learning_to_plan.data import metadata
 
 class PromptBuilder(abc.ABC):
-    def __init__(self, prompt_type: config.PROMPT_TYPE, **kwargs):
+    def __init__(self, prompt_type: config.PROMPT_TYPE, thinking_style: config.THINKING_STYLE = config.THINKING_STYLE.NONE, **kwargs):
         self.prompt_type : config.PROMPT_TYPE = prompt_type
+        self.thinking_style : config.THINKING_STYLE = thinking_style
         self.metadata = {
+            "class_name": self.__class__.__name__,
             "prompt_type": self.prompt_type.value,
+            "thinking_style": self.thinking_style.value,
         }
     
     @abc.abstractmethod
@@ -36,6 +39,5 @@ class PromptBuilder(abc.ABC):
         :return: A dictionary containing the metadata.
         """
         return metadata.create_metadata(
-            class_name=self.__class__.__name__,
             **self.metadata,
         )

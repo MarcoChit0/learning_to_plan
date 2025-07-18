@@ -68,6 +68,14 @@ class TOKENS(Enum):
     CHECKLIST_END = "</checklist>"
     LANDMARKS_START = "<landmarks>"
     LANDMARKS_END = "</landmarks>"
+    THINKING_START = "<thinking>"
+    THINKING_END = "</thinking>"
+    ADD_EFFECTS_START = "<add_effects>"
+    ADD_EFFECTS_END = "</add_effects>"
+    DELETE_EFFECTS_START = "<delete_effects>"
+    DELETE_EFFECTS_END = "</delete_effects>"
+    STATE_START = "<state>"
+    STATE_END = "</state>"
 
 class STATUS(Enum):
     OK = "ok"
@@ -89,7 +97,16 @@ class PROMPT_TYPE(Enum):
             return self.value < other.value
         return NotImplemented
 
-def get_special_tokens(prompt_type: PROMPT_TYPE) -> list[str]:
+class THINKING_STYLE(Enum):
+    NONE = "none"
+    COT = "cot"
+
+    def __lt__(self, other):
+        if isinstance(other, THINKING_STYLE):
+            return self.value < other.value
+        return NotImplemented
+
+def get_special_tokens(prompt_type: PROMPT_TYPE, thinking_style: THINKING_STYLE) -> list[str]:
     if prompt_type == PROMPT_TYPE.IO:
         tokens = [
             TOKENS.PLAN_START,
@@ -122,10 +139,27 @@ def get_special_tokens(prompt_type: PROMPT_TYPE) -> list[str]:
             TOKENS.PROBLEM_END,
             TOKENS.CHECKLIST_START,
             TOKENS.CHECKLIST_END,
+            TOKENS.THINKING_START,
+            TOKENS.THINKING_END,
         ]
         if prompt_type == PROMPT_TYPE.LANDMARKS:
-            tokens.append(TOKENS.LANDMARKS_START)
-            tokens.append(TOKENS.LANDMARKS_END)
+            tokens += [
+                TOKENS.LANDMARKS_START,
+                TOKENS.LANDMARKS_END,
+            ]
+        if thinking_style == THINKING_STYLE.COT or thinking_style == THINKING_STYLE.COT:
+            tokens += [
+                TOKENS.ADD_EFFECTS_START,
+                TOKENS.ADD_EFFECTS_END,
+                TOKENS.DELETE_EFFECTS_START,
+                TOKENS.DELETE_EFFECTS_END,
+            ]
+            if thinking_style == THINKING_STYLE.COT:
+                tokens += [
+                    TOKENS.STATE_START,
+                    TOKENS.STATE_END,
+                ]
+        
 
     else:
         raise ValueError(f"Unknown prompt type: {prompt_type}. Must be one of {list(PROMPT_TYPE)}.")

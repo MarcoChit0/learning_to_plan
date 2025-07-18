@@ -1,0 +1,150 @@
+Checking plan: .temp_plan_35399.txt
+Plan to validate:
+
+Plan size: 15
+1:
+(move d262 d478 peg2)
+ 
+2:
+(move d478 d176 peg3)
+ 
+3:
+(move d262 peg2 d478)
+ 
+4:
+(move d176 d103 peg2)
+ 
+5:
+(move d262 d478 d103)
+ 
+6:
+(move d478 peg3 d176)
+ 
+7:
+(move d262 d103 d478)
+ 
+8:
+(move d103 peg1 peg3)
+ 
+9:
+(move d262 d478 d103)
+ 
+10:
+(move d478 d176 peg1)
+ 
+11:
+(move d262 d103 d478)
+ 
+12:
+(move d176 peg2 d103)
+ 
+13:
+(move d262 d478 peg2)
+ 
+14:
+(move d478 peg1 d176)
+ 
+15:
+(move d262 peg2 d478)
+ 
+
+Plan Validation details
+-----------------------
+
+Checking next happening (time 1)
+Deleting (on d262 d478)
+Deleting (clear peg2)
+Adding (clear d478)
+Adding (on d262 peg2)
+
+Checking next happening (time 2)
+Deleting (on d478 d176)
+Deleting (clear peg3)
+Adding (clear d176)
+Adding (on d478 peg3)
+
+Checking next happening (time 3)
+Deleting (on d262 peg2)
+Deleting (clear d478)
+Adding (clear peg2)
+Adding (on d262 d478)
+
+Checking next happening (time 4)
+Deleting (on d176 d103)
+Deleting (clear peg2)
+Adding (clear d103)
+Adding (on d176 peg2)
+
+Checking next happening (time 5)
+Deleting (on d262 d478)
+Deleting (clear d103)
+Adding (clear d478)
+Adding (on d262 d103)
+
+Checking next happening (time 6)
+Deleting (on d478 peg3)
+Deleting (clear d176)
+Adding (clear peg3)
+Adding (on d478 d176)
+
+Checking next happening (time 7)
+Deleting (on d262 d103)
+Deleting (clear d478)
+Adding (clear d103)
+Adding (on d262 d478)
+
+Checking next happening (time 8)
+Deleting (on d103 peg1)
+Deleting (clear peg3)
+Adding (clear peg1)
+Adding (on d103 peg3)
+
+Checking next happening (time 9)
+Deleting (on d262 d478)
+Deleting (clear d103)
+Adding (clear d478)
+Adding (on d262 d103)
+
+Checking next happening (time 10)
+Deleting (on d478 d176)
+Deleting (clear peg1)
+Adding (clear d176)
+Adding (on d478 peg1)
+
+Checking next happening (time 11)
+Deleting (on d262 d103)
+Deleting (clear d478)
+Adding (clear d103)
+Adding (on d262 d478)
+
+Checking next happening (time 12)
+Deleting (on d176 peg2)
+Deleting (clear d103)
+Adding (clear peg2)
+Adding (on d176 d103)
+
+Checking next happening (time 13)
+Deleting (on d262 d478)
+Deleting (clear peg2)
+Adding (clear d478)
+Adding (on d262 peg2)
+
+Checking next happening (time 14)
+Deleting (on d478 peg1)
+Deleting (clear d176)
+Adding (clear peg1)
+Adding (on d478 d176)
+
+Checking next happening (time 15)
+Deleting (on d262 peg2)
+Deleting (clear d478)
+Adding (clear peg2)
+Adding (on d262 d478)
+Plan executed successfully - checking goal
+Plan valid
+Final value: 15 
+
+Successful plans:
+Value: 15
+ .temp_plan_35399.txt 15 
+

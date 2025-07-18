@@ -5,8 +5,8 @@ from learning_to_plan.domain_translators import utils as domain_translator_utils
 logger = config.get_logger(__name__)
 
 class NaturalLanguagePromptBuilder(base.PromptBuilder):
-    def __init__(self, prompt_type, **kwargs):
-        super().__init__(prompt_type=prompt_type, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     def process_response(self, response: str) -> str:
         if response == "":
