@@ -90,7 +90,7 @@ class PDDLPromptBuilder(base.PromptBuilder):
 
     def get_additional_info(self, t: task.Task) -> str:
         _ = t  # Unused task
-        s = "Here are some examples of plans in the same format as the one you should provide:"
+        s = "Here are some examples of plans in the same format as the one you should provide:\n\n"
 
         if self.thinking_style == config.THINKING_STYLE.NONE:
             template = BASIC_EXAMPLE_TEMPLATE
@@ -107,8 +107,7 @@ class PDDLPromptBuilder(base.PromptBuilder):
                 raise e
             
             ex_data = {
-                "domain": ex.domain,
-                "domain_description": domain_description,
+                "domain": domain_description,
                 "instance": instance_content,
                 "plan": ex.get_plan(),
             }

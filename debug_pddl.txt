@@ -1,64 +1,161 @@
 Your task is to generate a plan for the following planning problem. The domain section describes the available actions and objects, and the problem section defines the initial and goal states. The plan must be a sequence of actions that starts from the initial state and reaches the goal state. The entire plan must be enclosed between <plan> and </plan> tags, and each action must be on a new line. You must provide the plan in your response. You may also provide your reasoning in the thinking section before the plan, which should be enclosed between <thinking> and </thinking> tags. Your response should only contain the reasoning and the plan.
                      
 <domain>
-(define (domain blocksworld-4ops)
-  (:requirements :strips)
-(:predicates (clear ?x)
-             (ontable ?x)
-             (handempty)
-             (holding ?x)
-             (on ?x ?y))
+(define (domain satellite)
+  (:requirements :strips :typing)
+  (:types
+    satellite direction instrument mode
+  )
+  (:predicates
+    (on_board ?i - instrument ?s - satellite)
+    (supports ?i - instrument ?m - mode)
+    (pointing ?s - satellite ?d - direction)
+    (power_avail ?s - satellite)
+    (power_on ?i - instrument)
+    (calibrated ?i - instrument)
+    (have_image ?d - direction ?m - mode)
+    (calibration_target ?i - instrument ?d - direction)
+  )
 
-(:action pick-up
-  :parameters (?ob)
-  :precondition (and (clear ?ob) (ontable ?ob) (handempty))
-  :effect (and (holding ?ob) (not (clear ?ob)) (not (ontable ?ob))
-               (not (handempty))))
+  (:action turn_to
+    :parameters (?s - satellite ?d_new - direction ?d_prev - direction)
+    :precondition (and
+      (pointing ?s ?d_prev))
+    :effect (and
+      (pointing ?s ?d_new)
+      (not (pointing ?s ?d_prev)))
+  )
 
-(:action put-down
-  :parameters  (?ob)
-  :precondition (holding ?ob)
-  :effect (and (clear ?ob) (handempty) (ontable ?ob)
-               (not (holding ?ob))))
+  (:action switch_on
+    :parameters (?i - instrument ?s - satellite)
+    :precondition (and
+      (on_board ?i ?s)
+      (power_avail ?s))
+    :effect (and
+      (power_on ?i)
+      (not (calibrated ?i))
+      (not (power_avail ?s)))
+  )
 
-(:action stack
-  :parameters  (?ob ?underob)
-  :precondition (and (clear ?underob) (holding ?ob))
-  :effect (and (handempty) (clear ?ob) (on ?ob ?underob)
-               (not (clear ?underob)) (not (holding ?ob))))
+  (:action switch_off
+    :parameters (?i - instrument ?s - satellite)
+    :precondition (and
+      (on_board ?i ?s)
+      (power_on ?i))
+    :effect (and
+      (not (power_on ?i))
+      (power_avail ?s))
+  )
 
-(:action unstack
-  :parameters  (?ob ?underob)
-  :precondition (and (on ?ob ?underob) (clear ?ob) (handempty))
-  :effect (and (holding ?ob) (clear ?underob)
-               (not (on ?ob ?underob)) (not (clear ?ob)) (not (handempty)))))
+  (:action calibrate
+    :parameters (?s - satellite ?i - instrument ?d - direction)
+    :precondition (and
+      (on_board ?i ?s)
+      (calibration_target ?i ?d)
+      (pointing ?s ?d)
+      (power_on ?i))
+    :effect (calibrated ?i)
+  )
+
+  (:action take_image
+    :parameters (?s - satellite ?d - direction ?i - instrument ?m - mode)
+    :precondition (and
+      (calibrated ?i)
+      (on_board ?i ?s)
+      (supports ?i ?m)
+      (power_on ?i)
+      (pointing ?s ?d))
+    :effect (have_image ?d ?m)
+  )
+)
 </domain>
 <instance>
-(define (problem BW-rand-6)
-(:domain blocksworld-4ops)
-(:objects a b c d e f )
+(define (problem strips-sat-x-1)
+(:domain satellite)
+(:objects
+	satellite0 - satellite
+	instrument0 - instrument
+	instrument1 - instrument
+	satellite1 - satellite
+	instrument2 - instrument
+	instrument3 - instrument
+	satellite2 - satellite
+	instrument4 - instrument
+	instrument5 - instrument
+	thermograph0 - mode
+	star0 - direction
+	star1 - direction
+	planet2 - direction
+	phenomenon3 - direction
+	planet4 - direction
+	phenomenon5 - direction
+	phenomenon6 - direction
+	planet7 - direction
+	star8 - direction
+)
 (:init
-(handempty)
-(ontable a)
-(on b d)
-(on c a)
-(on d c)
-(on e f)
-(on f b)
-(clear e)
+	(supports instrument0 thermograph0)
+	(calibration_target instrument0 star0)
+	(supports instrument1 thermograph0)
+	(calibration_target instrument1 star0)
+	(on_board instrument0 satellite0)
+	(on_board instrument1 satellite0)
+	(power_avail satellite0)
+	(pointing satellite0 planet7)
+	(supports instrument2 thermograph0)
+	(calibration_target instrument2 star0)
+	(supports instrument3 thermograph0)
+	(calibration_target instrument3 star0)
+	(on_board instrument2 satellite1)
+	(on_board instrument3 satellite1)
+	(power_avail satellite1)
+	(pointing satellite1 star0)
+	(supports instrument4 thermograph0)
+	(calibration_target instrument4 star0)
+	(supports instrument5 thermograph0)
+	(calibration_target instrument5 star0)
+	(on_board instrument4 satellite2)
+	(on_board instrument5 satellite2)
+	(power_avail satellite2)
+	(pointing satellite2 phenomenon6)
 )
-(:goal
-(and
-(on a b)
-(on d f)
-(on e d)
-(on f c))
-)
+(:goal (and
+	(have_image star1 thermograph0)
+	(have_image planet2 thermograph0)
+	(have_image phenomenon3 thermograph0)
+	(have_image planet4 thermograph0)
+	(have_image phenomenon5 thermograph0)
+	(have_image phenomenon6 thermograph0)
+	(have_image planet7 thermograph0)
+	(have_image star8 thermograph0)
+))
+
 )
 </instance>
-Here are some examples of plans in the same format as the one you should provide:<example>
+Here are some examples of plans in the same format as the one you should provide:
+
+<example>
 <domain>
-hanoi
+(define (domain hanoi)
+    (:requirements :strips)
+    (:predicates
+        (clear ?x)
+        (on ?x ?y)
+        (smaller ?x ?y)
+    )
+
+    (:action move
+        :parameters (?disc ?from ?to)
+        :precondition (and (smaller ?to ?disc)
+            (on ?disc ?from)
+            (clear ?disc)
+            (clear ?to))
+        :effect (and (clear ?from)
+            (on ?disc ?to)
+            (not (on ?disc ?from))
+            (not (clear ?to)))
+    )
+)
 </domain>
 <instance>
 (define (problem hanoi-4)
@@ -724,7 +821,94 @@ Action: (move d262 peg2 d478)
 
 <example>
 <domain>
-storage
+(define (domain Storage-Propositional)
+    (:requirements :typing)
+    (:types
+        hoist crate place area - object
+        container depot - place
+        storearea transitarea - area
+    )
+
+    (:predicates
+        (clear ?s - storearea)
+        (in ?x -
+            (either storearea crate) ?p - place)
+        (available ?h - hoist)
+        (lifting ?h - hoist ?c - crate)
+        (at ?h - hoist ?a - area)
+        (on ?c - crate ?s - storearea)
+        (connected ?a1 ?a2 - area)
+        (compatible ?c1 ?c2 - crate)
+    )
+
+    (:action lift
+        :parameters (?h - hoist ?c - crate ?a1 - storearea ?a2 - area ?p - place)
+        :precondition (and
+            (connected ?a1 ?a2)
+            (at ?h ?a2)
+            (available ?h)
+            (on ?c ?a1)
+            (in ?a1 ?p))
+        :effect (and
+            (not (on ?c ?a1))
+            (clear ?a1)
+            (not (available ?h))
+            (lifting ?h ?c)
+            (not (in ?c ?p)))
+    )
+
+    (:action drop
+        :parameters (?h - hoist ?c - crate ?a1 - storearea ?a2 - area ?p - place)
+        :precondition (and
+            (connected ?a1 ?a2)
+            (at ?h ?a2)
+            ( lifting ?h ?c)
+            (clear ?a1)
+            (in ?a1 ?p))
+        :effect (and
+            (not (lifting ?h ?c))
+            (available ?h)
+            (not (clear ?a1))
+            (on ?c ?a1)
+            (in ?c ?p))
+    )
+
+    (:action move
+        :parameters (?h - hoist ?from ?to - storearea)
+        :precondition (and
+            (at ?h ?from)
+            (clear ?to)
+            (connected ?from ?to))
+        :effect (and
+            (not (at ?h ?from))
+            (at ?h ?to)
+            (not (clear ?to))
+            (clear ?from))
+    )
+
+    (:action go-out
+        :parameters (?h - hoist ?from - storearea ?to - transitarea)
+        :precondition (and
+            (at ?h ?from)
+            (connected ?from ?to))
+        :effect (and
+            (not (at ?h ?from))
+            (at ?h ?to)
+            (clear ?from))
+    )
+
+    (:action go-in
+        :parameters (?h - hoist ?from - transitarea ?to - storearea)
+        :precondition (and
+            (at ?h ?from)
+            (connected ?from ?to)
+            (clear ?to))
+        :effect (and
+            (not (at ?h ?from))
+            (at ?h ?to)
+            (not (clear ?to)))
+    )
+)
 </domain>
 <instance>
 (define (problem storage-199)

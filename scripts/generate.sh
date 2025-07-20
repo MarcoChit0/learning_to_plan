@@ -1,14 +1,31 @@
 number_of_problems=20
 number_of_samples=1
-prompt_type="landmarks"
+prompt_type="pddl"
 task_type="outofdistribution"
+thinking_style="cot"
+configs=(
+    "src/configs/generate/gemma.json"
+    "src/configs/generate/gemini.json"
+)
 domains=("barman" "blocksworld" "childsnack" "depots" "driverlog" "grippers" "logistics" "satellite")
-for d in "${domains[@]}"; do
+for c in "${configs[@]}"; do
+    echo "Using configuration: $c"
     echo "----------------------------------------"
-    echo "Generating problems for domain: $d"
-    command="python src/learning_to_plan/main.py --generate -c src/configs/generate/gemini.json -n ${number_of_problems} -d ${d} --task_type=${task_type} --prompt_type=${prompt_type} -s ${number_of_samples} --google_api_key=AIzaSyBtwXbkf0coO13-Ep-EHQvqO8475J7Pw-8"
-    echo "Running command: $command"
-    eval $command
-    echo "Finished generating problems for domain: $d"
+    for d in "${domains[@]}"; do
+        echo "----------------------------------------"
+        echo "Generating problems for domain: $d"
+        python src/learning_to_plan/main.py \
+            --generate \
+            -c "${c}" \
+            -n "${number_of_problems}" \
+            -d "${d}" \
+            --task_type="${task_type}" \
+            --prompt_type="${prompt_type}" \
+            -s "${number_of_samples}" \
+            --thinking_style="${thinking_style}"
+        echo "Finished generating problems for domain: $d"
+        echo "----------------------------------------"
+    done
+    echo "Finished generating problems with configuration: $c"
     echo "----------------------------------------"
 done
