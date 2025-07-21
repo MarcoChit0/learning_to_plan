@@ -4,7 +4,7 @@ from learning_to_plan.prompt_builder import base
 from learning_to_plan.data import task
 from learning_to_plan import database
 
-BASIC_EXAMPLE_TEMPLATE = Template(f"""{config.TOKENS.EXAMPLE_START.value}
+BASIC_PDDL_EXAMPLE_TEMPLATE = Template(f"""{config.TOKENS.EXAMPLE_START.value}
 {config.TOKENS.DOMAIN_START.value}
 $domain
 {config.TOKENS.DOMAIN_END.value}
@@ -17,7 +17,7 @@ $plan
 {config.TOKENS.EXAMPLE_END.value}
 """)
 
-THINKING_EXAMPLE_TEMPLATE = Template(f"""{config.TOKENS.EXAMPLE_START.value}
+THINKING_PDDL_EXAMPLE_TEMPLATE = Template(f"""{config.TOKENS.EXAMPLE_START.value}
 {config.TOKENS.DOMAIN_START.value}
 $domain
 {config.TOKENS.DOMAIN_END.value}
@@ -33,16 +33,19 @@ $plan
 {config.TOKENS.EXAMPLE_END.value}
 """)
 
-BASIC_PDDL_TEMPLATE_PROMPT = Template(f"""Your task is to generate a plan for the following planning problem. The domain section describes the available actions and objects, and the problem section defines the initial and goal states. The plan must be a sequence of actions that starts from the initial state and reaches the goal state. The entire plan must be enclosed between {config.TOKENS.PLAN_START.value} and {config.TOKENS.PLAN_END.value} tags, and each action must be on a new line. Your response should only contain the plan.
+BASIC_PDDL_PROMPT_TEMPLATE = Template(f"""Your task is to generate a plan for the following planning problem. The domain section describes the available actions and objects, and the problem section defines the initial and goal states. The plan must be a sequence of actions that starts from the initial state and reaches the goal state. The entire plan must be enclosed between {config.TOKENS.PLAN_START.value} and {config.TOKENS.PLAN_END.value} tags, and each action must be on a new line. Your response should only contain the plan.
                                 
 {config.TOKENS.DOMAIN_START.value}
-$domain_description
+$domain
 {config.TOKENS.DOMAIN_END.value}
 {config.TOKENS.PROBLEM_START.value}
-$instance_content
+$instance
 {config.TOKENS.PROBLEM_END.value}
-$additional_info
-          
+
+Here are some examples of plans in the same format as the one you should provide:
+
+$examples
+
 Here is a checklist to help you with your task:
 
 {config.TOKENS.CHECKLIST_START.value}
@@ -53,15 +56,18 @@ Here is a checklist to help you with your task:
 5) The plan must be valid, that is, each action must be applicable in the state it is applied, and the plan must end in a goal state.
 {config.TOKENS.CHECKLIST_END.value}""")
 
-THINKING_PDDL_TEMPLATE_PROMPT = Template(f"""Your task is to generate a plan for the following planning problem. The domain section describes the available actions and objects, and the problem section defines the initial and goal states. The plan must be a sequence of actions that starts from the initial state and reaches the goal state. The entire plan must be enclosed between {config.TOKENS.PLAN_START.value} and {config.TOKENS.PLAN_END.value} tags, and each action must be on a new line. You must provide the plan in your response. You may also provide your reasoning in the thinking section before the plan, which should be enclosed between {config.TOKENS.THINKING_START.value} and {config.TOKENS.THINKING_END.value} tags. Your response should only contain the reasoning and the plan.
-                     
+THINKING_PDDL_PROMPT_TEMPLATE= Template(f"""Your task is to generate a plan for the following planning problem. The domain section describes the available actions and objects, and the problem section defines the initial and goal states. The plan must be a sequence of actions that starts from the initial state and reaches the goal state. The entire plan must be enclosed between {config.TOKENS.PLAN_START.value} and {config.TOKENS.PLAN_END.value} tags, and each action must be on a new line. You must provide the plan in your response. You may also provide your reasoning in the thinking section before the plan, which should be enclosed between {config.TOKENS.THINKING_START.value} and {config.TOKENS.THINKING_END.value} tags. Your response should only contain the reasoning and the plan.
+
 {config.TOKENS.DOMAIN_START.value}
-$domain_description
+$domain
 {config.TOKENS.DOMAIN_END.value}
 {config.TOKENS.PROBLEM_START.value}
-$instance_content
+$instance
 {config.TOKENS.PROBLEM_END.value}
-$additional_info
+
+Here are some examples of plans in the same format as the one you should provide:
+
+$examples
 
 Here is a checklist to help you with your task:
 
@@ -75,78 +81,183 @@ Here is a checklist to help you with your task:
 7) Your reasoning should be restricted to the thinking section. So, do not provide any reasoning inside the plan section.
 {config.TOKENS.CHECKLIST_END.value}""")
 
-
 logger = config.get_logger(__name__)
+
+class ThinkingStep:
+    def build(self) -> str:
+        """
+        Returns the action associated with this thinking step.
+        This is a placeholder method and should be implemented in subclasses.
+        """
+        raise NotImplementedError("Subclasses should implement this method.")
+    
+class StateStep(ThinkingStep):
+    def __init__(self, state_facts: set[str]):
+        self.state_facts = state_facts
+        self.state_fact_additional_info = {f : [] for f in state_facts}
+    
+    def build(self) -> str:
+        """
+        Builds the state step as a string.
+        :return: The state step as a string.
+        """
+        parts = [f"{config.TOKENS.STATE_START.value}"]
+        for fact in self.state_facts:
+            l = fact.strip()
+            if self.state_fact_additional_info[fact]:
+                l += "\t; " + ", ".join(self.state_fact_additional_info[fact])
+            parts.append(l)
+        parts.append(f"{config.TOKENS.STATE_END.value}")
+        return "\n".join(parts)
+
+    def __str__(self):
+        return f"StateStep(state_facts={self.state_facts})"
+
+class ActionStep(ThinkingStep):
+    def __init__(self, action: str, add_effects: list[str] = [], delete_effects: list[str] = []):
+        self.action = action
+        self.add_effects = add_effects
+        self.delete_effects = delete_effects
+    
+    def build(self) -> str:
+        """
+        Builds the action step as a string.
+        :return: The action step as a string.
+        """
+        parts = [f"Action: {self.action}"]
+        if self.delete_effects:
+            parts.append(f"{config.TOKENS.DELETE_EFFECTS_START.value}\n" + "\n".join(self.delete_effects) + f"\n{config.TOKENS.DELETE_EFFECTS_END.value}")
+        if self.add_effects:
+            parts.append(f"{config.TOKENS.ADD_EFFECTS_START.value}\n" + "\n".join(self.add_effects) + f"\n{config.TOKENS.ADD_EFFECTS_END.value}")
+        return "\n".join(parts)
+    
+    def __str__(self):
+        return f"ActionStep(action={self.action}, add_effects={self.add_effects}, delete_effects={self.delete_effects})"
+
+class Thinking:
+    def __init__(self, steps: list[ThinkingStep] = []):
+        self.steps = steps
+    
+    def add(self, step: ThinkingStep):
+        """
+        Adds a step to the thinking process.
+        :param step: The step to add.
+        """
+        print("************.")
+        for s in self.steps:
+            print(f"Step: {s}")
+        print(".************")
+        print(f"Adding step: {step}")
+        if len(self.steps) == 0:
+            if not isinstance(step, StateStep):
+                raise ValueError("The first step must be a StateStep. Please add a StateStep first.")
+            self.steps.append(step)
+            
+        else:
+            last_step = self.steps[-1]
+            if isinstance(last_step, StateStep) and isinstance(step, StateStep):
+                raise ValueError("Cannot add two StateSteps in a row. Please add an ActionStep in between.")
+            if isinstance(last_step, ActionStep) and isinstance(step, ActionStep):
+                raise ValueError("Cannot add two ActionSteps in a row. Please add a StateStep in between.")
+            
+            if isinstance(step, StateStep):
+                self.steps.append(step)
+            
+            elif isinstance(step, ActionStep):
+                assert isinstance(last_step, StateStep), "An ActionStep must be preceded by a StateStep. Please add a StateStep first."
+                state_facts = last_step.state_facts
+                state_facts = state_facts - set(step.delete_effects)
+                state_facts = state_facts.union(set(step.add_effects))
+                new_state = StateStep(state_facts=state_facts)
+                self.steps.append(step)
+                self.steps.append(new_state)
+            
+            else:
+                raise ValueError(f"Unknown step type: {type(step)}. Please provide a StateStep or ActionStep.")
+
+    def build(self) -> str:
+        """
+        Builds the thinking process as a string.
+        :return: The thinking process as a string.
+        """
+        return "\n\n".join(step.build() for step in self.steps)
+    
+    def add_flag_to_state_facts(self, flag: str, state_facts: set[str]):
+        for step in self.steps:
+            if isinstance(step, StateStep):
+                for fact in state_facts:
+                    if fact in step.state_facts:
+                        step.state_fact_additional_info[fact].append(flag)
 
 class PDDLPromptBuilder(base.PromptBuilder):
 
     def __init__(self, prompt_type=config.PROMPT_TYPE.PDDL, **kwargs):
         super().__init__(prompt_type=prompt_type, **kwargs)
         self.examples : list[task.Task] = []
+        self.examples_data : dict[task.Task, dict[str, str]] = {}
         for d in ["hanoi", "storage"]:
             tasks : set[task.Task] = database.task_database.get(filter_by_domain=d)
             assert len(tasks) > 0, f"No tasks found for the {d} domain."
-            self.examples.append(sorted(tasks)[-1])
+            t = sorted(tasks)[-1]
+            self.examples.append(t)
+            try:
+                self.examples_data[t] = self.get_task_data(t, with_plan=True)
+            except Exception as e:
+                logger.error(f"Error getting example data for task {t.id}: {e}")
+                raise e
+            try:
+                self.examples_data[t]["thinking"] = self.get_thinking(t)
+            except Exception as e:
+                logger.error(f"Error getting thinking for task {t.id}: {e}")
+                raise e
 
-    def get_additional_info(self, t: task.Task) -> str:
-        _ = t  # Unused task
-        s = "Here are some examples of plans in the same format as the one you should provide:\n\n"
+    def get_task_data(self, t: task.Task, with_plan: bool) -> dict[str, str]:
+        """
+        Returns the data for the task.
+        :param t: The task to get the data for.
+        :return: A dictionary with the task data.
+        """
+        try:
+            domain = t.read_domain().strip()
+            instance = t.read_instance().strip()
+            plan = t.get_plan() if with_plan else ""
+        except Exception as e:
+            logger.error(f"Error getting task data for task {t.id}: {e}")
+            raise e
+        return {
+            "domain": domain,
+            "instance": instance,
+            "plan": plan,
+        }
 
-        if self.thinking_style == config.THINKING_STYLE.NONE:
-            template = BASIC_EXAMPLE_TEMPLATE
-        else:
-            template = THINKING_EXAMPLE_TEMPLATE
-        
+    def get_examples(self, **kwargs) -> str:
+        template = self.get_example_template(**kwargs)
         examples = []
         for ex in self.examples:
-            try:
-                domain_description = ex.read_domain().strip()
-                instance_content = ex.read_instance().strip()
-            except Exception as e:
-                logger.error(f"Error reading PDDL domain and instance for task {ex.id}: {e}")
-                raise e
-            
-            ex_data = {
-                "domain": domain_description,
-                "instance": instance_content,
-                "plan": ex.get_plan(),
-            }
-            if self.thinking_style != config.THINKING_STYLE.NONE:
-                try:
-                    ex_data["thinking"] = self.get_thinking(ex).strip()
-                except Exception as e:
-                    logger.error(f"Error getting thinking for task {ex.id}: {e}")
-                    raise e
-            
-            examples.append(template.substitute(**ex_data))
-        s += "\n\n".join(examples)
-        return s
+            ex_data = self.examples_data[ex]
+            if "thinking" in ex_data:
+                thinking = ex_data["thinking"].build()
+                _d = ex_data.copy()
+                _d["thinking"] = thinking
+            examples.append(template.substitute(
+                **_d
+            ))
+        return "\n".join(examples)
 
     def get_chat(self, t : task.Task, with_plan: bool = True, **kwargs) -> list[dict[str, str]]:
-        _ = kwargs # Unused kwargs
-        if self.thinking_style == config.THINKING_STYLE.NONE:
-            prompt = BASIC_PDDL_TEMPLATE_PROMPT
-        else:
-            prompt = THINKING_PDDL_TEMPLATE_PROMPT
+        prompt = self.get_prompt_template(t, **kwargs)
         try:
-            domain_description = t.read_domain().strip()
-            instance_content = t.read_instance().strip()
+            data = self.get_task_data(t, with_plan=with_plan)
         except Exception as e:
-            logger.error(f"Error reading pddl domain and instance for task {t.id}: {e}")
+            logger.error(f"Error getting task data for task {t.id}: {e}")
+            raise e
+        try:
+            data["examples"] = self.get_examples(**kwargs).strip()
+        except Exception as e:
+            logger.error(f"Error getting examples for task {t.id}: {e}")
             raise e
 
-        try:
-            additional_info = self.get_additional_info(t)
-        except Exception as e:
-            logger.error(f"Error getting additional info for task {t.id}: {e}")
-            raise e
-        
-        content = prompt.substitute(
-            domain=t.domain,
-            domain_description=domain_description,
-            instance_content=instance_content,
-            additional_info=additional_info
-        )
+        content = prompt.substitute(**data)
         
         chat = [
             {"role": "system", "content": "You are an expert in AI Planning."},
@@ -188,8 +299,8 @@ class PDDLPromptBuilder(base.PromptBuilder):
             raise ValueError("After removing the plan start and end tokens, the plan is empty. Please provide a valid plan.")
         
         return plan
-    
-    def get_thinking(self, t : task.Task) -> str:
+
+    def get_thinking(self, t : task.Task) -> list[dict[str, str]]:
         """
         Returns the thinking style for the task.
         :param t: The task to execute.
@@ -219,36 +330,52 @@ class PDDLPromptBuilder(base.PromptBuilder):
                 if fact.replace("(", "").replace(")", "").strip() == "":
                     continue
                 state_facts.add(fact.strip().replace("\t", ""))
-            thinking = f"{config.TOKENS.STATE_START.value}\n"
-            thinking += "\n".join(sorted(state_facts))
-            thinking += f"\n{config.TOKENS.STATE_END.value}\n\n"
+            
+        
+            thinking : Thinking = Thinking([StateStep(state_facts=state_facts)])
+
             for action_index, action_data in plan_data.items():
                 action = action_data["name"]
                 effects = action_data["effects"]
-                thinking += f"Action: {action}\n"
-                if effects["delete"]:
-                    delete_effects = '\n'.join(effects['delete'])
-                    thinking += f"{config.TOKENS.DELETE_EFFECTS_START.value}\n{delete_effects}\n{config.TOKENS.DELETE_EFFECTS_END.value}\n"
-                if effects["add"]:
-                    add_effects = '\n'.join(effects['add'])
-                    thinking += f"{config.TOKENS.ADD_EFFECTS_START.value}\n{add_effects}\n{config.TOKENS.ADD_EFFECTS_END.value}\n\n"
-                
-                state_facts = state_facts - set(effects["delete"])
-                state_facts = state_facts.union(set(effects["add"]))
-                thinking += f"{config.TOKENS.STATE_START.value}\n"
-                thinking += "\n".join(sorted(state_facts))
-                thinking += f"\n{config.TOKENS.STATE_END.value}\n"
-
-                if action_index < len(plan_data) - 1:
-                    thinking += "\n"
+                thinking.add(ActionStep(
+                    action=action,
+                    add_effects=effects["add"],
+                    delete_effects=effects["delete"]
+                ))
             return thinking
 
         else :
             raise ValueError(f"Unknown thinking style: {self.thinking_style}. Please provide a valid thinking style.")
+        
+    def get_example_template(self, **kwargs) -> Template:
+        """
+        Returns the template to be used for generating the prompt.
+        :param kwargs: Additional keyword arguments.
+        :return: The template to be used for generating the prompt.
+        """
+        if self.thinking_style == config.THINKING_STYLE.NONE:
+            return BASIC_PDDL_EXAMPLE_TEMPLATE
+        elif self.thinking_style == config.THINKING_STYLE.COT:
+            return THINKING_PDDL_EXAMPLE_TEMPLATE
+        else:
+            raise ValueError(f"Unknown thinking style: {self.thinking_style}. Please provide a valid thinking style.")
+
+    def get_prompt_template(self, t: task.Task, **kwargs) -> Template:
+        """
+        Returns the prompt template to be used for generating the prompt.
+        :param kwargs: Additional keyword arguments.
+        :return: The prompt template to be used for generating the prompt.
+        """
+        if self.thinking_style == config.THINKING_STYLE.NONE:
+            return BASIC_PDDL_PROMPT_TEMPLATE
+        elif self.thinking_style == config.THINKING_STYLE.COT:
+            return THINKING_PDDL_PROMPT_TEMPLATE
+        else:
+            raise ValueError(f"Unknown thinking style: {self.thinking_style}. Please provide a valid thinking style.")
 
 from learning_to_plan import utils 
 import re
-def extract_plan_add_and_delete_data(t : task.Task) -> str:
+def extract_plan_add_and_delete_data(t: task.Task) -> str:
     """
     Gets the add and delete effects for each action in a plan for a given task.
     :param t: The task to execute.
