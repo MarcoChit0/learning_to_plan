@@ -143,11 +143,6 @@ class Thinking:
         Adds a step to the thinking process.
         :param step: The step to add.
         """
-        print("************.")
-        for s in self.steps:
-            print(f"Step: {s}")
-        print(".************")
-        print(f"Adding step: {step}")
         if len(self.steps) == 0:
             if not isinstance(step, StateStep):
                 raise ValueError("The first step must be a StateStep. Please add a StateStep first.")

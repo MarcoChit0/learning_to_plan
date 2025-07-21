@@ -1,11 +1,11 @@
 number_of_problems=20
 number_of_samples=1
-prompt_type="pddl"
+prompt_type="landmarks"
 task_type="outofdistribution"
 thinking_style="cot"
 configs=(
-    "src/configs/generate/gemma.json"
     "src/configs/generate/gemini.json"
+    "src/configs/generate/gemma.json"
 )
 domains=("barman" "blocksworld" "childsnack" "depots" "driverlog" "grippers" "logistics" "satellite")
 for c in "${configs[@]}"; do
