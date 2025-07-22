@@ -74,119 +74,86 @@ def compute_metrics(
         if gen_plan.validity == generated_plan.GeneratedPlan.VALIDITY.VALID:
             data[gen_plan.prompt_metadata_id][gen_plan.model_metadata_id][t.domain][t.type][t.id]['num_valid_samples'] += 1
     
-    processed_data = {}
-    for prompt_metadata_id, prompt_data in data.items():
-        for model_metadata_id, models_data in prompt_data.items():
-            for domain, task_types in models_data.items():
-                for task_type, tasks in task_types.items():
-                    for task_id, metrics in tasks.items():
-                        num_samples = metrics['num_samples']
-                        num_valid_samples = metrics['num_valid_samples']
-                        
-                        if prompt_metadata_id not in processed_data:
-                            processed_data[prompt_metadata_id] = {}
-                        if model_metadata_id not in processed_data[prompt_metadata_id]:
-                            processed_data[prompt_metadata_id][model_metadata_id] = {}
-                        if domain not in processed_data[prompt_metadata_id][model_metadata_id]:
-                            processed_data[prompt_metadata_id][model_metadata_id][domain] = {}
-                        if task_type not in processed_data[prompt_metadata_id][model_metadata_id][domain]:
-                            processed_data[prompt_metadata_id][model_metadata_id][domain][task_type] = {}
-
-                        if num_samples not in processed_data[prompt_metadata_id][model_metadata_id][domain][task_type]:
-                            processed_data[prompt_metadata_id][model_metadata_id][domain][task_type][num_samples] = {
-                                'list_num_valid_samples': []
-                            }
-                        
-                        processed_data[prompt_metadata_id][model_metadata_id][domain][task_type][num_samples]['list_num_valid_samples'].append(num_valid_samples)
                     
     def pass_at_k(total_num_samples, num_correct_samples, k):
+        if k > total_num_samples:
+            return np.nan
         # compute 1 - comb(n - c, k) / comb(n, k)
         if k > total_num_samples - num_correct_samples:
             return 1.0
         return 1 - np.prod(1 - k / np.arange(total_num_samples - num_correct_samples + 1, total_num_samples + 1))
                     
     MAX_K = 10
+    _max_k = 0
 
-    results_list = []
-    for prompt_metadata_id, prompt_data in processed_data.items():
-        try:
-            prompt_metadata = database.metadata_database.get_by_id(prompt_metadata_id)
-        except Exception as e:
-            raise ValueError(f"Could not recover prompt metadata {prompt_metadata_id} from the database: {e}")
-        for model_metadata_id, models_data in prompt_data.items():
-
-            try:
-                model_metadata = database.metadata_database.get_by_id(model_metadata_id)
-            except Exception as e:
-                raise ValueError(f"Could not recover model metadata {model_metadata_id} from the database: {e}")
-            for domain, domains_data in models_data.items():
-                for task_type, tasks_type_data in domains_data.items():
-                    for num_samples, metrics in tasks_type_data.items():
-                        k = 0
-                        accuracy_all_valid = 0.0
-                        accuracy_any_valid = 0.0
-                        std_validity_ratio = 0.0
-                        avg_validity_ratio = 0.0
-                        list_num_valid_samples = metrics['list_num_valid_samples']
-                        number_of_instances = len(list_num_valid_samples)
-                        
-                        if number_of_instances > 0:
-                            k = min(MAX_K, num_samples)
-                            all_valid = sum(1 for x in list_num_valid_samples if x == num_samples)
-                            accuracy_all_valid = all_valid / number_of_instances
-                            
-                            any_valid = sum(1 for x in list_num_valid_samples if x > 0) 
-                            accuracy_any_valid = any_valid / number_of_instances
-                            avg_validity_ratio = sum(list_num_valid_samples) / (number_of_instances * num_samples)
-                            std_validity_ratio = (sum((x - avg_validity_ratio) ** 2 for x in list_num_valid_samples) / number_of_instances) ** 0.5
-                            
-                            pass_at_k_values_by_k = {k : [] for k in range(1, k + 1)}
-                            for instance in range(number_of_instances):
-                                for k in range(1, k + 1):
-                                    pass_at_k_values_by_k[k].append(
-                                        pass_at_k(num_samples, list_num_valid_samples[instance], k)
-                                    )
-                            
-                            k_values = {i: np.mean(pass_at_k_values_by_k[i]) if i <= k else np.nan for i in range(1, MAX_K + 1)}
-                        
-                        def truncate(n, decimals=2):
-                            if not isinstance(n, float) or np.isnan(n):
-                                return n
-                            multiplier = 10 ** decimals
-                            return int(n * multiplier) / multiplier
-
-                        results_list.append({
+    rows = []
+    for pm_id, pm_data in data.items():
+        for mm_id, mm_data in pm_data.items():
+            for domain, domain_data in mm_data.items():
+                for task_type, task_type_data in domain_data.items():
+                    for task_id, task_data in task_type_data.items():
+                        prompt_metadata = database.metadata_database.get_by_id(pm_id)
+                        model_metadata = database.metadata_database.get_by_id(mm_id)
+                        rows.append({
                             'prompt_metadata': prompt_metadata,
                             'model_metadata': model_metadata,
                             'domain': domain,
                             'task_type': task_type,
-                            'num_samples': num_samples,
-                            'accuracy_all_valid': truncate(accuracy_all_valid),
-                            'all_valid': all_valid,
-                            'accuracy_any_valid': truncate(accuracy_any_valid),
-                            'any_valid': any_valid,
-                            'avg_validity_ratio': truncate(avg_validity_ratio),
-                            'std_validity_ratio': truncate(std_validity_ratio),
-                            'number_of_instances': number_of_instances,
-                            **{f'pass_at_k_{i}': truncate(k_values[i]) for i in range(1, MAX_K + 1)}
+                            'task_id': task_id,
+                            'num_samples': task_data['num_samples'],
+                            'valid_samples': task_data['num_valid_samples']
                         })
+    if not rows:
+        logger.warning("No data to process for metrics computation.")
+        return
     
-    # Convert results to DataFrame
-    results_df = pd.DataFrame(results_list, columns=[
-        'prompt_metadata', 
-        'model_metadata', 
-        'domain', 
-        'task_type', 
-        'num_samples',
-        'accuracy_all_valid', 
-        'all_valid', 
-        'accuracy_any_valid',
-        'any_valid', 
-        'avg_validity_ratio', 
-        'std_validity_ratio',
+    _max_k = max(row['num_samples'] for row in rows)
+    _max_k = min(_max_k, MAX_K)
+        
+    df = pd.DataFrame(rows)
+
+    # Calculate per-task metrics before grouping
+    df['all_valid'] = (df['num_samples'] == df['valid_samples']).astype(int)
+    df['any_valid'] = (df['valid_samples'] > 0).astype(int)
+
+    for k in range(1, _max_k + 1):
+        df[f'pass_at_{k}'] = df.apply(
+            lambda row: pass_at_k(row['num_samples'], row['valid_samples'], k),
+            axis=1
+        )
+
+    # Group by the specified columns
+    group_cols = ['prompt_metadata', 'model_metadata', 'domain', 'task_type', 'num_samples']
+    grouped = df.groupby(group_cols)
+
+    # Define aggregations
+    agg_dict = {
+        'task_id': 'count',  # This will be our number_of_instances
+        'all_valid': 'sum',
+        'any_valid': 'sum',
+        **{f'pass_at_{k}': 'mean' for k in range(1, _max_k + 1)}
+    }
+
+    # Apply aggregations
+    results_df = grouped.agg(agg_dict).reset_index()
+
+    # Rename columns and calculate accuracy metrics
+    results_df.rename(columns={'task_id': 'number_of_instances'}, inplace=True)
+    
+    # Calculate accuracies, handling division by zero
+    results_df['all_valid_accuracy'] = (results_df['all_valid'] / results_df['number_of_instances']).where(results_df['number_of_instances'] > 0, 0)
+    results_df['any_valid_accuracy'] = (results_df['any_valid'] / results_df['number_of_instances']).where(results_df['number_of_instances'] > 0, 0)
+
+    # Reorder columns to match the desired output structure
+    final_cols = group_cols + [
         'number_of_instances',
-        *[f'pass_at_k_{k}' for k in range(1, MAX_K + 1)]
-    ])
+        'all_valid',
+        'any_valid',
+        'all_valid_accuracy',
+        'any_valid_accuracy'
+    ] + [f'pass_at_{k}' for k in range(1, _max_k + 1)]
+
+    results_df = results_df[final_cols]
     results_df = results_df.sort_values(by=['prompt_metadata', 'model_metadata', 'domain', 'task_type', 'num_samples'])
     results_df.reset_index(drop=True, inplace=True)
     results_df.to_csv(config.METRICS_FILE_PATH, index=False)
