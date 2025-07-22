@@ -1,4 +1,6 @@
+from __future__ import annotations
 from string import Template
+from typing import Union
 from learning_to_plan import config
 from learning_to_plan.prompt_builder import base
 from learning_to_plan.data import task
@@ -183,13 +185,56 @@ class Thinking:
                 for fact in state_facts:
                     if fact in step.state_facts:
                         step.state_fact_additional_info[fact].append(flag)
+    
+    @classmethod
+    def from_thinking_style(cls, t : task.Task, thinking_style: config.THINKING_STYLE) -> Thinking:
+        if thinking_style == config.THINKING_STYLE.NONE:
+            return Thinking()
+
+        elif thinking_style == config.THINKING_STYLE.COT:
+            try:
+                plan_data = extract_plan_add_and_delete_data(t)
+            except Exception as e:
+                logger.error(f"Error getting plan effects for task {t.id}: {e}")
+
+            initial_state_regex = r"\({}\s+(.*?)(?=\s+\(:|\s*\)\s*$)".format(re.escape(pattern=":init"))
+            try:
+                match = re.search(initial_state_regex, t.read_instance(), re.IGNORECASE | re.DOTALL)
+                if match:
+                    initial_state = match.group(1).strip()
+                else:
+                    raise ValueError(f"Could not find initial state in task {t.id} instance.")
+            except Exception as e:
+                logger.error(f"Error extracting initial state from task {t.id}: {e}")
+                raise e
+            state_facts = set()
+            for fact in initial_state.splitlines():
+                if fact.replace("(", "").replace(")", "").strip() == "":
+                    continue
+                state_facts.add(fact.strip().replace("\t", ""))
+            
+        
+            thinking : Thinking = Thinking([StateStep(state_facts=state_facts)])
+
+            for action_index, action_data in plan_data.items():
+                action = action_data["name"]
+                effects = action_data["effects"]
+                thinking.add(ActionStep(
+                    action=action,
+                    add_effects=effects["add"],
+                    delete_effects=effects["delete"]
+                ))
+            return thinking
+
+        else :
+            raise ValueError(f"Unknown thinking style: {self.thinking_style}. Please provide a valid thinking style.")
 
 class PDDLPromptBuilder(base.PromptBuilder):
 
     def __init__(self, prompt_type=config.PROMPT_TYPE.PDDL, **kwargs):
         super().__init__(prompt_type=prompt_type, **kwargs)
         self.examples : list[task.Task] = []
-        self.examples_data : dict[task.Task, dict[str, str]] = {}
+        self.examples_data : dict[task.Task, dict[str, Union[str, Thinking]]] = {}
         for d in ["hanoi", "storage"]:
             tasks : set[task.Task] = database.task_database.get(filter_by_domain=d)
             assert len(tasks) > 0, f"No tasks found for the {d} domain."
@@ -201,7 +246,7 @@ class PDDLPromptBuilder(base.PromptBuilder):
                 logger.error(f"Error getting example data for task {t.id}: {e}")
                 raise e
             try:
-                self.examples_data[t]["thinking"] = self.get_thinking(t)
+                self.examples_data[t]["thinking"] = Thinking.from_thinking_style(t, self.thinking_style)
             except Exception as e:
                 logger.error(f"Error getting thinking for task {t.id}: {e}")
                 raise e
@@ -294,53 +339,6 @@ class PDDLPromptBuilder(base.PromptBuilder):
             raise ValueError("After removing the plan start and end tokens, the plan is empty. Please provide a valid plan.")
         
         return plan
-
-    def get_thinking(self, t : task.Task) -> list[dict[str, str]]:
-        """
-        Returns the thinking style for the task.
-        :param t: The task to execute.
-        :return: The thinking style for the task.
-        """
-        if self.thinking_style == config.THINKING_STYLE.NONE:
-            return ""
-        
-        elif self.thinking_style == config.THINKING_STYLE.COT:
-            try:
-                plan_data = extract_plan_add_and_delete_data(t)
-            except Exception as e:
-                logger.error(f"Error getting plan effects for task {t.id}: {e}")
-
-            initial_state_regex = r"\({}\s+(.*?)(?=\s+\(:|\s*\)\s*$)".format(re.escape(pattern=":init"))
-            try:
-                match = re.search(initial_state_regex, t.read_instance(), re.IGNORECASE | re.DOTALL)
-                if match:
-                    initial_state = match.group(1).strip()
-                else:
-                    raise ValueError(f"Could not find initial state in task {t.id} instance.")
-            except Exception as e:
-                logger.error(f"Error extracting initial state from task {t.id}: {e}")
-                raise e
-            state_facts = set()
-            for fact in initial_state.splitlines():
-                if fact.replace("(", "").replace(")", "").strip() == "":
-                    continue
-                state_facts.add(fact.strip().replace("\t", ""))
-            
-        
-            thinking : Thinking = Thinking([StateStep(state_facts=state_facts)])
-
-            for action_index, action_data in plan_data.items():
-                action = action_data["name"]
-                effects = action_data["effects"]
-                thinking.add(ActionStep(
-                    action=action,
-                    add_effects=effects["add"],
-                    delete_effects=effects["delete"]
-                ))
-            return thinking
-
-        else :
-            raise ValueError(f"Unknown thinking style: {self.thinking_style}. Please provide a valid thinking style.")
         
     def get_example_template(self, **kwargs) -> Template:
         """

@@ -274,8 +274,8 @@ def extract_landmarks(landmark_graph_str: str) -> list[str]:
     
     # Each predicate is on the following format <name>(<operand1>, <operand2>, ...)
     # It is need to convert to the format (<name> <operand1> <operand2> ...)
-    predicate_pattern = r'(\w+)\((.*)\)'
-    operand_pattern = r'\s*(\w+)\s*,?\s*'
+    predicate_pattern = r'([^()]+)\((.*)\)'
+    operand_pattern = r'\s*([^,]+)\s*,?\s*'
     landmarks = []
     for match in matches:
         # Extract the predicate name and operands
