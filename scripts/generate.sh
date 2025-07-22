@@ -2,7 +2,7 @@ number_of_problems=20
 number_of_samples=1
 prompt_type="landmarks"
 task_type="outofdistribution"
-thinking_style="cot"
+thinking_style="none"
 configs=(
     "src/configs/generate/gemini.json"
     "src/configs/generate/gemma.json"

@@ -149,20 +149,26 @@ def compute_metrics(
                             
                             k_values = {i: np.mean(pass_at_k_values_by_k[i]) if i <= k else np.nan for i in range(1, MAX_K + 1)}
                         
+                        def truncate(n, decimals=2):
+                            if not isinstance(n, float) or np.isnan(n):
+                                return n
+                            multiplier = 10 ** decimals
+                            return int(n * multiplier) / multiplier
+
                         results_list.append({
                             'prompt_metadata': prompt_metadata,
                             'model_metadata': model_metadata,
                             'domain': domain,
                             'task_type': task_type,
                             'num_samples': num_samples,
-                            'accuracy_all_valid': accuracy_all_valid,
+                            'accuracy_all_valid': truncate(accuracy_all_valid),
                             'all_valid': all_valid,
-                            'accuracy_any_valid': accuracy_any_valid,
+                            'accuracy_any_valid': truncate(accuracy_any_valid),
                             'any_valid': any_valid,
-                            'avg_validity_ratio': avg_validity_ratio,
-                            'std_validity_ratio': std_validity_ratio,
+                            'avg_validity_ratio': truncate(avg_validity_ratio),
+                            'std_validity_ratio': truncate(std_validity_ratio),
                             'number_of_instances': number_of_instances,
-                            **{f'pass_at_k_{i}': k_values[i] for i in range(1, MAX_K + 1)}
+                            **{f'pass_at_k_{i}': truncate(k_values[i]) for i in range(1, MAX_K + 1)}
                         })
     
     # Convert results to DataFrame
