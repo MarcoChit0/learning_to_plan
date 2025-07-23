@@ -2,13 +2,12 @@ number_of_problems=20
 number_of_samples=1
 prompt_type="landmarks"
 task_type="outofdistribution"
-thinking_style="cot"
+thinking_style="none"
 configs=(
-    "src/configs/generate/gemini-thinking.json"
     "src/configs/generate/gemini.json"
+    "src/configs/generate/gemini-thinking.json"
     "src/configs/generate/gemma.json"
 )
-google_api_key="AIzaSyACYxqV12gHcQhDrLPI5BlqEMi9OxH6VJQ"
 domains=("barman" "blocksworld" "childsnack" "depots" "driverlog" "grippers" "logistics" "satellite")
 for c in "${configs[@]}"; do
     echo "Using configuration: $c"
