@@ -1,106 +1,180 @@
-Your task is to generate a plan for the following planning problem. The domain section describes the available actions and objects, and the problem section defines the initial and goal states. The plan must be a sequence of actions that starts from the initial state and reaches the goal state. The entire plan must be enclosed between <plan> and </plan> tags, and each action must be on a new line. Landmarks are the facts that must be true in all valid plans. The landmarks section lists the landmarks for this problem. You must use the landmarks to help you generate the plan. You must provide the plan in your response. You may also provide your reasoning in the thinking section before the plan, which should be enclosed between <thinking> and </thinking> tags. Your response should only contain the reasoning and the plan.
-
+Your task is to generate a plan for the following planning problem. The domain section describes the available actions and objects, and the problem section defines the initial and goal states. The plan must be a sequence of actions that starts from the initial state and reaches the goal state. The entire plan must be enclosed between <plan> and </plan> tags, and each action must be on a new line. Landmarks are the facts that must be true in all valid plans. The landmarks section lists the landmarks for this problem. You must use the landmarks to help you generate the plan. Your response should only contain the plan.
+                                
 <domain>
-(define (domain gripper-strips)
-    (:requirements :strips :typing)
+(define (domain driverlog)
+    (:requirements :typing)
     (:types
-        room obj robot gripper
+        location locatable - object
+        driver truck obj - locatable
+
     )
     (:predicates
-        (at-robby ?r - robot ?x - room)
-        (at ?o - obj ?x - room)
-        (free ?r - robot ?g - gripper)
-        (carry ?r - robot ?o - obj ?g - gripper)
+        (at ?obj - locatable ?loc - location)
+        (in ?obj1 - obj ?obj - truck)
+        (driving ?d - driver ?v - truck)
+        (link ?x ?y - location)
+        (path ?x ?y - location)
+        (empty ?v - truck)
     )
 
-    (:action move
-        :parameters (?r - robot ?from ?to - room)
+    (:action load-truck
+        :parameters (?obj - obj ?truck - truck ?loc - location)
         :precondition (and
-            (at-robby ?r ?from))
+            (at ?truck ?loc)
+            (at ?obj ?loc))
         :effect (and
-            (at-robby ?r ?to)
-            (not (at-robby ?r ?from)))
+            (not (at ?obj ?loc))
+            (in ?obj ?truck))
     )
 
-    (:action pick
-        :parameters (?r - robot ?obj - obj ?room - room ?g - gripper)
+    (:action unload-truck
+        :parameters (?obj - obj ?truck - truck ?loc - location)
         :precondition (and
-            (at ?obj ?room)
-            (at-robby ?r ?room)
-            (free ?r ?g))
+            (at ?truck ?loc)
+            (in ?obj ?truck))
         :effect (and
-            (carry ?r ?obj ?g)
-            (not (at ?obj ?room))
-            (not (free ?r ?g)))
+            (not (in ?obj ?truck))
+            (at ?obj ?loc))
     )
 
-    (:action drop
-        :parameters (?r - robot ?obj - obj ?room - room ?g - gripper)
+    (:action board-truck
+        :parameters (?driver - driver ?truck - truck ?loc - location)
         :precondition (and
-            (carry ?r ?obj ?g)
-            (at-robby ?r ?room))
+            (at ?truck ?loc)
+            (at ?driver ?loc)
+            (empty ?truck))
         :effect (and
-            (at ?obj ?room)
-            (free ?r ?g)
-            (not (carry ?r ?obj ?g)))
+            (not (at ?driver ?loc))
+            (driving ?driver ?truck)
+            (not (empty ?truck)))
     )
+
+    (:action disembark-truck
+        :parameters (?driver - driver ?truck - truck ?loc - location)
+        :precondition (and
+            (at ?truck ?loc)
+            (driving ?driver ?truck))
+        :effect (and
+            (not (driving ?driver ?truck))
+            (at ?driver ?loc)
+            (empty ?truck))
+    )
+
+    (:action drive-truck
+        :parameters (?truck - truck ?loc-from - location ?loc-to - location ?driver - driver)
+        :precondition (and
+            (at ?truck ?loc-from)
+            (driving ?driver ?truck)
+            (link ?loc-from ?loc-to))
+        :effect (and
+            (not (at ?truck ?loc-from))
+            (at ?truck ?loc-to))
+    )
+
+    (:action walk
+        :parameters (?driver - driver ?loc-from - location ?loc-to - location)
+        :precondition (and
+            (at ?driver ?loc-from)
+            (path ?loc-from ?loc-to))
+        :effect (and
+            (not (at ?driver ?loc-from))
+            (at ?driver ?loc-to))
+    )
+
 )
 </domain>
 <instance>
-(define (problem gripper-2-5-9)
-(:domain gripper-strips)
-(:objects robot1 robot2 - robot
-rgripper1 lgripper1 rgripper2 lgripper2 - gripper
-room1 room2 room3 room4 room5 - room
-ball1 ball2 ball3 ball4 ball5 ball6 ball7 ball8 ball9 - obj)
-(:init
-(at-robby robot1 room5)
-(free robot1 rgripper1)
-(free robot1 lgripper1)
-(at-robby robot2 room5)
-(free robot2 rgripper2)
-(free robot2 lgripper2)
-(at ball1 room5)
-(at ball2 room1)
-(at ball3 room3)
-(at ball4 room1)
-(at ball5 room2)
-(at ball6 room5)
-(at ball7 room3)
-(at ball8 room1)
-(at ball9 room2)
+(define (problem DLOG-3-3-5)
+	(:domain driverlog)
+	(:objects
+	driver1 - driver
+	driver2 - driver
+	driver3 - driver
+	truck1 - truck
+	truck2 - truck
+	truck3 - truck
+	package1 - obj
+	package2 - obj
+	package3 - obj
+	package4 - obj
+	package5 - obj
+	s0 - location
+	s1 - location
+	s2 - location
+	p1-0 - location
+	p1-2 - location
+	p2-0 - location
+	)
+	(:init
+	(at driver1 s0)
+	(at driver2 s0)
+	(at driver3 s0)
+	(at truck1 s2)
+	(empty truck1)
+	(at truck2 s0)
+	(empty truck2)
+	(at truck3 s1)
+	(empty truck3)
+	(at package1 s2)
+	(at package2 s0)
+	(at package3 s0)
+	(at package4 s1)
+	(at package5 s0)
+	(path s1 p1-0)
+	(path p1-0 s1)
+	(path s0 p1-0)
+	(path p1-0 s0)
+	(path s1 p1-2)
+	(path p1-2 s1)
+	(path s2 p1-2)
+	(path p1-2 s2)
+	(path s2 p2-0)
+	(path p2-0 s2)
+	(path s0 p2-0)
+	(path p2-0 s0)
+	(link s0 s1)
+	(link s1 s0)
+	(link s0 s2)
+	(link s2 s0)
+	(link s2 s1)
+	(link s1 s2)
 )
-(:goal
-(and
-(at ball1 room1)
-(at ball2 room4)
-(at ball3 room3)
-(at ball4 room1)
-(at ball5 room5)
-(at ball6 room3)
-(at ball7 room4)
-(at ball8 room1)
-(at ball9 room4)
-)
-)
+	(:goal (and
+	(at driver1 s1)
+	(at driver2 s2)
+	(at driver3 s0)
+	(at truck1 s0)
+	(at truck3 s2)
+	(at package1 s1)
+	(at package2 s0)
+	(at package3 s2)
+	(at package4 s1)
+	(at package5 s1)
+	))
+
+
 )
 </instance>
 <landmarks>
-(at ball1 room1)
-(at ball1 room5)
-(at ball2 room4)
-(at ball2 room1)
-(at ball3 room3)
-(at ball4 room1)
-(at ball5 room5)
-(at ball5 room2)
-(at ball6 room3)
-(at ball6 room5)
-(at ball7 room4)
-(at ball7 room3)
-(at ball8 room1)
-(at ball9 room4)
-(at ball9 room2)
+(at truck1 s0)
+(at truck1 s2)
+(empty truck1)
+(at truck3 s2)
+(at truck3 s1)
+(empty truck3)
+(at driver1 s1)
+(at driver1 s0)
+(at driver2 s2)
+(at driver2 s0)
+(at driver3 s0)
+(at package5 s1)
+(at package5 s0)
+(at package4 s1)
+(at package3 s2)
+(at package3 s0)
+(at package2 s0)
+(at package1 s1)
+(at package1 s2)
 </landmarks>
 
 Here are some examples of plans in the same format as the one you should provide:
@@ -130,43 +204,45 @@ Here are some examples of plans in the same format as the one you should provide
 </domain>
 <instance>
 (define (problem hanoi-4)
-(:domain hanoi)
-(:objects peg1 peg2 peg3 d262 d478 d176 d103 )
-(:init
-(smaller peg1 d262)
-(smaller peg1 d478)
-(smaller peg1 d176)
-(smaller peg1 d103)
-(smaller peg2 d262)
-(smaller peg2 d478)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller peg3 d262)
-(smaller peg3 d478)
-(smaller peg3 d176)
-(smaller peg3 d103)
-(smaller d478 d262)
-(smaller d176 d262)
-(smaller d103 d262)
-(smaller d176 d478)
-(smaller d103 d478)
-(smaller d103 d176)
-(clear peg2)
-(clear peg3)
-(clear d262)
-(on d103 peg1)
-(on d176 d103)
-(on d478 d176)
-(on d262 d478)
-)
-(:goal
-(and 
-(on d103 peg3)
-(on d176 d103)
-(on d478 d176)
-(on d262 d478)
-)
-)
+    (:domain hanoi)
+    (:objects
+        peg1 peg2 peg3 d262 d478 d176 d103
+    )
+    (:init
+        (smaller peg1 d262)
+        (smaller peg1 d478)
+        (smaller peg1 d176)
+        (smaller peg1 d103)
+        (smaller peg2 d262)
+        (smaller peg2 d478)
+        (smaller peg2 d176)
+        (smaller peg2 d103)
+        (smaller peg3 d262)
+        (smaller peg3 d478)
+        (smaller peg3 d176)
+        (smaller peg3 d103)
+        (smaller d478 d262)
+        (smaller d176 d262)
+        (smaller d103 d262)
+        (smaller d176 d478)
+        (smaller d103 d478)
+        (smaller d103 d176)
+        (clear peg2)
+        (clear peg3)
+        (clear d262)
+        (on d103 peg1)
+        (on d176 d103)
+        (on d478 d176)
+        (on d262 d478)
+    )
+    (:goal
+        (and
+            (on d103 peg3)
+            (on d176 d103)
+            (on d478 d176)
+            (on d262 d478)
+        )
+    )
 )
 </instance>
 <landmarks>
@@ -180,605 +256,6 @@ Here are some examples of plans in the same format as the one you should provide
 (on d176 d103)
 (clear d103)
 </landmarks>
-<thinking>
-<state>
-(smaller peg2 d478)
-(smaller peg3 d176)
-(clear peg2)
-(smaller peg2 d103)
-(smaller peg1 d103)
-(smaller peg3 d262)
-(on d478 d176)	; landmark
-(smaller peg1 d262)
-(on d176 d103)	; landmark
-(smaller d478 d262)
-(smaller peg1 d176)
-(clear d262)
-(clear peg3)	; landmark
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller d176 d478)
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(on d262 d478)	; landmark
-(on d103 peg1)	; landmark
-(smaller d176 d262)
-(smaller d103 d176)
-(smaller peg3 d478)
-</state>
-
-Action: (move d262 d478 peg2)
-<delete_effects>
-(on d262 d478)
-(clear peg2)
-</delete_effects>
-<add_effects>
-(clear d478)
-(on d262 peg2)
-</add_effects>
-
-<state>
-(on d176 d103)	; landmark
-(on d262 peg2)
-(smaller peg2 d478)
-(smaller peg3 d176)
-(clear d478)	; landmark
-(smaller d478 d262)
-(smaller peg1 d176)
-(clear d262)
-(clear peg3)	; landmark
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller peg1 d262)
-(smaller d176 d478)
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(on d103 peg1)	; landmark
-(smaller peg1 d103)
-(smaller d176 d262)
-(smaller peg3 d262)
-(on d478 d176)	; landmark
-(smaller d103 d176)
-(smaller peg3 d478)
-</state>
-
-Action: (move d478 d176 peg3)
-<delete_effects>
-(on d478 d176)
-(clear peg3)
-</delete_effects>
-<add_effects>
-(clear d176)
-(on d478 peg3)
-</add_effects>
-
-<state>
-(on d176 d103)	; landmark
-(on d262 peg2)
-(smaller peg2 d478)
-(smaller peg3 d176)
-(clear d478)	; landmark
-(smaller d478 d262)
-(smaller peg1 d176)
-(clear d262)
-(smaller peg3 d478)
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller d176 d478)
-(clear d176)	; landmark
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(on d478 peg3)
-(on d103 peg1)	; landmark
-(smaller peg1 d103)
-(smaller d176 d262)
-(smaller peg3 d262)
-(smaller d103 d176)
-(smaller peg1 d262)
-</state>
-
-Action: (move d262 peg2 d478)
-<delete_effects>
-(on d262 peg2)
-(clear d478)
-</delete_effects>
-<add_effects>
-(clear peg2)
-(on d262 d478)
-</add_effects>
-
-<state>
-(on d176 d103)	; landmark
-(smaller peg2 d478)
-(smaller peg3 d176)
-(clear peg2)
-(smaller d478 d262)
-(smaller peg1 d176)
-(clear d262)
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller peg1 d262)
-(smaller d176 d478)
-(clear d176)	; landmark
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(on d262 d478)	; landmark
-(on d478 peg3)
-(on d103 peg1)	; landmark
-(smaller peg1 d103)
-(smaller d176 d262)
-(smaller peg3 d262)
-(smaller d103 d176)
-(smaller peg3 d478)
-</state>
-
-Action: (move d176 d103 peg2)
-<delete_effects>
-(on d176 d103)
-(clear peg2)
-</delete_effects>
-<add_effects>
-(clear d103)
-(on d176 peg2)
-</add_effects>
-
-<state>
-(smaller peg2 d478)
-(smaller peg3 d176)
-(smaller d478 d262)
-(clear d103)	; landmark
-(smaller peg1 d176)
-(clear d262)
-(smaller peg3 d478)
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller d176 d478)
-(clear d176)	; landmark
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(on d262 d478)	; landmark
-(on d478 peg3)
-(on d103 peg1)	; landmark
-(smaller peg1 d103)
-(smaller d176 d262)
-(on d176 peg2)
-(smaller peg3 d262)
-(smaller d103 d176)
-(smaller peg1 d262)
-</state>
-
-Action: (move d262 d478 d103)
-<delete_effects>
-(on d262 d478)
-(clear d103)
-</delete_effects>
-<add_effects>
-(clear d478)
-(on d262 d103)
-</add_effects>
-
-<state>
-(smaller peg2 d478)
-(smaller peg3 d176)
-(clear d478)	; landmark
-(smaller d478 d262)
-(smaller peg1 d176)
-(clear d262)
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller peg1 d262)
-(smaller d176 d478)
-(clear d176)	; landmark
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(on d478 peg3)
-(on d262 d103)
-(on d103 peg1)	; landmark
-(smaller peg1 d103)
-(smaller d176 d262)
-(on d176 peg2)
-(smaller peg3 d262)
-(smaller d103 d176)
-(smaller peg3 d478)
-</state>
-
-Action: (move d478 peg3 d176)
-<delete_effects>
-(on d478 peg3)
-(clear d176)
-</delete_effects>
-<add_effects>
-(clear peg3)
-(on d478 d176)
-</add_effects>
-
-<state>
-(smaller peg2 d478)
-(smaller peg3 d176)
-(clear d478)	; landmark
-(smaller d478 d262)
-(smaller peg1 d176)
-(clear d262)
-(clear peg3)	; landmark
-(smaller peg3 d478)
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller d176 d478)
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(on d262 d103)
-(on d103 peg1)	; landmark
-(smaller peg1 d103)
-(smaller d176 d262)
-(on d176 peg2)
-(smaller peg3 d262)
-(on d478 d176)	; landmark
-(smaller d103 d176)
-(smaller peg1 d262)
-</state>
-
-Action: (move d262 d103 d478)
-<delete_effects>
-(on d262 d103)
-(clear d478)
-</delete_effects>
-<add_effects>
-(clear d103)
-(on d262 d478)
-</add_effects>
-
-<state>
-(smaller peg2 d478)
-(smaller peg3 d176)
-(smaller d478 d262)
-(clear d103)	; landmark
-(smaller peg1 d176)
-(clear d262)
-(clear peg3)	; landmark
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller peg1 d262)
-(smaller d176 d478)
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(on d262 d478)	; landmark
-(on d103 peg1)	; landmark
-(smaller peg1 d103)
-(smaller d176 d262)
-(on d176 peg2)
-(smaller peg3 d262)
-(on d478 d176)	; landmark
-(smaller d103 d176)
-(smaller peg3 d478)
-</state>
-
-Action: (move d103 peg1 peg3)
-<delete_effects>
-(on d103 peg1)
-(clear peg3)
-</delete_effects>
-<add_effects>
-(clear peg1)
-(on d103 peg3)
-</add_effects>
-
-<state>
-(smaller peg2 d478)
-(smaller peg3 d176)
-(on d103 peg3)	; landmark
-(smaller d478 d262)
-(clear d103)	; landmark
-(smaller peg1 d176)
-(clear d262)
-(smaller peg3 d478)
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller d176 d478)
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(on d262 d478)	; landmark
-(clear peg1)
-(smaller peg1 d103)
-(smaller d176 d262)
-(on d176 peg2)
-(smaller peg3 d262)
-(on d478 d176)	; landmark
-(smaller d103 d176)
-(smaller peg1 d262)
-</state>
-
-Action: (move d262 d478 d103)
-<delete_effects>
-(on d262 d478)
-(clear d103)
-</delete_effects>
-<add_effects>
-(clear d478)
-(on d262 d103)
-</add_effects>
-
-<state>
-(smaller peg2 d478)
-(smaller peg3 d176)
-(on d103 peg3)	; landmark
-(clear d478)	; landmark
-(smaller d478 d262)
-(smaller peg1 d176)
-(clear d262)
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller peg1 d262)
-(smaller d176 d478)
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(on d262 d103)
-(clear peg1)
-(smaller peg1 d103)
-(smaller d176 d262)
-(on d176 peg2)
-(smaller peg3 d262)
-(on d478 d176)	; landmark
-(smaller d103 d176)
-(smaller peg3 d478)
-</state>
-
-Action: (move d478 d176 peg1)
-<delete_effects>
-(on d478 d176)
-(clear peg1)
-</delete_effects>
-<add_effects>
-(clear d176)
-(on d478 peg1)
-</add_effects>
-
-<state>
-(smaller peg2 d478)
-(smaller peg3 d176)
-(on d103 peg3)	; landmark
-(clear d478)	; landmark
-(smaller d478 d262)
-(smaller peg1 d176)
-(clear d262)
-(smaller peg3 d478)
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller d176 d478)
-(clear d176)	; landmark
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(on d262 d103)
-(smaller peg1 d103)
-(smaller d176 d262)
-(on d176 peg2)
-(smaller peg3 d262)
-(on d478 peg1)
-(smaller d103 d176)
-(smaller peg1 d262)
-</state>
-
-Action: (move d262 d103 d478)
-<delete_effects>
-(on d262 d103)
-(clear d478)
-</delete_effects>
-<add_effects>
-(clear d103)
-(on d262 d478)
-</add_effects>
-
-<state>
-(smaller peg2 d478)
-(smaller peg3 d176)
-(on d103 peg3)	; landmark
-(smaller d478 d262)
-(clear d103)	; landmark
-(smaller peg1 d176)
-(clear d262)
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller peg1 d262)
-(smaller d176 d478)
-(clear d176)	; landmark
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(on d262 d478)	; landmark
-(smaller peg1 d103)
-(smaller d176 d262)
-(on d176 peg2)
-(smaller peg3 d262)
-(on d478 peg1)
-(smaller d103 d176)
-(smaller peg3 d478)
-</state>
-
-Action: (move d176 peg2 d103)
-<delete_effects>
-(on d176 peg2)
-(clear d103)
-</delete_effects>
-<add_effects>
-(clear peg2)
-(on d176 d103)
-</add_effects>
-
-<state>
-(on d176 d103)	; landmark
-(smaller peg2 d478)
-(smaller peg3 d176)
-(on d103 peg3)	; landmark
-(clear peg2)
-(smaller d478 d262)
-(smaller peg1 d176)
-(clear d262)
-(smaller peg3 d478)
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller d176 d478)
-(clear d176)	; landmark
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(on d262 d478)	; landmark
-(smaller peg1 d103)
-(smaller d176 d262)
-(smaller peg3 d262)
-(on d478 peg1)
-(smaller d103 d176)
-(smaller peg1 d262)
-</state>
-
-Action: (move d262 d478 peg2)
-<delete_effects>
-(on d262 d478)
-(clear peg2)
-</delete_effects>
-<add_effects>
-(clear d478)
-(on d262 peg2)
-</add_effects>
-
-<state>
-(on d176 d103)	; landmark
-(on d262 peg2)
-(smaller peg2 d478)
-(smaller peg3 d176)
-(on d103 peg3)	; landmark
-(clear d478)	; landmark
-(smaller d478 d262)
-(smaller peg1 d176)
-(clear d262)
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller peg1 d262)
-(smaller d176 d478)
-(clear d176)	; landmark
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(smaller peg1 d103)
-(smaller d176 d262)
-(smaller peg3 d262)
-(on d478 peg1)
-(smaller d103 d176)
-(smaller peg3 d478)
-</state>
-
-Action: (move d478 peg1 d176)
-<delete_effects>
-(on d478 peg1)
-(clear d176)
-</delete_effects>
-<add_effects>
-(clear peg1)
-(on d478 d176)
-</add_effects>
-
-<state>
-(on d176 d103)	; landmark
-(on d262 peg2)
-(smaller peg2 d478)
-(smaller peg3 d176)
-(on d103 peg3)	; landmark
-(clear d478)	; landmark
-(smaller d478 d262)
-(smaller peg1 d176)
-(clear d262)
-(smaller peg3 d478)
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller d176 d478)
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(clear peg1)
-(smaller peg1 d103)
-(smaller d176 d262)
-(smaller peg3 d262)
-(on d478 d176)	; landmark
-(smaller d103 d176)
-(smaller peg1 d262)
-</state>
-
-Action: (move d262 peg2 d478)
-<delete_effects>
-(on d262 peg2)
-(clear d478)
-</delete_effects>
-<add_effects>
-(clear peg2)
-(on d262 d478)
-</add_effects>
-
-<state>
-(on d176 d103)	; landmark
-(smaller peg2 d478)
-(smaller peg3 d176)
-(on d103 peg3)	; landmark
-(clear peg2)
-(smaller d478 d262)
-(smaller peg1 d176)
-(clear d262)
-(smaller peg3 d103)
-(smaller peg2 d176)
-(smaller peg2 d103)
-(smaller peg1 d262)
-(smaller d176 d478)
-(smaller d103 d262)
-(smaller d103 d478)
-(smaller peg1 d478)
-(smaller peg2 d262)
-(on d262 d478)	; landmark
-(clear peg1)
-(smaller peg1 d103)
-(smaller d176 d262)
-(smaller peg3 d262)
-(on d478 d176)	; landmark
-(smaller d103 d176)
-(smaller peg3 d478)
-</state>
-</thinking>
 <plan>
 (move d262 d478 peg2)
 (move d478 d176 peg3)
@@ -891,58 +368,62 @@ Action: (move d262 peg2 d478)
 </domain>
 <instance>
 (define (problem storage-199)
-(:domain Storage-Propositional)
-(:objects
-	depot48-1-1 depot48-1-2 depot49-1-1 depot49-1-2 depot50-1-1 container-0-0 container-1-0 container-2-0 - storearea
-	hoist0 hoist1 - hoist
-	crate0 crate1 crate2 - crate
-	container0 container1 container2 - container
-	depot48 depot49 depot50 - depot
-	loadarea - transitarea)
+	(:domain Storage-Propositional)
+	(:objects
+		depot48-1-1 depot48-1-2 depot49-1-1 depot49-1-2 depot50-1-1 container-0-0 container-1-0 container-2-0 - storearea
+		hoist0 hoist1 - hoist
+		crate0 crate1 crate2 - crate
+		container0 container1 container2 - container
+		depot48 depot49 depot50 - depot
+		loadarea - transitarea
+	)
 
-(:init
-	(connected depot48-1-1 depot48-1-2)
-	(connected depot48-1-2 depot48-1-1)
-	(connected depot49-1-1 depot49-1-2)
-	(connected depot49-1-2 depot49-1-1)
-	(in depot48-1-1 depot48)
-	(in depot48-1-2 depot48)
-	(in depot49-1-1 depot49)
-	(in depot49-1-2 depot49)
-	(in depot50-1-1 depot50)
-	(on crate0 container-0-0)
-	(on crate1 container-1-0)
-	(on crate2 container-2-0)
-	(in crate0 container0)
-	(in crate1 container1)
-	(in crate2 container2)
-	(in container-0-0 container0)
-	(in container-1-0 container1)
-	(in container-2-0 container2)
-	(connected loadarea container-0-0) 
-	(connected container-0-0 loadarea)
-	(connected loadarea container-1-0) 
-	(connected container-1-0 loadarea)
-	(connected loadarea container-2-0) 
-	(connected container-2-0 loadarea)  
-	(connected depot48-1-1 loadarea)
-	(connected loadarea depot48-1-1)
-	(connected depot49-1-1 loadarea)
-	(connected loadarea depot49-1-1)
-	(connected depot50-1-1 loadarea)
-	(connected loadarea depot50-1-1)  
-	(clear depot48-1-1)
-	(clear depot49-1-1)
-	(clear depot50-1-1)  
-	(at hoist0 depot48-1-2)
-	(available hoist0)
-	(at hoist1 depot49-1-2)
-	(available hoist1))
+	(:init
+		(connected depot48-1-1 depot48-1-2)
+		(connected depot48-1-2 depot48-1-1)
+		(connected depot49-1-1 depot49-1-2)
+		(connected depot49-1-2 depot49-1-1)
+		(in depot48-1-1 depot48)
+		(in depot48-1-2 depot48)
+		(in depot49-1-1 depot49)
+		(in depot49-1-2 depot49)
+		(in depot50-1-1 depot50)
+		(on crate0 container-0-0)
+		(on crate1 container-1-0)
+		(on crate2 container-2-0)
+		(in crate0 container0)
+		(in crate1 container1)
+		(in crate2 container2)
+		(in container-0-0 container0)
+		(in container-1-0 container1)
+		(in container-2-0 container2)
+		(connected loadarea container-0-0)
+		(connected container-0-0 loadarea)
+		(connected loadarea container-1-0)
+		(connected container-1-0 loadarea)
+		(connected loadarea container-2-0)
+		(connected container-2-0 loadarea)
+		(connected depot48-1-1 loadarea)
+		(connected loadarea depot48-1-1)
+		(connected depot49-1-1 loadarea)
+		(connected loadarea depot49-1-1)
+		(connected depot50-1-1 loadarea)
+		(connected loadarea depot50-1-1)
+		(clear depot48-1-1)
+		(clear depot49-1-1)
+		(clear depot50-1-1)
+		(at hoist0 depot48-1-2)
+		(available hoist0)
+		(at hoist1 depot49-1-2)
+		(available hoist1)
+	)
 
-(:goal (and
-	(in crate0 depot48)
-	(in crate1 depot48)
-	(in crate2 depot49)))
+	(:goal
+		(and
+			(in crate0 depot48)
+			(in crate1 depot48)
+			(in crate2 depot49))
+	)
 )
 </instance>
 <landmarks>
@@ -955,667 +436,6 @@ Action: (move d262 peg2 d478)
 (in crate0 depot48)
 (on crate0 container-0-0)
 </landmarks>
-<thinking>
-<state>
-(in depot48-1-1 depot48)
-(connected depot48-1-1 loadarea)
-(available hoist1))
-(on crate0 container-0-0)	; landmark
-(on crate1 container-1-0)	; landmark
-(in container-2-0 container2)
-(in depot50-1-1 depot50)
-(connected depot48-1-1 depot48-1-2)
-(in crate1 container1)
-(connected container-0-0 loadarea)
-(in crate2 container2)
-(connected depot49-1-1 loadarea)
-(in depot49-1-2 depot49)
-(connected loadarea depot50-1-1)
-(in container-1-0 container1)
-(clear depot48-1-1)	; landmark
-(clear depot50-1-1)
-(in depot49-1-1 depot49)
-(connected loadarea depot48-1-1)
-(connected container-2-0 loadarea)
-(connected loadarea container-0-0)
-(in crate0 container0)
-(connected container-1-0 loadarea)
-(connected depot49-1-1 depot49-1-2)
-(clear depot49-1-1)	; landmark
-(connected loadarea depot49-1-1)
-(connected loadarea container-2-0)
-(connected depot48-1-2 depot48-1-1)
-(connected depot49-1-2 depot49-1-1)
-(on crate2 container-2-0)	; landmark
-(connected loadarea container-1-0)
-(available hoist0)
-(at hoist1 depot49-1-2)
-(in depot48-1-2 depot48)
-(at hoist0 depot48-1-2)
-(in container-0-0 container0)
-(connected depot50-1-1 loadarea)
-</state>
-
-Action: (move hoist1 depot49-1-2 depot49-1-1)
-<delete_effects>
-(at hoist1 depot49-1-2)
-(clear depot49-1-1)
-</delete_effects>
-<add_effects>
-(at hoist1 depot49-1-1)
-(clear depot49-1-2)
-</add_effects>
-
-<state>
-(at hoist1 depot49-1-1)
-(in depot48-1-1 depot48)
-(connected depot48-1-1 loadarea)
-(available hoist1))
-(on crate0 container-0-0)	; landmark
-(on crate1 container-1-0)	; landmark
-(in container-2-0 container2)
-(in depot50-1-1 depot50)
-(connected depot48-1-1 depot48-1-2)
-(in crate1 container1)
-(connected container-0-0 loadarea)
-(in crate2 container2)
-(connected depot49-1-1 loadarea)
-(in depot49-1-2 depot49)
-(connected loadarea depot50-1-1)
-(in container-1-0 container1)
-(clear depot48-1-1)	; landmark
-(clear depot50-1-1)
-(in depot49-1-1 depot49)
-(connected loadarea depot48-1-1)
-(connected container-2-0 loadarea)
-(connected loadarea container-0-0)
-(in crate0 container0)
-(connected container-1-0 loadarea)
-(connected depot49-1-1 depot49-1-2)
-(connected loadarea depot49-1-1)
-(connected loadarea container-2-0)
-(connected depot48-1-2 depot48-1-1)
-(connected depot49-1-2 depot49-1-1)
-(on crate2 container-2-0)	; landmark
-(connected loadarea container-1-0)
-(clear depot49-1-2)
-(available hoist0)
-(in depot48-1-2 depot48)
-(at hoist0 depot48-1-2)
-(in container-0-0 container0)
-(connected depot50-1-1 loadarea)
-</state>
-
-Action: (go-out hoist1 depot49-1-1 loadarea)
-<delete_effects>
-(at hoist1 depot49-1-1)
-</delete_effects>
-<add_effects>
-(at hoist1 loadarea)
-(clear depot49-1-1)
-</add_effects>
-
-<state>
-(in depot48-1-1 depot48)
-(connected depot48-1-1 loadarea)
-(available hoist1))
-(on crate0 container-0-0)	; landmark
-(on crate1 container-1-0)	; landmark
-(in container-2-0 container2)
-(in depot50-1-1 depot50)
-(connected depot48-1-1 depot48-1-2)
-(in crate1 container1)
-(connected container-0-0 loadarea)
-(in crate2 container2)
-(connected depot49-1-1 loadarea)
-(in depot49-1-2 depot49)
-(connected loadarea depot50-1-1)
-(in container-1-0 container1)
-(clear depot48-1-1)	; landmark
-(clear depot50-1-1)
-(in depot49-1-1 depot49)
-(connected loadarea depot48-1-1)
-(at hoist1 loadarea)
-(connected container-2-0 loadarea)
-(connected loadarea container-0-0)
-(in crate0 container0)
-(connected container-1-0 loadarea)
-(connected depot49-1-1 depot49-1-2)
-(clear depot49-1-1)	; landmark
-(connected loadarea depot49-1-1)
-(connected loadarea container-2-0)
-(connected depot48-1-2 depot48-1-1)
-(connected depot49-1-2 depot49-1-1)
-(on crate2 container-2-0)	; landmark
-(connected loadarea container-1-0)
-(clear depot49-1-2)
-(available hoist0)
-(in depot48-1-2 depot48)
-(at hoist0 depot48-1-2)
-(in container-0-0 container0)
-(connected depot50-1-1 loadarea)
-</state>
-
-Action: (lift hoist1 crate0 container-0-0 loadarea container0)
-<delete_effects>
-(on crate0 container-0-0)
-(available hoist1)
-(in crate0 container0)
-</delete_effects>
-<add_effects>
-(clear container-0-0)
-(lifting hoist1 crate0)
-</add_effects>
-
-<state>
-(in depot48-1-1 depot48)
-(clear container-0-0)
-(connected depot48-1-1 loadarea)
-(available hoist1))
-(on crate1 container-1-0)	; landmark
-(in container-2-0 container2)
-(in depot50-1-1 depot50)
-(connected depot48-1-1 depot48-1-2)
-(in crate1 container1)
-(connected container-0-0 loadarea)
-(in crate2 container2)
-(connected depot49-1-1 loadarea)
-(in depot49-1-2 depot49)
-(connected loadarea depot50-1-1)
-(in container-1-0 container1)
-(clear depot48-1-1)	; landmark
-(clear depot50-1-1)
-(in depot49-1-1 depot49)
-(connected loadarea depot48-1-1)
-(at hoist1 loadarea)
-(connected container-2-0 loadarea)
-(connected loadarea container-0-0)
-(connected container-1-0 loadarea)
-(clear depot49-1-1)	; landmark
-(connected depot49-1-1 depot49-1-2)
-(connected loadarea depot49-1-1)
-(connected loadarea container-2-0)
-(connected depot48-1-2 depot48-1-1)
-(connected depot49-1-2 depot49-1-1)
-(on crate2 container-2-0)	; landmark
-(connected loadarea container-1-0)
-(lifting hoist1 crate0)
-(clear depot49-1-2)
-(available hoist0)
-(in depot48-1-2 depot48)
-(at hoist0 depot48-1-2)
-(in container-0-0 container0)
-(connected depot50-1-1 loadarea)
-</state>
-
-Action: (drop hoist1 crate0 depot48-1-1 loadarea depot48)
-<delete_effects>
-(lifting hoist1 crate0)
-(clear depot48-1-1)
-</delete_effects>
-<add_effects>
-(available hoist1)
-(on crate0 depot48-1-1)
-(in crate0 depot48)
-</add_effects>
-
-<state>
-(available hoist1)
-(in depot48-1-1 depot48)
-(clear container-0-0)
-(connected depot48-1-1 loadarea)
-(available hoist1))
-(on crate1 container-1-0)	; landmark
-(in container-2-0 container2)
-(in depot50-1-1 depot50)
-(connected depot48-1-1 depot48-1-2)
-(in crate1 container1)
-(connected container-0-0 loadarea)
-(in crate0 depot48)	; landmark
-(in crate2 container2)
-(connected depot49-1-1 loadarea)
-(in depot49-1-2 depot49)
-(connected loadarea depot50-1-1)
-(in container-1-0 container1)
-(clear depot50-1-1)
-(in depot49-1-1 depot49)
-(connected loadarea depot48-1-1)
-(at hoist1 loadarea)
-(connected container-2-0 loadarea)
-(connected loadarea container-0-0)
-(connected container-1-0 loadarea)
-(clear depot49-1-1)	; landmark
-(connected depot49-1-1 depot49-1-2)
-(connected loadarea depot49-1-1)
-(on crate0 depot48-1-1)
-(connected loadarea container-2-0)
-(connected depot48-1-2 depot48-1-1)
-(connected depot49-1-2 depot49-1-1)
-(on crate2 container-2-0)	; landmark
-(connected loadarea container-1-0)
-(clear depot49-1-2)
-(available hoist0)
-(in depot48-1-2 depot48)
-(at hoist0 depot48-1-2)
-(in container-0-0 container0)
-(connected depot50-1-1 loadarea)
-</state>
-
-Action: (lift hoist1 crate2 container-2-0 loadarea container2)
-<delete_effects>
-(on crate2 container-2-0)
-(available hoist1)
-(in crate2 container2)
-</delete_effects>
-<add_effects>
-(clear container-2-0)
-(lifting hoist1 crate2)
-</add_effects>
-
-<state>
-(in depot48-1-1 depot48)
-(clear container-0-0)
-(connected depot48-1-1 loadarea)
-(available hoist1))
-(on crate1 container-1-0)	; landmark
-(in container-2-0 container2)
-(in depot50-1-1 depot50)
-(connected depot48-1-1 depot48-1-2)
-(in crate1 container1)
-(connected container-0-0 loadarea)
-(in crate0 depot48)	; landmark
-(connected depot49-1-1 loadarea)
-(in depot49-1-2 depot49)
-(connected loadarea depot50-1-1)
-(in container-1-0 container1)
-(clear depot50-1-1)
-(lifting hoist1 crate2)
-(in depot49-1-1 depot49)
-(connected loadarea depot48-1-1)
-(at hoist1 loadarea)
-(connected container-2-0 loadarea)
-(connected loadarea container-0-0)
-(connected container-1-0 loadarea)
-(clear depot49-1-1)	; landmark
-(connected depot49-1-1 depot49-1-2)
-(connected loadarea depot49-1-1)
-(on crate0 depot48-1-1)
-(connected loadarea container-2-0)
-(connected depot48-1-2 depot48-1-1)
-(connected depot49-1-2 depot49-1-1)
-(connected loadarea container-1-0)
-(clear depot49-1-2)
-(available hoist0)
-(in depot48-1-2 depot48)
-(at hoist0 depot48-1-2)
-(in container-0-0 container0)
-(connected depot50-1-1 loadarea)
-(clear container-2-0)
-</state>
-
-Action: (drop hoist1 crate2 depot49-1-1 loadarea depot49)
-<delete_effects>
-(lifting hoist1 crate2)
-(clear depot49-1-1)
-</delete_effects>
-<add_effects>
-(available hoist1)
-(on crate2 depot49-1-1)
-(in crate2 depot49)
-</add_effects>
-
-<state>
-(available hoist1)
-(in depot48-1-1 depot48)
-(clear container-0-0)
-(connected depot48-1-1 loadarea)
-(available hoist1))
-(on crate1 container-1-0)	; landmark
-(on crate2 depot49-1-1)
-(in container-2-0 container2)
-(in depot50-1-1 depot50)
-(connected depot48-1-1 depot48-1-2)
-(in crate1 container1)
-(connected container-0-0 loadarea)
-(in crate0 depot48)	; landmark
-(connected depot49-1-1 loadarea)
-(in depot49-1-2 depot49)
-(connected loadarea depot50-1-1)
-(in container-1-0 container1)
-(clear depot50-1-1)
-(in depot49-1-1 depot49)
-(connected loadarea depot48-1-1)
-(at hoist1 loadarea)
-(connected container-2-0 loadarea)
-(in crate2 depot49)	; landmark
-(connected loadarea container-0-0)
-(connected container-1-0 loadarea)
-(connected depot49-1-1 depot49-1-2)
-(connected loadarea depot49-1-1)
-(on crate0 depot48-1-1)
-(connected loadarea container-2-0)
-(connected depot48-1-2 depot48-1-1)
-(connected depot49-1-2 depot49-1-1)
-(connected loadarea container-1-0)
-(clear depot49-1-2)
-(available hoist0)
-(in depot48-1-2 depot48)
-(at hoist0 depot48-1-2)
-(in container-0-0 container0)
-(connected depot50-1-1 loadarea)
-(clear container-2-0)
-</state>
-
-Action: (lift hoist1 crate1 container-1-0 loadarea container1)
-<delete_effects>
-(on crate1 container-1-0)
-(available hoist1)
-(in crate1 container1)
-</delete_effects>
-<add_effects>
-(clear container-1-0)
-(lifting hoist1 crate1)
-</add_effects>
-
-<state>
-(in depot48-1-1 depot48)
-(clear container-0-0)
-(connected depot48-1-1 loadarea)
-(available hoist1))
-(on crate2 depot49-1-1)
-(in container-2-0 container2)
-(in depot50-1-1 depot50)
-(connected depot48-1-1 depot48-1-2)
-(connected container-0-0 loadarea)
-(in crate0 depot48)	; landmark
-(connected depot49-1-1 loadarea)
-(in depot49-1-2 depot49)
-(connected loadarea depot50-1-1)
-(in container-1-0 container1)
-(clear depot50-1-1)
-(in depot49-1-1 depot49)
-(connected loadarea depot48-1-1)
-(at hoist1 loadarea)
-(connected container-2-0 loadarea)
-(in crate2 depot49)	; landmark
-(clear container-1-0)
-(lifting hoist1 crate1)
-(connected loadarea container-0-0)
-(connected container-1-0 loadarea)
-(connected depot49-1-1 depot49-1-2)
-(connected loadarea depot49-1-1)
-(on crate0 depot48-1-1)
-(connected loadarea container-2-0)
-(connected depot48-1-2 depot48-1-1)
-(connected depot49-1-2 depot49-1-1)
-(connected loadarea container-1-0)
-(clear depot49-1-2)
-(available hoist0)
-(in depot48-1-2 depot48)
-(at hoist0 depot48-1-2)
-(in container-0-0 container0)
-(connected depot50-1-1 loadarea)
-(clear container-2-0)
-</state>
-
-Action: (lift hoist0 crate0 depot48-1-1 depot48-1-2 depot48)
-<delete_effects>
-(on crate0 depot48-1-1)
-(available hoist0)
-(in crate0 depot48)
-</delete_effects>
-<add_effects>
-(clear depot48-1-1)
-(lifting hoist0 crate0)
-</add_effects>
-
-<state>
-(in depot48-1-1 depot48)
-(clear container-0-0)
-(connected depot48-1-1 loadarea)
-(available hoist1))
-(on crate2 depot49-1-1)
-(in container-2-0 container2)
-(in depot50-1-1 depot50)
-(connected depot48-1-1 depot48-1-2)
-(connected container-0-0 loadarea)
-(connected depot49-1-1 loadarea)
-(in depot49-1-2 depot49)
-(connected loadarea depot50-1-1)
-(in container-1-0 container1)
-(clear depot50-1-1)
-(clear depot48-1-1)	; landmark
-(lifting hoist0 crate0)
-(in depot49-1-1 depot49)
-(connected loadarea depot48-1-1)
-(at hoist1 loadarea)
-(connected container-2-0 loadarea)
-(in crate2 depot49)	; landmark
-(clear container-1-0)
-(lifting hoist1 crate1)
-(connected loadarea container-0-0)
-(connected container-1-0 loadarea)
-(connected depot49-1-1 depot49-1-2)
-(connected loadarea depot49-1-1)
-(connected loadarea container-2-0)
-(connected depot48-1-2 depot48-1-1)
-(connected depot49-1-2 depot49-1-1)
-(connected loadarea container-1-0)
-(clear depot49-1-2)
-(in depot48-1-2 depot48)
-(at hoist0 depot48-1-2)
-(in container-0-0 container0)
-(connected depot50-1-1 loadarea)
-(clear container-2-0)
-</state>
-
-Action: (move hoist0 depot48-1-2 depot48-1-1)
-<delete_effects>
-(at hoist0 depot48-1-2)
-(clear depot48-1-1)
-</delete_effects>
-<add_effects>
-(at hoist0 depot48-1-1)
-(clear depot48-1-2)
-</add_effects>
-
-<state>
-(at hoist0 depot48-1-1)
-(in depot48-1-1 depot48)
-(clear container-0-0)
-(connected depot48-1-1 loadarea)
-(available hoist1))
-(on crate2 depot49-1-1)
-(in container-2-0 container2)
-(in depot50-1-1 depot50)
-(connected depot48-1-1 depot48-1-2)
-(connected container-0-0 loadarea)
-(connected depot49-1-1 loadarea)
-(in depot49-1-2 depot49)
-(clear depot48-1-2)
-(connected loadarea depot50-1-1)
-(in container-1-0 container1)
-(clear depot50-1-1)
-(lifting hoist0 crate0)
-(in depot49-1-1 depot49)
-(connected loadarea depot48-1-1)
-(at hoist1 loadarea)
-(connected container-2-0 loadarea)
-(in crate2 depot49)	; landmark
-(clear container-1-0)
-(lifting hoist1 crate1)
-(connected loadarea container-0-0)
-(connected container-1-0 loadarea)
-(connected depot49-1-1 depot49-1-2)
-(connected loadarea depot49-1-1)
-(connected loadarea container-2-0)
-(connected depot48-1-2 depot48-1-1)
-(connected depot49-1-2 depot49-1-1)
-(connected loadarea container-1-0)
-(clear depot49-1-2)
-(in depot48-1-2 depot48)
-(in container-0-0 container0)
-(connected depot50-1-1 loadarea)
-(clear container-2-0)
-</state>
-
-Action: (drop hoist0 crate0 depot48-1-2 depot48-1-1 depot48)
-<delete_effects>
-(lifting hoist0 crate0)
-(clear depot48-1-2)
-</delete_effects>
-<add_effects>
-(available hoist0)
-(on crate0 depot48-1-2)
-(in crate0 depot48)
-</add_effects>
-
-<state>
-(at hoist0 depot48-1-1)
-(in depot48-1-1 depot48)
-(clear container-0-0)
-(connected depot48-1-1 loadarea)
-(available hoist1))
-(on crate2 depot49-1-1)
-(in container-2-0 container2)
-(in depot50-1-1 depot50)
-(connected depot48-1-1 depot48-1-2)
-(connected container-0-0 loadarea)
-(in crate0 depot48)	; landmark
-(connected depot49-1-1 loadarea)
-(in depot49-1-2 depot49)
-(connected loadarea depot50-1-1)
-(in container-1-0 container1)
-(clear depot50-1-1)
-(in depot49-1-1 depot49)
-(connected loadarea depot48-1-1)
-(at hoist1 loadarea)
-(connected container-2-0 loadarea)
-(in crate2 depot49)	; landmark
-(clear container-1-0)
-(lifting hoist1 crate1)
-(connected loadarea container-0-0)
-(connected container-1-0 loadarea)
-(connected depot49-1-1 depot49-1-2)
-(connected loadarea depot49-1-1)
-(on crate0 depot48-1-2)
-(connected loadarea container-2-0)
-(connected depot48-1-2 depot48-1-1)
-(connected depot49-1-2 depot49-1-1)
-(connected loadarea container-1-0)
-(clear depot49-1-2)
-(available hoist0)
-(in depot48-1-2 depot48)
-(in container-0-0 container0)
-(connected depot50-1-1 loadarea)
-(clear container-2-0)
-</state>
-
-Action: (go-out hoist0 depot48-1-1 loadarea)
-<delete_effects>
-(at hoist0 depot48-1-1)
-</delete_effects>
-<add_effects>
-(at hoist0 loadarea)
-(clear depot48-1-1)
-</add_effects>
-
-<state>
-(at hoist0 loadarea)
-(in depot48-1-1 depot48)
-(clear container-0-0)
-(connected depot48-1-1 loadarea)
-(available hoist1))
-(on crate2 depot49-1-1)
-(in container-2-0 container2)
-(in depot50-1-1 depot50)
-(connected depot48-1-1 depot48-1-2)
-(connected container-0-0 loadarea)
-(in crate0 depot48)	; landmark
-(connected depot49-1-1 loadarea)
-(in depot49-1-2 depot49)
-(connected loadarea depot50-1-1)
-(in container-1-0 container1)
-(clear depot50-1-1)
-(clear depot48-1-1)	; landmark
-(in depot49-1-1 depot49)
-(connected loadarea depot48-1-1)
-(at hoist1 loadarea)
-(connected container-2-0 loadarea)
-(in crate2 depot49)	; landmark
-(clear container-1-0)
-(lifting hoist1 crate1)
-(connected loadarea container-0-0)
-(connected container-1-0 loadarea)
-(connected depot49-1-1 depot49-1-2)
-(connected loadarea depot49-1-1)
-(on crate0 depot48-1-2)
-(connected loadarea container-2-0)
-(connected depot48-1-2 depot48-1-1)
-(connected depot49-1-2 depot49-1-1)
-(connected loadarea container-1-0)
-(clear depot49-1-2)
-(available hoist0)
-(in depot48-1-2 depot48)
-(in container-0-0 container0)
-(connected depot50-1-1 loadarea)
-(clear container-2-0)
-</state>
-
-Action: (drop hoist1 crate1 depot48-1-1 loadarea depot48)
-<delete_effects>
-(lifting hoist1 crate1)
-(clear depot48-1-1)
-</delete_effects>
-<add_effects>
-(available hoist1)
-(on crate1 depot48-1-1)
-(in crate1 depot48)
-</add_effects>
-
-<state>
-(available hoist1)
-(at hoist0 loadarea)
-(in depot48-1-1 depot48)
-(clear container-0-0)
-(connected depot48-1-1 loadarea)
-(available hoist1))
-(on crate2 depot49-1-1)
-(in container-2-0 container2)
-(in depot50-1-1 depot50)
-(in crate1 depot48)	; landmark
-(connected depot48-1-1 depot48-1-2)
-(connected container-0-0 loadarea)
-(in crate0 depot48)	; landmark
-(connected depot49-1-1 loadarea)
-(in depot49-1-2 depot49)
-(connected loadarea depot50-1-1)
-(in container-1-0 container1)
-(clear depot50-1-1)
-(in depot49-1-1 depot49)
-(connected loadarea depot48-1-1)
-(at hoist1 loadarea)
-(connected container-2-0 loadarea)
-(in crate2 depot49)	; landmark
-(clear container-1-0)
-(connected loadarea container-0-0)
-(connected container-1-0 loadarea)
-(connected depot49-1-1 depot49-1-2)
-(connected loadarea depot49-1-1)
-(on crate0 depot48-1-2)
-(connected loadarea container-2-0)
-(connected depot48-1-2 depot48-1-1)
-(connected depot49-1-2 depot49-1-1)
-(on crate1 depot48-1-1)
-(connected loadarea container-1-0)
-(clear depot49-1-2)
-(available hoist0)
-(in depot48-1-2 depot48)
-(in container-0-0 container0)
-(connected depot50-1-1 loadarea)
-(clear container-2-0)
-</state>
-</thinking>
 <plan>
 (move hoist1 depot49-1-2 depot49-1-1)
 (go-out hoist1 depot49-1-1 loadarea)
@@ -1635,11 +455,9 @@ Action: (drop hoist1 crate1 depot48-1-1 loadarea depot48)
 Here is a checklist to help you with your task:
 
 <checklist>
-1) Your response could contain the reasoning inside the thinking section and must contain the plan inside the plan section. Do not provide any additional text or explanations outside these sections.
+1) Do not provide any additional text or explanations outside the plan tags.
 2) The plan must be in the same format as the examples above.
 3) The plan should be preceded by the <plan> tag and should be followed by the </plan> tag.
 4) The actions in the plan must be from the set of actions in the domain described above, that is, they must use the same name and the same number of parameters as one of the action schemas.
 5) The plan must be valid, that is, each action must be applicable in the state it is applied, and the plan must end in a goal state.
-6) You may provide your reasoning in the thinking section before the plan, which should be enclosed between <thinking> and </thinking> tags.
-7) Your reasoning should be restricted to the thinking section. So, do not provide any reasoning inside the plan section.
 </checklist>

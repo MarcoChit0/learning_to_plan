@@ -141,8 +141,8 @@ def compute_metrics(
     results_df.rename(columns={'task_id': 'number_of_instances'}, inplace=True)
     
     # Calculate accuracies, handling division by zero
-    results_df['all_valid_accuracy'] = (results_df['all_valid'] / results_df['number_of_instances']).where(results_df['number_of_instances'] > 0, 0)
-    results_df['any_valid_accuracy'] = (results_df['any_valid'] / results_df['number_of_instances']).where(results_df['number_of_instances'] > 0, 0)
+    results_df['all_valid_accuracy'] = ((results_df['all_valid'] / results_df['number_of_instances']).where(results_df['number_of_instances'] > 0, 0)).round(2)
+    results_df['any_valid_accuracy'] = ((results_df['any_valid'] / results_df['number_of_instances']).where(results_df['number_of_instances'] > 0, 0)).round(2)
 
     # Reorder columns to match the desired output structure
     final_cols = group_cols + [
