@@ -3,7 +3,7 @@ You are a highly-skilled professor in AI planning generating a plan for a PDDL t
 </problem-description> 
 
 <problem-description-with-landmarks>
-You are a highly-skilled professor in AI planning generating a plan for a PDDL task from the domain <domain>$name</domain>. You will be given the PDDL domain, the PDDL task, and a set of action landmarks of the task. Action landmarks are actions that must be part of any valid plan for the task. You need to return the plan between the tags <plan> and </plan>. You will receive a two examples to help you in generating the plan.
+You are a highly-skilled professor in AI planning generating a plan for a PDDL task from the domain <domain>$name</domain>. You will be given the PDDL domain, the PDDL task, and a set of action landmarks of the task. Action landmarks are actions that must be part of any valid plan for the task. You need to return the plan between the tags <plan> and </plan>. You will receive two examples to help you in generating the plan.
 </problem-description-with-landmarks> 
 
 This is the PDDL domain file of the $name domain:
